@@ -182,3 +182,23 @@ export function analysisContext(events: TranscriptEvent[], context: unknown) {
   const sessions = new Set(events.map(event => event.session_id));
   return { ...value, scenarios: value.scenarios.filter(scenario => sessions.has(scenario.session_id)) };
 }
+
+export const MEMORY_KEYS = ['name', 'occupation', 'location', 'goal', 'interest', 'preference'] as const;
+export function memoryManagement(body: Record<string, unknown>) {
+  const companionId = requireCompanionId(body.companionId ?? null);
+  const action = body.action;
+  if (typeof action !== 'string' || !['list', 'setFact', 'forgetFact', 'excludeSession', 'restoreSession'].includes(action)) throw new AppError(400, 'INVALID_ACTION', 'Choose a supported memory action.');
+  const fields = action === 'setFact' ? ['key', 'value'] : action === 'forgetFact' ? ['key'] : action === 'excludeSession' || action === 'restoreSession' ? ['sessionId'] : [];
+  allowKeys(body, ['companionId', 'action', ...fields]);
+  if (fields.includes('key') && !MEMORY_KEYS.includes(body.key as typeof MEMORY_KEYS[number])) throw new AppError(400, 'INVALID_FACT', 'Choose a supported memory field.');
+  if (action === 'setFact' && (typeof body.value !== 'string' || !body.value.trim() || body.value.length > 240)) throw new AppError(400, 'INVALID_FACT', 'Memory values must contain 1–240 characters.');
+  return { companionId, action, key: fields.includes('key') ? body.key : null, value: action === 'setFact' ? (body.value as string).trim() : null, sessionId: fields.includes('sessionId') ? requireUuid(body.sessionId) : null };
+}
+export function embeddingVector(value: unknown, dimensions: number): number[] {
+  if (!Array.isArray(value) || value.length !== dimensions || value.some(x => typeof x !== 'number' || !Number.isFinite(x)) || !value.some(x => x !== 0)) throw new AppError(502, 'INVALID_EMBEDDING', 'Memory search could not be prepared. Please retry.');
+  return value;
+}
+export async function fingerprint(value: unknown): Promise<string> {
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(value)));
+  return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
+}

@@ -27,9 +27,10 @@ export function sanitizeStatus(value) {
 
 export function verifyEvidence(content, events) {
   const users = new Map(events.filter(event => event.speaker === 'user').map(event => [event.id, event]));
-  for (const key of ['strengths', 'corrections', 'practice', 'patterns']) {
+  for (const key of ['strengths', 'corrections', 'practice', 'patterns', 'memory_facts']) {
     for (const item of content[key] || []) {
       ensure(Array.isArray(item.evidence_ids) && item.evidence_ids.length > 0 && item.evidence_ids.every(id => users.has(id)), 'Feedback contains an unsupported evidence reference.');
+      if (key === 'memory_facts') ensure(typeof item.quote === 'string' && item.quote.length > 0 && item.evidence_ids.some(id => users.get(id).text.includes(item.quote)), 'Memory fact quotation does not match saved user speech.');
       if (key === 'corrections') ensure(typeof item.original === 'string' && item.original.length > 0 && item.evidence_ids.some(id => users.get(id).text.includes(item.original)), 'Correction quotation does not match saved user speech.');
     }
   }
@@ -101,7 +102,7 @@ async function main() {
     if (approval === false) {
       stage = 'private access enforcement';
       for (const user of users) {
-        for (const table of ['sessions','transcript_events','analyses']) {
+        for (const table of ['sessions','transcript_events','analyses','memory_state','memory_fact_overrides','memory_session_exclusions']) {
           ensure((await userRequest(user, '/rest/v1/' + table + '?select=*')).length === 0, 'Unapproved account can read data.');
         }
         for (const [endpoint, body] of [
@@ -110,13 +111,19 @@ async function main() {
           ['/rest/v1/rpc/finish_session', {p_session_id:randomUUID()}],
           ['/rest/v1/rpc/restore_history', {p_backup:{sessions:[],events:[]}}],
           ['/functions/v1/coach/config', {}],
+          ['/functions/v1/coach/memory', {companionId:'alex',query:'Previous conversation'}],
+          ['/functions/v1/coach/memory-manage', {companionId:'alex',action:'list'}],
+          ['/functions/v1/coach/memory-manage', {companionId:'alex',action:'setFact',key:'goal',value:'Must be denied'}],
+          ['/functions/v1/coach/memory-index', {companionId:'alex'}],
+          ['/functions/v1/coach/checkpoint', {sessionId:randomUUID()}],
+          ['/rest/v1/rpc/memory_context', {p_user_id:user.user.id,p_companion_id:'alex'}],
           ['/functions/v1/coach/voice', {sessionId:randomUUID(),sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'}],
         ]) {
           const denied = await fetch(base + endpoint, {method:'POST',headers:{apikey:publicKey,Authorization:`Bearer ${user.access_token}`,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
           ensure(denied.status === 403, 'Unapproved account bypassed an access gate.');
         }
       }
-      pass('Unapproved verified accounts cannot read, create, append, finish, restore, or access AI. Voice checks require an approved account and were not run.');
+      pass('Unapproved verified accounts cannot read records or memory controls, create, append, finish, restore, manage/index memories, checkpoint, or access AI. Voice checks require an approved account and were not run.');
       return;
     }
     await mkdir('test-results', { recursive: true });

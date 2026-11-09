@@ -10,7 +10,8 @@
     "check": "node --check web/app.js && node --check src/outbox.js && deno check supabase/functions/coach/index.ts",
     "build": "node scripts/build-web.mjs",
     "test:edge": "node --experimental-transform-types --test supabase/functions/coach/coach.test.mjs",
-    "deploy:check": "python3 scripts/deploy.py"
+    "deploy:check": "python3 scripts/deploy.py",
+    "eval:memory": "node scripts/evaluate-memory.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.15",

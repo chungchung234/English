@@ -1,0 +1,18 @@
+{
+  "release": "f45356430ab33d3d17fb5a4595dbb6631b9e7d2c",
+  "site": "https://chungchung234.github.io/English/",
+  "htmlSha256": "e55ca93f1edf004958d628d342732c8e258e0153af6710b6660d2d91f000a7b5",
+  "currentPublicProviders": {
+    "google": false,
+    "kakao": false
+  },
+  "scope": "Published HTML fetched with verified HTTPS and rendered at the real service origin under its unchanged CSP. Auth APIs are intercepted; no real email, provider consent, user account, or private record is accessed.",
+  "currentStateVerified": true,
+  "productionCspPkceVerified": true,
+  "callbackUrlScrubbed": true,
+  "providerTokenNotPersisted": true,
+  "unapprovedHistoryRequests": 0,
+  "syntheticCodeExchanges": 1,
+  "browserErrors": [],
+  "actualProviderConsentTested": false
+}

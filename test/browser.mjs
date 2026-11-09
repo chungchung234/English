@@ -93,6 +93,11 @@ try{
  assert.doesNotMatch(await page.locator('#call-home').innerText(),/lorem|todo|placeholder/i,'home must not show placeholder copy');
  assert.deepEqual(errors,[]);
  console.log('PASS: browser reload retains offline records; retry syncs exact IDs; voice-event wiring saves and reviews; mobile layout fits. Full export handles a lower DB page cap. Voice upstream is simulated, not validated.');
+ await page.route('**/functions/v1/coach/config', route=>route.fulfill({status:403,json:{error:{code:'ACCOUNT_NOT_ALLOWED',message:'승인된 이메일 계정만 이용할 수 있습니다.'}}}));
+ const deniedRequests=[];page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/rest/v1/'))deniedRequests.push(request.url());});
+ await page.reload();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('승인된 이메일'));
+ assert.equal(await page.locator('#workspace').isVisible(),false);assert.deepEqual(deniedRequests,[]);
+ console.log('PASS: unapproved accounts stay on login and never attempt history reads or queued uploads.');
  await context.close();
  const fresh=await browser.newPage();await fresh.goto(base);await fresh.waitForFunction(()=>document.querySelector('#service-state').textContent.includes('서비스 연결을 준비'));assert.equal(await fresh.locator('#public-key').count(),0);assert.equal(await fresh.locator('#config-form').count(),0);
  console.log('PASS: visitors see a ready-to-use email login, no backend setup or API key fields; unconfigured deployment shows preparation status.');

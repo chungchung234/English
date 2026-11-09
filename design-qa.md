@@ -49,3 +49,7 @@ P3: native Apple material refraction differs from CSS backdrop blur. This is an 
 ## Published release acceptance
 
 [Release42639444223](https://github.com/chungchung234/English/actions/runs/42639444223) passed backend deployment, Pages publication, three real voice calls, actual provider voices cedar/marin/verse, transcript/feedback save, reload persistence, companion memory/evidence boundaries, account isolation and weekly analysis. Synthetic test accounts were cleaned. Opened the downloaded actual deployment [home](docs/design/deployed-home.png), [Mia call](docs/design/deployed-call.png), and [Juno review](docs/design/deployed-review.png): complete all-Korean logo, correct portraits, visible controls and readable feedback. These are isolated synthetic accounts, not real user screenshots. Native iOS-device and public OTP-delivery gaps remain as described above.
+
+## Approved conversation logo refresh
+
+Applied the user-selected empty overlapping speech-bubble logo with the redesigned 콜콜 glyphs and tightened wordmark spacing. `docs/design/approved-logo.png` preserves the approved full-size source; the header uses a whitespace-trimmed WebP export. Replaced the prior negative-offset image crop with a centered, aspect-preserving 170 × 48 px container. The 390 px mobile capture shows the full symbol and wordmark without clipping. `npm run build` and `npm run test:browser` passed (voice responses simulated).

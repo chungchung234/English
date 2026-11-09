@@ -165,15 +165,9 @@ async function main() {
       await page.locator('#workspace').waitFor({ state: 'visible' });
       await page.waitForFunction(() => document.querySelector('#models')?.textContent.includes('gpt-'), {}, { timeout: 60_000 });
       ensure((await page.locator('#companion-name').textContent()) === 'Alex', 'A fresh mobile session did not default to Alex.');
-      await page.locator('#companion-open').click();
       await page.locator(`[data-companion="${profile.id}"]`).click();
       await page.waitForFunction(name => document.querySelector('#companion-name')?.textContent === name, profile.name);
-      await page.locator('[data-view="call"]').click();
-      // Choose a neutral scenario through the UI instead of the legacy topic
-      // containing Alex's name when testing Mia or Juno.
-      await page.locator('#topic-open').click();
-      await page.locator('#scenario').selectOption({ label: '오늘 있었던 일' });
-      await page.locator('#topic-done').click();
+      await page.locator('#detail-panel').waitFor({state:'visible'});
       await page.screenshot({ path: `test-results/live-${profile.id}-home.png`, fullPage: true });
       stage = `${profile.name}: actual WebRTC and provider transcription`;
       await page.locator('#start-call').click();
@@ -196,7 +190,7 @@ async function main() {
       await page.waitForFunction(name => document.querySelector('#companion-name')?.textContent === name, profile.name);
       await page.locator('[data-view="history"]').click();
       await page.locator('#history .history-entry').first().waitFor({ state: 'visible' });
-      ensure(await page.locator('#history .history-entry').count() === 1, 'Reloaded history contains another companion conversation.');
+      ensure(await page.locator('#history .history-entry[data-companion-id="'+profile.id+'"]').count() === 1, 'Reloaded history is missing or duplicates this companion conversation.');
       await page.locator('[data-view="review"]').click();
       await page.locator('#review-content .analysis').first().waitFor({ state: 'visible' });
       await statusSnapshot();

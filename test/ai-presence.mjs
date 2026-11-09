@@ -16,7 +16,7 @@ try{
   const getContext=canvas.getContext.bind(canvas);canvas.getContext=(kind,options)=>getContext(kind,{...options,preserveDrawingBuffer:true});
   const presence=createAIPresence(root);const tick=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
   await presence.ready;await tick();const fallback=canvas.classList.contains('ai-presence-fallback');
-  const images=[];for(const name of ['alex','mia','juno']){presence.setProfile(name);await tick();images.push(canvas.toDataURL());}
+  const images=[];for(const name of ['alex','mia','juno']){presence.setProfile(name);await presence.ready;await tick();images.push(canvas.toDataURL());}
   const first=images[2];presence.setState('speaking');await tick();const reducedStatic=first===canvas.toDataURL();
   const RealAudio=window.AudioContext,contexts=[];
   window.AudioContext=class extends RealAudio{constructor(){super();contexts.push(this);}};

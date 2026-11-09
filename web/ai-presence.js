@@ -1,7 +1,7 @@
 // Approved character artwork, animated as a continuous material rather than redrawn.
 // Motion principles: Google Gemini visual design; state continuity: VoiceOrbs/Murmur.
 const AI_ART_SOURCES = Object.fromEntries(['alex','mia','juno'].map(name => [name,
-  document.getElementById('ai-art-'+name)?.src || new URL('assets/ai-'+name+'.png',document.baseURI).href
+  document.getElementById('ai-art-'+name)?.dataset.src || document.getElementById('ai-art-'+name)?.src || new URL('assets/ai-'+name+'.webp',document.baseURI).href
 ]));
 const AI_ART_IMAGES = new Map();
 async function loadAIArtwork(name) {
@@ -72,7 +72,7 @@ export function createAIPresence(root = document) {
   function nameFor(canvas){return canvas.dataset.aiProfile==='current'?profile:canvas.dataset.aiProfile;}
   function showPoster(s,failed=false){
     if(!s.poster){
-      s.poster=new Image();s.poster.className=s.canvas.className+' ai-presence-poster';
+      s.poster=new Image();s.poster.loading='lazy';s.poster.decoding='async';s.poster.className=s.canvas.className+' ai-presence-poster';
       s.poster.alt=s.canvas.getAttribute('aria-label')||'';
       if(s.canvas.getAttribute('aria-hidden')==='true')s.poster.alt='';
       s.canvas.before(s.poster);
@@ -125,15 +125,19 @@ export function createAIPresence(root = document) {
     clock+=dt*(.22*weights.idle+.42*weights.connecting+.48*weights.listening+.86*weights.thinking+.73*weights.speaking+.12*weights.error);
     idleClock+=dt*.22;
     const energy=outputLevel*weights.speaking+inputLevel*weights.listening;
+    let drewSurface=false;
     for(const s of surfaces){
       const {canvas,gl}=s,current=canvas.dataset.aiProfile==='current',name=nameFor(canvas);
       canvas.dataset.profile=name;canvas.dataset.state=current?state:'idle';
       if(s.poster){s.poster.alt=canvas.getAttribute('aria-label')||'';if(s.poster.dataset.profile!==name){s.poster.src=AI_ART_SOURCES[name];s.poster.dataset.profile=name;}}
+      if(!gl||s.lost)continue;
+      const visible=canvas.hidden&&s.poster&&!s.poster.hidden?s.poster:canvas;
+      let box=visible.getBoundingClientRect();
+      if(!box.width||!box.height||box.bottom<0||box.top>innerHeight||(visible.checkVisibility&&!visible.checkVisibility()))continue;
       const image=artwork.get(name);
-      if(!gl||s.lost||!image)continue;
+      if(!image){ensureArtwork(name);continue;}
       canvas.hidden=false;if(s.poster)s.poster.hidden=true;
-      const box=canvas.getBoundingClientRect();
-      if(!box.width||!box.height||box.bottom<0||box.top>innerHeight||(canvas.checkVisibility&&!canvas.checkVisibility()))continue;
+      box=canvas.getBoundingClientRect();
       const size=Math.min(440,Math.round(box.width*Math.min(devicePixelRatio||1,1.5)));
       if(canvas.width!==size){canvas.width=size;canvas.height=size;gl.viewport(0,0,size,size);}
       gl.useProgram(s.program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,s.texture);
@@ -148,14 +152,18 @@ export function createAIPresence(root = document) {
       gl.uniform4f(s.uniforms.attention,
         motion.matches||!current?0:weights.listening,motion.matches||!current?0:weights.thinking,
         motion.matches||!current?0:weights.speaking,motion.matches||!current?0:weights.connecting);
-      gl.drawArrays(gl.TRIANGLES,0,6);canvas.dataset.ready='true';
+      gl.drawArrays(gl.TRIANGLES,0,6);canvas.dataset.ready='true';drewSurface=true;
     }
-    if(!motion.matches)raf=requestAnimationFrame(draw);
+    if(!motion.matches&&drewSurface)raf=requestAnimationFrame(draw);
   }
   function refresh(){if(!raf&&!destroyed)raf=requestAnimationFrame(draw);}
-  const ready=Promise.all(Object.keys(profiles).map(async name=>{
-    try{artwork.set(name,await loadAIArtwork(name));}catch{for(const s of surfaces)if(nameFor(s.canvas)===name)showPoster(s,true);}
-  })).then(refresh);
+  const pendingArtwork=new Map();
+  function ensureArtwork(name){
+    if(!pendingArtwork.has(name))pendingArtwork.set(name,loadAIArtwork(name).then(image=>{
+      if(!destroyed){artwork.set(name,image);refresh();}
+    }).catch(()=>{for(const s of surfaces)if(nameFor(s.canvas)===name)showPoster(s,true);}));
+    return pendingArtwork.get(name);
+  }
   function setProfile(value){profile=Object.hasOwn(profiles,value)?value:'alex';refresh();}
   function setState(value){state=stateNames.includes(value)?value:'idle';refresh();}
   async function attachAudio(stream,kind){
@@ -179,7 +187,7 @@ export function createAIPresence(root = document) {
   const visibility=()=>{if(document.hidden){cancelAnimationFrame(raf);raf=0;last=0;}else refresh();};
   const changed=()=>{cancelAnimationFrame(raf);raf=0;last=0;refresh();};
   document.addEventListener('visibilitychange',visibility);motion.addEventListener('change',changed);refresh();
-  return {ready,setProfile,setState,attachAudio,detachAudio,refresh,destroy(){
+  return {get ready(){return ensureArtwork(profile);},setProfile,setState,attachAudio,detachAudio,refresh,destroy(){
     destroyed=true;cancelAnimationFrame(raf);detachAudio();document.removeEventListener('visibilitychange',visibility);motion.removeEventListener('change',changed);
     for(const s of surfaces){s.canvas.removeEventListener('webglcontextlost',s.lostHandler);s.poster?.remove();if(s.gl){s.gl.deleteTexture(s.texture);s.gl.deleteBuffer(s.buffer);s.gl.deleteProgram(s.program);}}
   }};

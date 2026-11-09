@@ -16,17 +16,22 @@ const policy=`default-src 'self'; script-src 'sha256-${hash(script)}'; style-src
 let html=(await read('web/index.html')).replace(/<meta http-equiv="Content-Security-Policy"[^>]+>/,`<meta http-equiv="Content-Security-Policy" content="${policy}">`)
 .replace('<link rel="stylesheet" href="style.css">',`<style>${style}</style>`)
 .replace('<script src="public-config.js"></script><script type="module" src="app.js"></script>',`<script type="module">${script}</script>`);
+await mkdir(new URL('dist/assets/',root),{recursive:true});
 const assetPaths=[...new Set([...html.matchAll(/src="(assets\/[^"]+)"/g)].map(match=>match[1]))];
 for(const asset of assetPaths){
  const ext=asset.split('.').pop();const type=({svg:'image/svg+xml',png:'image/png',webp:'image/webp'})[ext];
  if(!type)throw Error('Unsupported image type');
  const data=await readFile(new URL('web/'+asset,root));
- html=html.replaceAll('src="'+asset+'"','src="data:'+type+';base64,'+data.toString('base64')+'"');
+ if (/^assets\/ai-(alex|mia|juno)\.webp$/.test(asset)) {
+  const name=asset.replace(/\.webp$/,'.'+createHash('sha256').update(data).digest('hex').slice(0,12)+'.webp');
+  await writeFile(new URL('dist/'+name,root),data);
+  html=html.replaceAll('src="'+asset+'"','src="'+name+'"');
+ } else html=html.replaceAll('src="'+asset+'"','src="data:'+type+';base64,'+data.toString('base64')+'"');
 }
 await mkdir(new URL('dist/',root),{recursive:true});
 await writeFile(new URL('dist/index.html',root),html);
 await rm(new URL('dist/loop-artifact.html',root),{force:true});
-await writeFile(new URL('dist/_headers',root),`/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: microphone=(self)\n`);
+await writeFile(new URL('dist/_headers',root),`/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: microphone=(self)\n/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n`);
 console.log(`Built public website: dist/index.html (${Buffer.byteLength(html)} bytes; connection ${config?'configured':'pending'})`);
 
 await writeFile(new URL('dist/THIRD_PARTY_LICENSES.txt',root),await read('web/assets/PHOSPHOR-LICENSE'));

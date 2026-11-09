@@ -28,9 +28,32 @@ button{transition:transform .16s ease,background-color .16s ease,box-shadow .16s
 button:active:not(:disabled){transform:scale(.975)}
 [hidden]{display:none!important}
 .app-shell{width:100%;max-width:460px;min-height:100svh;margin:0 auto;padding:env(safe-area-inset-top) 22px 0;background:var(--canvas)}
-.setup-panel{padding:70px 0 46px}
-.setup-brand-logo{display:block;width:148px;height:auto;max-height:46px;margin:0 0 35px;object-fit:contain;object-position:left center}
-.setup-panel h1{margin:0 0 14px;font-size:28px;letter-spacing:-.8px;font-weight:650}
+.setup-panel{padding:54px 0 30px}
+.setup-brand-logo{display:block;width:136px;height:auto;max-height:42px;margin:0 0 46px;object-fit:contain;object-position:left center}
+.setup-panel h1{margin:0 0 18px;font-size:34px;line-height:1.3;letter-spacing:-1.2px;font-weight:680}
+.login-intro{margin:0 0 35px;color:var(--secondary);font-size:15px;line-height:1.8}
+.social-login{display:grid;gap:12px}
+.oauth-button{display:flex;width:100%;height:52px;min-height:52px;align-items:center;justify-content:center;gap:12px;overflow:hidden;border-radius:14px;font-size:15px;font-weight:550}
+.oauth-google{border:1px solid #747775;background:#fff;color:#1f1f1f;font-family:Arial,var(--font)}
+.oauth-google img{width:20px;height:20px}
+.oauth-kakao{background:#fee500}
+.oauth-kakao img{display:block;width:100%;height:100%;object-fit:contain}
+.social-status{margin:0;color:var(--secondary);font-size:12px;line-height:1.7}
+.social-status:empty{display:none}
+.email-login{margin:24px 0 0;border-top:1px solid var(--line)}
+.email-login>summary{display:flex;min-height:54px;align-items:center;justify-content:center;gap:8px;color:var(--secondary);font-size:14px;cursor:pointer;list-style:none}
+.email-login>summary::-webkit-details-marker{display:none}
+.email-login>summary:after{content:'+';font-size:19px;font-weight:400}
+.email-login[open]>summary:after{content:'−'}
+.email-login-content{padding:0 0 8px}
+.email-login-content>.quiet-button{display:block;margin:8px auto}
+.login-retention{margin:26px 0 0;color:var(--secondary);font-size:12px;text-align:center}
+.setup-panel>.quiet-button{margin-top:8px!important;font-size:12px}
+.account-email{margin:0 0 20px;font-size:14px;overflow-wrap:anywhere}
+.identity-settings{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--line)}
+.identity-settings h3{margin:0 0 8px;font-size:15px;font-weight:620}
+.identity-actions{display:flex;gap:10px}
+.identity-actions button{flex:1}
 .secondary-copy{max-width:320px;margin:0 0 28px;color:var(--secondary);font-size:15px}
 .setup-panel form{margin-top:24px}
 .setup-panel label{display:block;margin-bottom:8px;font-size:14px}

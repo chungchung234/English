@@ -1,0 +1,18 @@
+{
+  "siteUrl": "https://chungchung234.github.io/English/",
+  "callbackUrl": "https://domkmxmwmihcfadophfg.supabase.co/auth/v1/callback",
+  "redirectPrepared": true,
+  "accountLinkingEnabled": true,
+  "providers": {
+    "google": {
+      "enabled": false,
+      "credentialsConfigured": false
+    },
+    "kakao": {
+      "enabled": false,
+      "credentialsConfigured": false
+    }
+  },
+  "actualProviderConsentAndLoginTested": false,
+  "recordedAt": "2026-11-09T18:41:58.539191+00:00"
+}

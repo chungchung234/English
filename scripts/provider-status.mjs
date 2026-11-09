@@ -9,6 +9,7 @@ try{
  const confirmed=auth.mailer_autoconfirm===true;
  console.log(`::notice title=Email login configuration::Custom SMTP configured: ${smtp}; email confirmation bypass enabled: ${confirmed}.`);
  console.log(`::notice title=Email retry policy::Email sends per hour: ${Number(auth.rate_limit_email_sent)||'unknown'}; minimum resend interval seconds: ${Number(auth.smtp_max_frequency)||'unknown'}. Configuration does not verify delivery.`);
+ for(const provider of ['google','kakao'])console.log(`::notice title=Social login configuration::${provider}: enabled=${auth[`external_${provider}_enabled`]===true}; credentials configured=${Boolean(auth[`external_${provider}_client_id`]&&auth[`external_${provider}_secret`])}. Provider consent has not been verified by this check.`);
  if(!smtp&&!confirmed)console.log('::warning title=Public email delivery::Custom SMTP is not configured. Verify delivery to users outside the project team before claiming public email login works.');
  try{
   const backup=await get('database/backups');

@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 test('phone build uses cached external AI assets and keeps CSP and subpath URLs valid',async()=>{
  execFileSync(process.execPath,['scripts/build-web.mjs','--require-config'],{cwd:new URL('../',import.meta.url),env:{...process.env,PUBLIC_SUPABASE_URL:'https://test-project.supabase.co',PUBLIC_SUPABASE_KEY:'sb_publishable_test'}});
  const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
- assert(Buffer.byteLength(html)<250_000,'primary HTML must not inline megabytes of character PNGs');
+ assert(Buffer.byteLength(html)<300_000,'primary HTML including the official auth SDK must stay below 300 kB; character art stays separately cached');
  assert(!html.includes('data:image/png;base64,'));
  for(const name of ['alex','mia','juno']){
   const source=await readFile(new URL(`../web/assets/ai-${name}.webp`,import.meta.url));

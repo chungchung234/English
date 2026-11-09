@@ -2,13 +2,14 @@ import { createAIPresence } from './ai-presence.js';
 import { createOutbox, flushOutbox } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
 import { mountEmailLogin } from '../src/email-login.mjs';
+import { createAuthSession, LoginFlowError } from '../src/auth-session.mjs';
 const $ = id => document.getElementById(id);
 const outbox = createOutbox();
 const presence = createAIPresence();
 const config = globalThis.LOOP_PUBLIC_CONFIG ? validatePublicConfig(globalThis.LOOP_PUBLIC_CONFIG.url,globalThis.LOOP_PUBLIC_CONFIG.key) : null;
-const authStorageKey='loop.auth:'+(config?.url||'unconfigured');
-let auth = JSON.parse(localStorage.getItem(authStorageKey) || 'null');
-let refreshPromise, flushing, call, scope, saving = Promise.resolve(), historyEpoch = 0, memoryEpoch = 0, cloudVerified = false;
+const authSession=config?createAuthSession(config):null;
+let auth=null,loginReady=false,socialBusy=false,providers={google:false,kakao:false};
+let flushing, call, scope, saving = Promise.resolve(), historyEpoch = 0, memoryEpoch = 0, cloudVerified = false;
 const companions = {mia:{name:'Mia',trait:'다정하고 사려 깊은 대화'},alex:{name:'Alex',trait:'차분하고 명료한 대화'},juno:{name:'Juno',trait:'경쾌하고 호기심 많은 대화'}};
 let companionId = 'alex', callStarting = false, callEnding = false, selectedReviewSessionId = null, practiceMemory = null;
 let currentView = 'contacts', viewEpoch = 0, historyFilter = null;
@@ -131,15 +132,9 @@ async function request(path, {method='GET', body, token, headers={}}={}) {
   if (!response.ok) {const error=Error(data.error?.message || data.msg || data.message || data.error_description || `요청 실패 (${response.status})`);error.code=data.error?.code||data.code||data.error_code;error.status=response.status;error.retryAfter=response.headers.get('Retry-After');throw error;}
   return {data,response};
 }
-function saveAuth(data) {
-  auth={...data, expires_at:data.expires_at || Math.floor(Date.now()/1000)+data.expires_in};
-  localStorage.setItem(authStorageKey, JSON.stringify(auth));
-}
 async function accessToken() {
-  if (!auth) throw Error('로그인이 필요합니다.');
-  if (auth.expires_at*1000 > Date.now()+60000) return auth.access_token;
-  if (!refreshPromise) refreshPromise=request('/auth/v1/token?grant_type=refresh_token',{method:'POST',body:{refresh_token:auth.refresh_token}}).then(({data}) => {saveAuth(data);return auth.access_token;}).finally(()=>{refreshPromise=null;});
-  return refreshPromise;
+  if(!authSession)throw Error('로그인이 필요합니다.');
+  return authSession.accessToken();
 }
 async function api(path, options={}) { const result=await request(path,{...options,token:await accessToken()});if(path.startsWith('/rest/v1/'))cloudVerified=true;return result.data; }
 async function rpc(name, body) { return api('/rest/v1/rpc/'+name,{method:'POST',body}); }
@@ -486,22 +481,67 @@ async function loadMemory(){
   if($('practice-preview-text'))$('practice-preview-text').textContent=expression||'아직 표현이 없어요.';
   if($('practice-preview'))$('practice-preview').disabled=!expression;
 }
+function renderAuthControls(){
+  const linked=new Set((auth?.user?.identities||[]).map(identity=>identity.provider));
+  for(const button of document.querySelectorAll('[data-oauth]')){
+    const provider=button.dataset.oauth,available=providers[provider];
+    button.disabled=!loginReady||socialBusy||!available;
+    button.setAttribute('aria-label',(provider==='google'?'Google로 계속하기':'카카오 로그인')+(available?'':' · 준비 중'));
+  }
+  for(const button of document.querySelectorAll('[data-link-provider]')){
+    const provider=button.dataset.linkProvider,name=provider==='google'?'Google':'카카오';
+    button.disabled=!loginReady||socialBusy||!providers[provider]||linked.has(provider);
+    button.textContent=linked.has(provider)?name+' 연결됨':name+' 연결';
+  }
+  $('account-email').textContent=auth?.user?.email||'로그인한 계정';
+  $('social-status').textContent=!loginReady?'로그인 연결을 확인하고 있어요.':providers.google||providers.kakao?'':'간편 로그인을 준비하고 있어요. 이메일로 시작할 수 있어요.';
+  $('identity-note').textContent=providers.google||providers.kakao?'다른 이메일을 쓰는 계정도 여기서 연결하면 대화 기록이 그대로 이어져요.':'간편 로그인 연결을 준비하고 있어요.';
+}
+async function loadAuthProviders(){
+  try{const {data}=await request('/auth/v1/settings');providers={google:data.external?.google===true,kakao:data.external?.kakao===true};}
+  catch{providers={google:false,kakao:false};}
+  renderAuthControls();
+}
+async function startSocialLogin(provider,link=false){
+  if(!authSession||!loginReady||socialBusy||!providers[provider])return;
+  if(memoryBusy())throw Error('통화를 마친 뒤 계정을 연결하세요.');
+  socialBusy=true;renderAuthControls();notice('');
+  try{const url=await authSession.begin(provider,{link});window.location.assign(url);}
+  catch{socialBusy=false;renderAuthControls();notice('로그인 연결을 시작하지 못했어요. 잠시 뒤 다시 선택해 주세요.');}
+}
+function resetSignedOutUI(){
+  auth=null;scope=null;historyEpoch++;memoryEpoch++;selectedReviewSessionId=null;
+  closeDialog('memory-dialog');closeDialog('account-dialog');
+  for(const id of ['memory-facts','memory-exclusions','history','memory-results','transcript'])$(id).replaceChildren();
+  emptyReview();$('setup').hidden=false;$('workspace').hidden=true;$('auth-reset').hidden=true;renderAuthControls();
+}
 async function ready(){
   if(!config){$('service-state').textContent='서비스 연결을 준비하고 있습니다. 설정이 완료되면 여기서 바로 시작할 수 있어요.';setStatus('서비스 준비 중');return;}
-  $('service-state').textContent='기록을 이어갈 이메일을 입력해 주세요.';
+  auth=await authSession.getSession();
+  $('service-state').hidden=true;$('social-login').hidden=false;$('email-login').hidden=false;
   $('login-form').hidden=false;
   $('login-help').hidden=false;$('use-code').hidden=false;
+  if((!providers.google&&!providers.kakao)||!$('verify-form').hidden)$('email-login').open=true;
+  renderAuthControls();
   if(!auth){setStatus('로그인하면 기록이 자동 저장됩니다');return;}
-  const user=await api('/auth/v1/user');auth.user=user;localStorage.setItem(authStorageKey,JSON.stringify(auth));scope=config.url+'|'+user.id;
-  const data=await edge('config');
+  scope=null;
+  const user=await api('/auth/v1/user');auth.user=user;
+  let data;
+  try{data=await edge('config');}
+  catch(error){if(error.code==='ACCOUNT_NOT_ALLOWED'){$('auth-reset').hidden=false;throw Error('승인된 이메일 계정만 이용할 수 있습니다. 이메일이 다른 계정은 기존 계정으로 로그인한 뒤 내 계정에서 연결하세요.');}throw error;}
+  scope=config.url+'|'+user.id;
+  renderAuthControls();$('auth-reset').hidden=true;
   const savedCompanion=localStorage.getItem(companionStorageKey());companionId=Object.hasOwn(companions,savedCompanion)?savedCompanion:'alex';updateCompanion();setView('contacts');
   $('setup').hidden=true;$('workspace').hidden=false;
   await updatePending();try{await sync();}catch(e){notice('미전송 기록이 있습니다: '+e.message);}
   await loadHistory();await loadMemory();await updatePending();
   $('models').textContent=`음성 ${data.models.voice} · 교정 ${data.models.coach} · 분석 ${data.models.analysis}`;
 }
-mountEmailLogin({document,storage:localStorage,storageKey:'loop.email-login:'+(config?.url||'unconfigured'),request,notice,onAuthenticated:async data=>{saveAuth(data);notice('');await ready();}});
-$('logout').onclick=protect(async()=>{if(call || callStarting || callEnding)throw Error('먼저 통화를 종료하세요.');try{await api('/auth/v1/logout',{method:'POST'});}finally{localStorage.removeItem(authStorageKey);auth=null;scope=null;historyEpoch++;memoryEpoch++;selectedReviewSessionId=null;closeDialog('memory-dialog');$('memory-facts').replaceChildren();$('memory-exclusions').replaceChildren();closeDialog('account-dialog');$('setup').hidden=false;$('workspace').hidden=true;notice('로그아웃했습니다. 전송 대기 기록이 있다면 같은 계정으로 다시 로그인해 주세요.');}});
+mountEmailLogin({document,storage:localStorage,storageKey:'loop.email-login:'+(config?.url||'unconfigured'),request,notice,onAuthenticated:async data=>{auth=await authSession.adopt(data);notice('');await ready();}});
+const logout=protect(async()=>{if(memoryBusy())throw Error('먼저 통화를 종료하세요.');try{await authSession.signOut();}finally{resetSignedOutUI();notice('로그아웃했습니다. 전송 대기 기록이 있다면 같은 계정으로 다시 로그인해 주세요.');}});
+$('logout').onclick=logout;$('auth-reset').onclick=logout;
+document.querySelectorAll('[data-oauth]').forEach(button=>button.onclick=protect(()=>startSocialLogin(button.dataset.oauth)));
+document.querySelectorAll('[data-link-provider]').forEach(button=>button.onclick=protect(()=>startSocialLogin(button.dataset.linkProvider,true)));
 $('start-call').onclick=protect(startCall);$('end-call').onclick=protect(endCall);
 $('refresh-history').onclick=protect(async()=>{if(memoryBusy())return;await sync();await loadHistory();await loadMemory();});
 $('weekly').onclick=protect(async()=>{if(memoryBusy())throw Error('통화를 마친 뒤 분석하세요.');const selected=companionId,requestScope=scope,epoch=viewEpoch;const valid=()=>selected===companionId&&requestScope===scope&&epoch===viewEpoch&&!memoryBusy();$('weekly').disabled=true;try{await sync();if(!valid())return;await edge('weekly',{companionId:selected});if(!valid())return;await loadHistory();}finally{$('weekly').disabled=memoryBusy();}});
@@ -525,7 +565,7 @@ document.querySelectorAll('[data-cue]').forEach(button=>button.onclick=protect(a
   try{current.dc.send(JSON.stringify({type:'response.create',response:{instructions:button.dataset.cue}}));}catch(error){current.responding=false;updateCallControls();throw error;}
 }));
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&call)updateCallClock(call);});
-window.addEventListener('pageshow',()=>{if(call)updateCallClock(call);});
+window.addEventListener('pageshow',event=>{if(call)updateCallClock(call);if(event.persisted){socialBusy=false;renderAuthControls();}});
 window.addEventListener('online',()=>sync().catch(e=>notice(e.message)));
 window.addEventListener('offline',()=>{cloudVerified=false;updatePending().catch(()=>{});});
 window.addEventListener('beforeunload',e=>{if(call || callStarting || callEnding){e.preventDefault();e.returnValue='';}});
@@ -551,6 +591,20 @@ if($('practice-preview'))$('practice-preview').onclick=()=>{
 };
 if($('mute-call'))$('mute-call').onclick=()=>{const current=call;if(!current||current.ending||current.compacting)return;current.muted=!current.muted;current.stream.getAudioTracks().forEach(track=>track.enabled=!current.muted);updateCallControls();};
 updateCompanion();setView('contacts');
-ready().catch(e=>notice('연결 확인 필요: '+e.message));
+async function initializeLogin(){
+  if(!config){await ready();return;}
+  const providersLoading=loadAuthProviders();let callbackMessage='';
+  try{const result=await authSession.completeRedirect();auth=result.session;if(result.linked)callbackMessage='계정을 연결했어요. 다음에는 연결한 계정으로 로그인할 수 있어요.';}
+  catch(error){auth=await authSession.getSession().catch(()=>null);callbackMessage=error instanceof LoginFlowError?error.message:'로그인을 완료하지 못했어요. 다시 선택해 주세요.';}
+  authSession.onChange((event,session)=>{
+    const previousUser=auth?.user?.id;auth=session;
+    if(event==='SIGNED_OUT'){
+      if(memoryBusy()){call?.stream?.getTracks().forEach(track=>track.stop());call?.pc?.close();window.location.reload();return;}
+      resetSignedOutUI();
+    }else if(event==='SIGNED_IN'&&previousUser&&session?.user?.id!==previousUser&&!$('workspace').hidden)window.location.reload();
+  });
+  await providersLoading;loginReady=true;await ready();if(callbackMessage)notice(callbackMessage);
+}
+initializeLogin().catch(error=>{loginReady=true;renderAuthControls();notice('연결 확인 필요: '+error.message);});
 
 document.querySelector('.brand').addEventListener('click',e=>{e.preventDefault();if(auth)setView('contacts');});

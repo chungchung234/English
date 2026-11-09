@@ -28,10 +28,15 @@ export async function testEmailLogin(browser, base) {
       markVerifyStarted();
       if(verifyMode==='hold')await verifyGate;
       if(verifyMode==='limit')return route.fulfill({status:429,json:{code:'over_request_rate_limit'},headers:{'Retry-After':'20','Access-Control-Expose-Headers':'Retry-After'}});
-      if(verifyMode==='success')return route.fulfill({status:200,json:{access_token:'fixture',refresh_token:'fixture-refresh',expires_in:3600}});
+      if(verifyMode==='success'){
+        const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
+        const token=encode({alg:'HS256',typ:'JWT'})+'.'+encode({sub:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',exp:Math.floor(Date.now()/1000)+86400})+'.'+Buffer.from('fixture-signature').toString('base64url');
+        return route.fulfill({status:200,json:{access_token:token,refresh_token:'fixture-refresh',expires_in:86400,token_type:'bearer'}});
+      }
       return route.fulfill({status:403,json:{code:'otp_expired',msg:'Token has expired or is invalid'}});
     }
     if(path==='/auth/v1/user')return route.fulfill({json:{id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'}});
+    if(path==='/auth/v1/settings')return route.fulfill({json:{external:{google:false,kakao:false}}});
     if(path.endsWith('/coach/config'))return route.fulfill({status:403,json:{error:{code:'ACCOUNT_NOT_ALLOWED',message:'승인된 이메일 계정만 이용할 수 있습니다.'}}});
     throw Error('Unexpected login fixture request: '+path);
   });
@@ -45,7 +50,7 @@ export async function testEmailLogin(browser, base) {
     assert.equal(sendCount,1);assert.equal(await page.locator('#send-code').isDisabled(),true);
     assert.equal(await page.locator('#email').getAttribute('readonly'),'');
     releaseSend();await page.locator('#verify-form').waitFor({state:'visible'});
-    await page.waitForFunction(()=>document.querySelector('#send-code').textContent.includes('60초'));
+    await page.waitForFunction(()=>/\d+초 후 다시 받기/.test(document.querySelector('#send-code').textContent));
     await page.locator('#otp').fill('123456');await page.reload();
     await page.locator('#verify-form').waitFor({state:'visible'});
     assert.equal(await page.locator('#email').inputValue(),'fixture@example.com');
@@ -76,13 +81,14 @@ export async function testEmailLogin(browser, base) {
     await page.waitForFunction(()=>document.querySelector('#send-code').textContent.includes('60분'));
     await page.clock.fastForward(3601000);assert.equal(sendCount,3);
     mode='interval';await page.locator('#send-code').click();
-    await page.waitForFunction(()=>document.querySelector('#send-code').textContent.includes('42초'));
+    await page.waitForFunction(()=>/\d+초 후 다시 받기/.test(document.querySelector('#send-code').textContent));
+    assert(await page.evaluate(()=>{const state=JSON.parse(localStorage.getItem('loop.email-login:https://login-fixture.supabase.co'));return state.reason==='request-limit'&&state.until-Date.now()<=42000;}));
     await page.clock.fastForward(43000);
     mode='network';await page.locator('#send-code').click();
     await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('발송 결과'));
     assert.equal(await page.locator('#send-code').isDisabled(),true);
     verifyMode='limit';await page.locator('#otp').fill('123456');await page.locator('#verify-code').click();
-    await page.waitForFunction(()=>document.querySelector('#verify-code').textContent.includes('20초'));
+    await page.waitForFunction(()=>/\d+초 후 로그인/.test(document.querySelector('#verify-code').textContent));
     await page.clock.fastForward(21000);assert.equal(verifyCount,2);
     verifyMode='success';await page.locator('#verify-code').click();
     await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('승인된 이메일'));

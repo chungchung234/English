@@ -1,12 +1,14 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import {bundleWeb} from './bundle-web.mjs';
 const root=path.resolve(import.meta.dirname,'..');
 const port=Number(process.env.PORT||4173);
 http.createServer(async(req,res)=>{
  try{
   const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
   if(pathname==='/public-config.js'&&process.env.PUBLIC_SUPABASE_KEY){const {validatePublicConfig}=await import('../src/public-config.mjs');const config=validatePublicConfig(process.env.PUBLIC_SUPABASE_URL,process.env.PUBLIC_SUPABASE_KEY);res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});res.end('globalThis.LOOP_PUBLIC_CONFIG='+JSON.stringify(config)+';');return;}
+  if(pathname==='/app.js'){res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});res.end(await bundleWeb());return;}
   const built=pathname==='/built'||pathname.startsWith('/built/');
   const builtPath=pathname.slice('/built'.length);
   const location=built?path.join(root,'dist',builtPath===''||builtPath==='/'?'index.html':builtPath):pathname.startsWith('/src/')?path.join(root,pathname):path.join(root,'web',pathname==='/'?'index.html':pathname);

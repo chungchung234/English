@@ -1,15 +1,14 @@
 import { readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { validatePublicConfig } from '../src/public-config.mjs';
+import { bundleWeb } from './bundle-web.mjs';
 const root=new URL('../',import.meta.url),read=path=>readFile(new URL(path,root),'utf8');
 const url=process.env.PUBLIC_SUPABASE_URL,key=process.env.PUBLIC_SUPABASE_KEY;
 const config=url&&key?validatePublicConfig(url,key):null;
 if((url||key)&&!config)throw Error('Set both PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_KEY.');
 if(process.argv.includes('--require-config')&&!config)throw Error('Public hosting build requires Supabase public URL and key.');
 const json=JSON.stringify(config).replaceAll('<','\\u003c');
-const shared=(await Promise.all(['web/ai-presence.js','src/outbox.js','src/public-config.mjs','src/email-login.mjs'].map(read))).map(source=>source.replaceAll('export ','')).join('\n');
-const js=(await read('web/app.js')).replace(/^import .*?;\n/gm,'');
-const script=`globalThis.LOOP_PUBLIC_CONFIG=${json};\n${shared}\n${js}`;
+const script=`globalThis.LOOP_PUBLIC_CONFIG=${json};\n${await bundleWeb({minify:true})}`;
 const style=await read('web/style.css');
 const hash=text=>createHash('sha256').update(text).digest('base64');
 const policy=`default-src 'self'; script-src 'sha256-${hash(script)}'; style-src 'sha256-${hash(style)}'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; media-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'`;
@@ -34,4 +33,6 @@ await rm(new URL('dist/loop-artifact.html',root),{force:true});
 await writeFile(new URL('dist/_headers',root),`/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: microphone=(self)\n/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n`);
 console.log(`Built public website: dist/index.html (${Buffer.byteLength(html)} bytes; connection ${config?'configured':'pending'})`);
 
-await writeFile(new URL('dist/THIRD_PARTY_LICENSES.txt',root),await read('web/assets/PHOSPHOR-LICENSE'));
+await writeFile(new URL('dist/THIRD_PARTY_LICENSES.txt',root),(await Promise.all([
+ 'web/assets/PHOSPHOR-LICENSE','node_modules/@supabase/auth-js/LICENSE','node_modules/tslib/LICENSE.txt',
+].map(read))).join('\n\n'));

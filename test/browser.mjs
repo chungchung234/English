@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { testEmailLogin } from './email-login-browser.mjs';
+import { testSocialLogin } from './social-login-browser.mjs';
 const port=4187, base=`http://127.0.0.1:${port}`;
 async function assertVisibleImagesLoaded(page){
  await page.waitForFunction(()=>[...document.images].filter(image=>{const box=image.getBoundingClientRect();return box.width>0&&box.height>0&&getComputedStyle(image).visibility!=='hidden';}).every(image=>image.complete&&image.naturalWidth>0));
@@ -14,6 +15,7 @@ const server=spawn(process.execPath,['scripts/serve.mjs'],{env:{...process.env,P
 await new Promise((resolve,reject)=>{server.stdout.once('data',resolve);server.once('error',reject);});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--enable-unsafe-swiftshader','--use-angle=swiftshader','--autoplay-policy=no-user-gesture-required']});
 try{
+ await testSocialLogin(browser,base);
  await testEmailLogin(browser,base);
  const context=await browser.newContext({permissions:['microphone']});
  const page=await context.newPage();let offline=true;const saved=new Map();const savedSession=new Map();let reviews=0,checkpoints=0,checkpointFail=false,historyFailure=false,voiceFailure=false;const finishes=new Map();
@@ -29,6 +31,7 @@ try{
  await page.route('https://test-project.supabase.co/**',async route=>{
   const url=new URL(route.request().url());const body=route.request().postDataJSON?.();let data=[];
   if(url.pathname==='/auth/v1/user')data={id:uid};
+  else if(url.pathname==='/auth/v1/settings')data={external:{google:false,kakao:false}};
   else if(url.pathname.endsWith('/rpc/append_events')){
    if(offline)return route.fulfill({status:503,json:{message:'temporary offline'}});
    for(const e of body.p_events){const old=saved.get(e.id);if(old)assert.deepEqual(old,e);saved.set(e.id,e);savedSession.set(e.id,body.p_session_id);}data={inserted:body.p_events.length,event_ids:body.p_events.map(e=>e.id)};

@@ -1,12 +1,14 @@
+import { createAIPresence } from './ai-presence.js';
 import { createOutbox, flushOutbox } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
 const $ = id => document.getElementById(id);
 const outbox = createOutbox();
+const presence = createAIPresence();
 const config = globalThis.LOOP_PUBLIC_CONFIG ? validatePublicConfig(globalThis.LOOP_PUBLIC_CONFIG.url,globalThis.LOOP_PUBLIC_CONFIG.key) : null;
 const authStorageKey='loop.auth:'+(config?.url||'unconfigured');
 let auth = JSON.parse(localStorage.getItem(authStorageKey) || 'null');
 let refreshPromise, flushing, call, scope, saving = Promise.resolve(), historyEpoch = 0, memoryEpoch = 0, cloudVerified = false;
-const companions = {mia:{name:'Mia'},alex:{name:'Alex'},juno:{name:'Juno'}};
+const companions = {mia:{name:'Mia',trait:'다정하고 사려 깊은 대화'},alex:{name:'Alex',trait:'차분하고 명료한 대화'},juno:{name:'Juno',trait:'경쾌하고 호기심 많은 대화'}};
 let companionId = 'alex', callStarting = false, callEnding = false, selectedReviewSessionId = null, practiceMemory = null;
 const companionName = () => companions[companionId].name;
 const companionStorageKey = () => 'loop.companion:' + config.url + '|' + auth.user.id;
@@ -17,6 +19,7 @@ function setView(view) {
     const selected = button.dataset.view === view;
     if(selected) button.setAttribute('aria-current','page'); else button.removeAttribute('aria-current');
   });
+  presence.refresh();
 }
 function updateScenarioLabel() {
   const option = $('scenario').selectedOptions[0];
@@ -25,8 +28,9 @@ function updateScenarioLabel() {
 function updateCompanion() {
   if($('companion-name')) $('companion-name').textContent = companionName();
   if($('live-name')) $('live-name').textContent=companionName();
-  if($('live-avatar')) $('live-avatar').src=document.querySelector('[data-companion="'+companionId+'"] img')?.src||'assets/companion-'+companionId+'.webp';
-  if($('companion-avatar')) { $('companion-avatar').src = document.querySelector('[data-companion="'+companionId+'"] img')?.src || 'assets/companion-'+companionId+'.webp'; $('companion-avatar').alt = companionName(); }
+  presence.setProfile(companionId);
+  if($('companion-trait'))$('companion-trait').textContent=companions[companionId].trait;
+  for(const id of ['orb','live-avatar'])$(id)?.setAttribute('aria-label',companionName()+' AI 통화 상대');
   document.querySelectorAll('[data-companion]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.companion === companionId)));
   if(!call && !callStarting && !callEnding) $('call-status').textContent = companionName()+'와 대화할 준비가 되었어요';
 }
@@ -38,11 +42,11 @@ function setCallLayout(active) {
   $('end-call').hidden = !active || callStarting;
   $('end-call').disabled = active && callStarting;
   $('scenario').disabled = active;
-  $('orb').classList.toggle('live',active);
+  presence.refresh();
   if($('mute-call')) { $('mute-call').disabled = !active || callStarting; $('mute-call').setAttribute('aria-pressed','false'); $('mute-call').setAttribute('aria-label','마이크 끄기'); }
   document.querySelectorAll('[data-cue]').forEach(button => button.disabled = !active || !call);
 }
-function openDialog(id) { const dialog=$(id); if(dialog && !dialog.open) dialog.showModal(); }
+function openDialog(id) { const dialog=$(id); if(dialog && !dialog.open) {dialog.showModal();presence.refresh();} }
 function closeDialog(id) { const dialog=$(id); if(dialog?.open) dialog.close(); }
 function emptyReview(message = '통화를 마치면 이곳에서 피드백을 확인할 수 있어요.') {
   if(!$('review-content')) return;
@@ -127,6 +131,7 @@ async function startCall() {
   setView('call');callStarting=true;$('start-call').disabled=true;
   $('transcript').replaceChildren();$('turn-count').textContent='0개 발화';$('empty-transcript').hidden=false;setCallLayout(true);
   $('call-status').textContent=companionName()+'와 연결하고 있어요…';
+  presence.setState('connecting');
   let stream;
   try {
     await sync();
@@ -135,12 +140,20 @@ async function startCall() {
     const pc=new RTCPeerConnection();
     call={id:session.id,pc,stream,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,speaking:false,awaitingCommit:false};
     $('transcript').replaceChildren();$('turn-count').textContent='0개 발화';$('empty-transcript').hidden=false;
+    presence.attachAudio(stream,'input');
     stream.getTracks().forEach(track=>pc.addTrack(track,stream));
-    pc.ontrack=e=>{$('remote-audio').srcObject=e.streams[0];$('remote-audio').play().catch(()=>notice('음성 재생이 차단되었습니다. 화면을 누른 뒤 다시 시작해 주세요.'));};
+    pc.ontrack=e=>{const remote=e.streams[0]||new MediaStream([e.track]);presence.attachAudio(remote,'output');$('remote-audio').srcObject=remote;$('remote-audio').play().catch(()=>notice('음성 재생이 차단되었습니다. 화면을 누른 뒤 다시 시작해 주세요.'));};
     const dc=pc.createDataChannel('oai-events');call.dc=dc;
     dc.onmessage=e=>{
       let event;try{event=JSON.parse(e.data);}catch{return;}
       if(!call)return;
+      if(!call.ending) {
+        if(event.type==='input_audio_buffer.speech_started'){presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
+        if(event.type==='input_audio_buffer.speech_stopped' || event.type==='response.created'){presence.setState('thinking');$('call-status').textContent='답변을 준비하고 있어요';}
+        if(event.type==='output_audio_buffer.started'){presence.setState('speaking');$('call-status').textContent=companionName()+'가 말하고 있어요';}
+        if(event.type==='output_audio_buffer.stopped' || event.type==='output_audio_buffer.cleared'){presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
+        if(event.type==='response.done' && event.response?.status && event.response.status!=='completed'){presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
+      }
       if(event.type==='input_audio_buffer.speech_started')call.speaking=true;
       if(event.type==='input_audio_buffer.speech_stopped')call.speaking=false;
       if(event.type==='input_audio_buffer.committed'){call.awaitingCommit=false;call.transcribing.add(event.item_id);}
@@ -150,8 +163,8 @@ async function startCall() {
     };
     dc.onopen=()=>{if(!call?.ending)dc.send(JSON.stringify({type:'response.create',response:{instructions:'Begin the roleplay now with a short friendly greeting and one question. Do not narrate setup.'}}));};
     pc.onconnectionstatechange=()=>{
-      if(pc.connectionState==='connected')$('call-status').textContent=companionName()+'와 통화 중 · 편하게 말씀하세요';
-      if(['failed','disconnected'].includes(pc.connectionState)){notice('음성 연결이 끊겼습니다. 수신된 기록은 저장됩니다. 통화를 종료한 뒤 다시 시작하세요.');$('call-status').textContent='음성 연결 끊김';}
+      if(pc.connectionState==='connected'){presence.setState('listening');$('call-status').textContent=companionName()+'와 통화 중 · 편하게 말씀하세요';}
+      if(['failed','disconnected'].includes(pc.connectionState)){notice('음성 연결이 끊겼습니다. 수신된 기록은 저장됩니다. 통화를 종료한 뒤 다시 시작하세요.');$('call-status').textContent='음성 연결 끊김';presence.detachAudio();presence.setState('error');}
     };
     const offer=await pc.createOffer();await pc.setLocalDescription(offer);
     $('call-status').textContent='음성 연결 중…';
@@ -159,13 +172,14 @@ async function startCall() {
     await pc.setRemoteDescription({type:'answer',sdp:answer.sdp});
     setCallLayout(true);
     document.querySelectorAll('[data-cue]').forEach(b=>b.disabled=false);
-  } catch(e) {stream?.getTracks().forEach(t=>t.stop());call?.pc.close();call=null;setCallLayout(false);$('call-status').textContent='연결하지 못했어요. 다시 시도해 주세요.';throw e;}
+  } catch(e) {stream?.getTracks().forEach(t=>t.stop());call?.pc.close();call=null;presence.detachAudio();setCallLayout(false);$('call-status').textContent='연결하지 못했어요. 다시 시도해 주세요.';throw e;}
   finally {callStarting=false;$('start-call').disabled=false;if(call){$('end-call').hidden=false;$('end-call').disabled=false;if($('mute-call'))$('mute-call').disabled=false;}}
 }
 async function endCall() {
   if(!call || call.ending)return;
   const current=call;current.ending=true;callEnding=true;$('end-call').disabled=true;
   try {
+    presence.detachAudio();
     current.stream.getTracks().forEach(t=>t.stop());
     $('call-status').textContent='마지막 발화의 전사와 저장을 확인하는 중…';
     if(current.dc.readyState==='open') {
@@ -190,7 +204,7 @@ async function endCall() {
     loadHistory().catch(()=>{});throw e;
   } finally {
     callEnding=false;$('end-call').disabled=false;
-    if(!call)setCallLayout(false);
+    if(!call){presence.detachAudio();setCallLayout(false);}
   }
 }
 function formatDate(value){return new Intl.DateTimeFormat('ko-KR',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Seoul'}).format(new Date(value));}

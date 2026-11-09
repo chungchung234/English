@@ -47,6 +47,8 @@ try{
  offline=false;await page.locator('[data-view="history"]').click();await page.locator('#refresh-history').click();await page.waitForFunction(()=>document.querySelector('#save-status').textContent==='클라우드 저장 확인됨');assert.equal(saved.size,1);assert.equal(savedSession.get('22222222-2222-4222-8222-222222222222'),session);
  await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.equal(saved.size,1);
  await page.setViewportSize({width:390,height:844});
+ assert.equal(await page.locator('img[src*="companion-"]').count(),0,'AI companions must have no portrait assets');
+ assert.equal(await page.locator('#orb').getAttribute('data-ai-profile'),'current');
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await assertVisibleImagesLoaded(page);
  await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/mobile.png',fullPage:true});
@@ -64,6 +66,11 @@ try{
  await page.evaluate(()=>{window.RTCPeerConnection=class{constructor(){window.testPeer=this;this.connectionState='new';}addTrack(){}createDataChannel(){return this.dc={readyState:'open',send:(raw)=>{const message=JSON.parse(raw);if(message.type==='input_audio_buffer.commit'){this.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.committed',item_id:'last-item'})});setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'last-item',transcript:'One last thing before we end.'})}),30);}}};}async createOffer(){return{type:'offer',sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};}async setLocalDescription(){}async setRemoteDescription(){this.connectionState='connected';this.onconnectionstatechange?.();this.dc.onopen?.();}close(){this.connectionState='closed';}};});
  await page.locator('[data-view="call"]').click();await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});
  assert.equal(sessions[0].companion_id,'mia','new sessions must be assigned to the selected companion');
+ await page.waitForFunction(()=>document.querySelector('#live-avatar').dataset.profile==='mia');
+ for(const [type,state] of [['response.created','thinking'],['output_audio_buffer.started','speaking'],['output_audio_buffer.stopped','listening']]){
+  await page.evaluate(type=>window.testPeer.dc.onmessage({data:JSON.stringify({type})}),type);
+  await page.waitForFunction(state=>document.querySelector('#live-avatar').dataset.state===state,state);
+ }
  await assertVisibleImagesLoaded(page);await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/mobile-call.png',fullPage:true});
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'item1',content_index:0,transcript:'I am thinking of visiting a friend.'})}));
  await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.waitForFunction(()=>document.querySelector('#save-status').textContent==='클라우드 저장 확인됨');assert.equal(saved.size,2);

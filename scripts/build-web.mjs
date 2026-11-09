@@ -7,7 +7,7 @@ const config=url&&key?validatePublicConfig(url,key):null;
 if((url||key)&&!config)throw Error('Set both PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_KEY.');
 if(process.argv.includes('--require-config')&&!config)throw Error('Public hosting build requires Supabase public URL and key.');
 const json=JSON.stringify(config).replaceAll('<','\\u003c');
-const shared=(await read('src/outbox.js')).replaceAll('export ','')+'\n'+(await read('src/public-config.mjs')).replaceAll('export ','');
+const shared=(await read('web/ai-presence.js')).replaceAll('export ','')+'\n'+(await read('src/outbox.js')).replaceAll('export ','')+'\n'+(await read('src/public-config.mjs')).replaceAll('export ','');
 const js=(await read('web/app.js')).replace(/^import .*?;\n/gm,'');
 const script=`globalThis.LOOP_PUBLIC_CONFIG=${json};\n${shared}\n${js}`;
 const style=await read('web/style.css');

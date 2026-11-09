@@ -10,7 +10,7 @@
 <div class="app-shell">
 <header class="app-header">
 <a class="brand" href="#" aria-label="시시콜콜 홈"><img class="brand-logo" src="assets/brand-logo.webp" alt="시시콜콜"></a>
-<button id="companion-open" class="avatar-control" aria-label="대화 상대 선택" hidden><img id="companion-avatar" src="assets/companion-alex.webp" alt="Alex"></button>
+<button id="companion-open" class="avatar-control" aria-label="대화 상대 선택" hidden><canvas id="companion-avatar" class="ai-presence ai-presence-mini" data-ai-profile="current" aria-hidden="true"></canvas></button>
 </header>
 <main>
 <section id="setup" class="setup-panel">
@@ -23,15 +23,16 @@
 <section data-panel="call" id="call-panel">
 <div id="call-home" class="call-home">
 <div class="call-focus">
-<img id="orb" class="voice-mark" src="assets/voice-wave.webp" alt="" aria-hidden="true">
+<canvas id="orb" class="ai-presence ai-presence-home" data-ai-profile="current" role="img" aria-label="Alex AI 통화 상대"></canvas><p class="ai-identity">AI 통화 친구</p>
 <button id="companion-name" class="companion-chip" data-open="companion-dialog" aria-label="통화 상대 선택">Alex</button>
+<p id="companion-trait" class="companion-trait">차분하고 명료한 대화</p>
 <button id="topic-open" class="topic-choice" aria-label="대화 주제 선택"><span id="scenario-label">주말 계획</span><span class="chevron-disc"><img src="assets/chevron.svg" alt=""></span></button>
 </div>
 <button id="start-call" class="primary-button call-start"><img src="assets/phone-white.svg" alt="">통화 시작</button>
 <button id="practice-preview" class="practice-preview" disabled><span class="practice-icon"><img src="assets/history.svg" alt=""></span><span class="practice-copy"><strong>지난 표현</strong><span id="practice-preview-text">첫 통화 후에 만나요</span></span><img class="row-chevron" src="assets/chevron.svg" alt=""></button>
 </div>
 <div id="live-call" class="live-call" hidden>
-<img id="live-avatar" class="live-avatar" src="assets/companion-alex.webp" alt="">
+<canvas id="live-avatar" class="ai-presence ai-presence-live" data-ai-profile="current" role="img" aria-label="Alex AI 통화 상대"></canvas><p class="ai-identity">AI 통화 친구</p>
 <h1 id="live-name">Alex</h1><p id="call-status" role="status" aria-live="polite">연결 준비 중</p><p id="save-status" class="save-status" role="status" aria-live="polite">연결 확인 중</p>
 <div class="live-actions"><button id="mute-call" class="glass-control" aria-label="마이크 끄기" aria-pressed="false"><img src="assets/microphone.svg" alt=""><span>마이크</span></button><button data-cue="Please give me a short hint for how to respond, then continue our roleplay." class="glass-control" disabled>힌트</button><button data-cue="Please use simpler English and shorter sentences." class="glass-control" disabled>쉽게</button></div>
 <button id="end-call" class="primary-button end-call" hidden>통화 종료</button>
@@ -49,12 +50,13 @@
 <div id="notice" role="status" aria-live="polite"></div>
 </main>
 </div>
-<dialog id="companion-dialog"><div class="dialog-heading"><h2>대화 상대</h2><button data-close="companion-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><p class="dialog-note">친구마다 대화와 기억이 따로 이어져요.</p>
-<button class="companion-option" data-companion="mia" aria-pressed="false"><img src="assets/companion-mia.webp" alt=""><span><strong>Mia</strong><small>차분하게, 일상 이야기</small></span></button>
-<button class="companion-option" data-companion="alex" aria-pressed="true"><img src="assets/companion-alex.webp" alt=""><span><strong>Alex</strong><small>편안하게, 생각 나누기</small></span></button>
-<button class="companion-option" data-companion="juno" aria-pressed="false"><img src="assets/companion-juno.webp" alt=""><span><strong>Juno</strong><small>장난스럽게, 가벼운 수다</small></span></button><p class="dialog-footnote">AI 통화 친구</p></dialog>
+<dialog id="companion-dialog"><div class="dialog-heading"><h2>대화 상대</h2><button data-close="companion-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><p class="dialog-note">성격이 다른 AI와 대화해 보세요. 기억은 따로 이어져요.</p>
+<button class="companion-option" data-companion="mia" aria-pressed="false"><canvas class="ai-presence ai-presence-option" data-ai-profile="mia" aria-hidden="true"></canvas><span><strong>Mia</strong><small>다정하고 사려 깊은 대화</small></span></button>
+<button class="companion-option" data-companion="alex" aria-pressed="true"><canvas class="ai-presence ai-presence-option" data-ai-profile="alex" aria-hidden="true"></canvas><span><strong>Alex</strong><small>차분하고 명료한 대화</small></span></button>
+<button class="companion-option" data-companion="juno" aria-pressed="false"><canvas class="ai-presence ai-presence-option" data-ai-profile="juno" aria-hidden="true"></canvas><span><strong>Juno</strong><small>호기심 많은, 가벼운 수다</small></span></button><p class="dialog-footnote">AI 통화 친구</p></dialog>
 <dialog id="topic-dialog"><div class="dialog-heading"><h2>대화 주제</h2><button data-close="topic-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><label class="sr-only" for="scenario">주제</label><select id="scenario"><option value="Weekend plans with a friend: leisure, hobbies, travel" data-label="주말 계획">주말 계획</option><option value="Talking about today and everyday life" data-label="오늘 있었던 일">오늘 있었던 일</option><option value="Ordering coffee at a cafe and describing preferences" data-label="카페에서 주문하기">카페에서 주문하기</option><option value="Resolving a hotel reservation issue while traveling" data-label="여행 이야기">여행 이야기</option><option value="Sharing work progress and discussing project plans" data-label="업무 이야기">업무 이야기</option></select><button id="topic-done" class="primary-button">선택</button></dialog>
 <dialog id="account-dialog"><div class="dialog-heading"><h2>내 계정</h2><button data-close="account-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><div class="settings-actions"><button id="export" class="glass-button">전체 기록 내보내기</button><label class="file-button">기록 가져오기<input id="restore" type="file" accept="application/json,.json"></label><button class="quiet-button" data-open="privacy-dialog">저장·개인정보</button><button id="logout" class="quiet-button">로그아웃</button></div><p id="models" class="dialog-footnote"></p></dialog>
 <dialog id="privacy-dialog"><div class="dialog-heading"><h2>저장·개인정보</h2><button data-close="privacy-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><p class="privacy-copy">대화문과 교정은 내 계정의 Supabase DB에 저장됩니다. 음성 처리와 피드백에는 OpenAI를 사용합니다. 원본 음성 파일은 보관하지 않습니다.</p><p class="privacy-copy">전송 대기 중인 기록은 이 기기에 임시 보관됩니다. 공용 기기에서는 사용하지 마세요. 기기 대기열이나 DB 삭제는 기록 손실로 이어질 수 있으며, 재해 복구에는 별도 백업 설정이 필요합니다.</p></dialog>
+<div hidden aria-hidden="true"><img id="ai-art-alex" src="assets/ai-alex.png" alt=""><img id="ai-art-mia" src="assets/ai-mia.png" alt=""><img id="ai-art-juno" src="assets/ai-juno.png" alt=""></div>
 <audio id="remote-audio" autoplay></audio><script src="public-config.js"></script><script type="module" src="app.js"></script>
 </body></html>

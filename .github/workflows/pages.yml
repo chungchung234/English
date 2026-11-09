@@ -8,6 +8,8 @@ on:
       - supabase/**
       - package.json
       - package-lock.json
+      - test/**
+      - scripts/evaluate-memory.mjs
       - scripts/build-web.mjs
       - scripts/deploy.py
       - scripts/prepare-hosting.mjs
@@ -33,6 +35,15 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
+      - name: Validate types and server/database behavior
+        run: |
+          npm run check
+          npm test
+          npm run eval:memory
+      - name: Validate memory controls and mobile browser
+        run: npm run test:browser
+        env:
+          CHROMIUM_PATH: /usr/bin/google-chrome
       - name: Resolve public site connection
         run: node scripts/prepare-hosting.mjs
         env:

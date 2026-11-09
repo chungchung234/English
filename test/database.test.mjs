@@ -25,7 +25,7 @@ async function database(t) {
     create role service_role nologin bypassrls;
     create schema auth;
     create schema extensions;
-    create table auth.users (id uuid primary key);
+    create table auth.users (id uuid primary key, email text, email_confirmed_at timestamptz);
     create function auth.uid() returns uuid language sql stable as $$
       select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
     $$;
@@ -33,7 +33,8 @@ async function database(t) {
     grant execute on function auth.uid() to public;
   `);
   for (const migration of migrations) await db.exec(migration);
-  await db.query('insert into auth.users(id) values ($1), ($2)', [USER_A, USER_B]);
+  await db.query("insert into auth.users(id,email,email_confirmed_at) values ($1,'owner@example.com',now()), ($2,'other@example.com',now())", [USER_A, USER_B]);
+  await db.exec("insert into loop_private.approved_emails values ('owner@example.com'), ('other@example.com')");
   return db;
 }
 
@@ -86,7 +87,8 @@ test('migration applies to the Supabase auth and role contract', async (t) => {
     order by tablename
   `);
   assert.deepEqual(rows.map((row) => row.tablename), [
-    'analyses', 'analysis_jobs', 'api_daily_usage', 'sessions', 'transcript_events',
+    'analyses', 'analysis_jobs', 'api_daily_usage', 'memory_embeddings', 'memory_fact_overrides',
+    'memory_session_exclusions', 'memory_state', 'sessions', 'transcript_events',
   ]);
 });
 
@@ -388,4 +390,250 @@ test('companion memory stays scoped, legacy sessions default to Alex, and restor
     asUser(db, USER_A, () => db.query("insert into public.sessions(scenario, companion_id) values ('Invalid', 'unknown')")),
     /companion/i,
   );
+});
+
+test('factual profile survives search eviction, follows speech date, isolates companions and honors forget', async t => {
+  const db=await database(t);
+  async function factSession(user,companion,key,value,day,quote='I live in Seoul.') {
+    const session=await makeSession(db,user,'Ordinary conversation',companion);
+    const {rows:[speech]}=await db.query(`insert into public.transcript_events(user_id,session_id,event_key,speaker,text,timestamp) values ($1,$2,'fact','user',$3,$4) returning id`,[user,session.id,quote,`2026-11-${String(day).padStart(2,'0')}T12:00:00Z`]);
+    await db.query(`insert into public.analyses(user_id,session_id,kind,content,model,source_event_ids) values ($1,$2,'session',$3,'test',$4)`,[user,session.id,JSON.stringify({summary:'Conversation',memory_facts:[{key,value,quote,evidence_ids:[speech.id]}]}),[speech.id]]);
+    return session;
+  }
+  const old=await factSession(USER_A,'alex','location','Seoul',1);
+  await factSession(USER_A,'alex','location','Busan',5,'I moved to Busan.');
+  await factSession(USER_A,'mia','location','Paris',6,'I live in Paris.');
+  await factSession(USER_B,'alex','location','London',6,'I live in London.');
+  // A late re-analysis of the old call must not overwrite a newer spoken fact.
+  await db.query(`update public.analyses set created_at=now()+interval '1 day' where session_id=$1`,[old.id]);
+  for(let i=0;i<14;i++){
+    const session=await makeSession(db,USER_A,'Recent coffee practice');
+    await db.query(`insert into public.analyses(user_id,session_id,kind,content,model,created_at) values ($1,$2,'session','{"summary":"Coffee"}','test',now()+interval '2 days')`,[USER_A,session.id]);
+  }
+  const profile=async(user,companion)=>asService(db,async()=>{
+    const {rows}=await db.query('select session_id,content from public.memory_search($1,$2,12,$3)',[user,'coffee',companion]);
+    return rows;
+  });
+  let rows=await profile(USER_A,'alex');assert.equal(rows.length,12);assert.ok(rows.every(row=>row.session_id!==old.id));
+  assert.equal(rows[0].content.memory_profile[0].value,'Busan');
+  assert.equal((await profile(USER_A,'mia'))[0].content.memory_profile[0].value,'Paris');
+  assert.equal((await profile(USER_B,'alex'))[0].content.memory_profile[0].value,'London');
+  await factSession(USER_A,'alex','location','',8,'Please forget where I live.');
+  rows=await profile(USER_A,'alex');assert.equal(rows[0].content.memory_profile[0].value,'');assert.equal(rows[0].content.memory_profile[0].forgotten,true);
+  // Both the wrapper and raw search stay unavailable to browser roles.
+  await asUser(db,USER_A,async()=>{
+    await assert.rejects(()=>db.query('select * from public.memory_search_hits($1,$2,12,$3)',[USER_A,'coffee','alex']),/permission denied/);
+  });
+});
+
+test('analysis continuations retain one parent budget while ordinary failures consume retries', async t=>{
+  const db=await database(t);
+  const reserve=async()=>asService(db,async()=>(await db.query("select public.reserve_run($1,'weekly','continuation-test',null,600) as result",[USER_A])).rows[0].result);
+  const fail=async(run,reason)=>asService(db,()=>db.query('select public.fail_run($1,$2,$3)',[run.job_id,run.lease_token,reason]));
+  let run=await reserve();
+  for(let i=0;i<4;i++){assert.equal(run.reserved,true);await fail(run,'ANALYSIS_CONTINUE');run=await reserve();}
+  let usage=await db.query("select reservations from public.api_daily_usage where user_id=$1 and kind='weekly'",[USER_A]);
+  assert.equal(usage.rows[0].reservations,1);
+  await fail(run,'UPSTREAM_UNAVAILABLE');run=await reserve();assert.equal(run.reserved,true);
+  usage=await db.query("select reservations from public.api_daily_usage where user_id=$1 and kind='weekly'",[USER_A]);assert.equal(usage.rows[0].reservations,2);
+});
+
+test('approval revocation blocks own data and every security-definer write path', async (t) => {
+  const db = await database(t);
+  const session = await makeSession(db, USER_A);
+  await asUser(db, USER_A, () => append(db, session.id, [event('before-revocation', 'Hello there')]));
+  await db.exec("delete from loop_private.approved_emails where email = 'owner@example.com'");
+  await asUser(db, USER_A, async () => {
+    for (const table of ['sessions','transcript_events','analyses']) {
+      assert.equal((await db.query(`select * from public.${table}`)).rows.length, 0);
+    }
+    await assert.rejects(db.query("insert into public.sessions(scenario) values ('Blocked')"), /row-level security/);
+    await assert.rejects(append(db, session.id, [event('blocked','No access')]), /Account not approved/);
+    await assert.rejects(db.query('select public.finish_session($1)', [session.id]), /Account not approved/);
+    await assert.rejects(db.query("select public.restore_history('{\"sessions\":[],\"events\":[]}'::jsonb)"), /Account not approved/);
+    await assert.rejects(db.query('select * from loop_private.approved_emails'), /permission denied/);
+    await assert.rejects(db.query('select loop_private.finish_session($1)', [session.id]), /permission denied/);
+  });
+  // An unverified account is denied even if its email appears in the list.
+  await db.exec("insert into loop_private.approved_emails values ('owner@example.com'); update auth.users set email_confirmed_at = null where email = 'owner@example.com'");
+  assert.equal(await asUser(db, USER_A, async () => (await db.query('select public.is_approved_user() as ok')).rows[0].ok), false);
+});
+
+const vector = (axis = 0) => Array.from({ length: 512 }, (_, index) => index === axis ? 1 : 0);
+async function memoryRpc(db, name, args, casts) {
+  return asService(db, async () => (await db.query(`select public.${name}(${args.map((_,i)=>`$${i+1}${casts?.[i] || ''}`).join(',')}) as result`, args)).rows[0].result);
+}
+async function memoryFixture(db, {user=USER_A,companion='alex',content={summary:'Coffee practice'},day='2026-10-01',fact=null}={}) {
+  const session=await makeSession(db,user,'Memory fixture',companion);
+  let sources=[];
+  if(fact) {
+    const quote=fact.quote || `My ${fact.key} is ${fact.value}.`;
+    const speech=await asUser(db,user,()=>append(db,session.id,[event(`fact-${session.id}`,quote,{timestamp:`${day}T12:00:00Z`})]));
+    sources=speech.event_ids;
+    content={...content,memory_facts:[{...fact,quote,evidence_ids:sources}]};
+  }
+  await asUser(db,user,()=>db.query('select public.finish_session($1)',[session.id]));
+  await db.query('update public.sessions set created_at=$2 where id=$1',[session.id,`${day}T00:00:00Z`]);
+  const {rows:[analysis]}=await db.query(`insert into public.analyses(user_id,session_id,kind,content,model,created_at,source_event_ids) values($1,$2,'session',$3,'fixture',$4,$5) returning *`,[user,session.id,JSON.stringify(content),`${day}T12:00:00Z`,sources]);
+  return {session,analysis};
+}
+const context=(db,user=USER_A,companion='alex',query='',embedding=null,model='test-512',limit=12)=>memoryRpc(db,'memory_context',[user,companion,query,embedding,model,limit],['','','','::real[]']);
+const manage=(db,action,key=null,value=null,session=null,user=USER_A,companion='alex')=>memoryRpc(db,'memory_manage',[user,companion,action,key,value,session]);
+const candidates=async(db,user=USER_A,companion='alex',model='test-512')=>asService(db,async()=>(await db.query('select * from public.memory_index_candidates($1,$2,$3,20)',[user,companion,model])).rows);
+const store=(db,candidate,embedding=vector(),user=USER_A,companion='alex',model='test-512')=>memoryRpc(db,'memory_store_embedding',[user,companion,candidate.analysis_id,model,candidate.content_hash,embedding,candidate.revision],['','','','','','::real[]']);
+
+test('hybrid mechanics recover an older paraphrase with cosine; keyword, model and latest-version fallbacks remain bounded',async t=>{
+  const db=await database(t);
+  const old=await memoryFixture(db,{content:{summary:'My work involves caring for patients in a clinic.'},day:'2026-09-01'});
+  const exact=await memoryFixture(db,{content:{summary:'physician pronunciation exercise'},day:'2026-09-02'});
+  for(let i=1;i<=14;i++) await memoryFixture(db,{content:{summary:`Coffee conversation ${i}`},day:`2026-10-${String(i).padStart(2,'0')}`});
+  await memoryFixture(db,{user:USER_B,content:{summary:'physician private'},day:'2026-10-20'});
+  await memoryFixture(db,{companion:'mia',content:{summary:'physician Mia'},day:'2026-10-20'});
+  for(const row of await candidates(db)) assert.equal(await store(db,row,vector(row.session_id===old.session.id?0:1)),true);
+  // These vectors are deliberately synthetic: this verifies retrieval mechanics,
+  // not whether a real embedding model understands this paraphrase.
+  const semantic=await context(db,USER_A,'alex','medical profession',vector());
+  assert.equal(semantic.retrieval,'hybrid');
+  assert.equal(semantic.memories[0].session_id,old.session.id);
+  assert.equal(semantic.memories.length,12);
+  assert.equal(semantic.limited,false);
+  assert.equal(semantic.memories.filter(m=>m.created_at>='2026-10-11').length,4,'four latest sessions retained beside old semantic hits');
+  assert.equal((await context(db,USER_A,'alex','medical profession',vector(),'test-512',1)).memories[0].session_id,old.session.id);
+  const keyword=await context(db,USER_A,'alex','physician');
+  assert.equal(keyword.retrieval,'keyword');assert.equal(keyword.memories[0].session_id,exact.session.id);
+  const mismatch=await context(db,USER_A,'alex','physician',vector(),'different-model');
+  assert.equal(mismatch.retrieval,'keyword');assert.equal(mismatch.memories[0].session_id,exact.session.id);
+  assert.ok(semantic.memories.every(m=>m.user_id===USER_A));
+  await db.query(`insert into public.analyses(user_id,session_id,kind,content,model) values($1,$2,'session','{"summary":"replacement"}','fixture')`,[USER_A,old.session.id]);
+  const replaced=await context(db,USER_A,'alex','',vector());
+  assert.ok(replaced.memories.every(m=>m.id!==old.analysis.id));
+  assert.ok((await candidates(db)).some(c=>c.session_id===old.session.id && c.analysis_id!==old.analysis.id));
+});
+
+test('manual facts work with no hits, changes increment revision and cutoff retains other structured slots',async t=>{
+  const db=await database(t);
+  const empty=await manage(db,'setFact','name','Ada');
+  assert.equal(empty.revision,1);assert.equal(empty.history_suppressed,true);
+  const noHistory=await context(db);assert.deepEqual(noHistory.memories,[]);assert.equal(noHistory.facts[0].value,'Ada');
+  const history=await memoryFixture(db,{fact:{key:'location',value:'Seoul'},content:{summary:'Seoul city'},day:'2026-10-01'});
+  await memoryFixture(db,{fact:{key:'occupation',value:'nurse'},day:'2026-10-02'});
+  const before=await manage(db,'list');assert.equal(before.facts.find(f=>f.key==='location').value,'Seoul');
+  const forgotten=await manage(db,'forgetFact','location');assert.equal(forgotten.revision,2);
+  const after=await context(db,USER_A,'alex','Seoul');
+  assert.deepEqual(after.memories,[]);assert.equal(after.facts.find(f=>f.key==='location').forgotten,true);
+  assert.equal(after.facts.find(f=>f.key==='occupation').value,'nurse');
+  assert.deepEqual(await candidates(db),[]);
+  assert.equal((await manage(db,'setFact','location','Busan')).revision,3);
+  assert.equal((await context(db)).facts.find(f=>f.key==='location').value,'Busan');
+  const live=await makeSession(db,USER_A);
+  await assert.rejects(manage(db,'forgetFact','name'),/Finish unfinished calls/);
+  assert.equal((await manage(db,'list')).revision,3);
+  await asUser(db,USER_A,()=>db.query('select public.finish_session($1)',[live.id]));
+  await assert.rejects(manage(db,'setFact','name',' '.repeat(4)),/Invalid memory fact/);
+  await assert.rejects(manage(db,'setFact','bad','value'),/Invalid memory fact/);
+  await assert.rejects(manage(db,'setFact','name','a'.repeat(241)),/Invalid memory fact/);
+  assert.ok(history.analysis.id);
+});
+
+test('exclusions gate facts, hits and indexing; restore cannot clear current restrictions',async t=>{
+  const db=await database(t);
+  const hidden=await memoryFixture(db,{fact:{key:'location',value:'Seoul'}});
+  const savedCandidate=(await candidates(db))[0];
+  assert.equal((await context(db)).facts[0].value,'Seoul');
+  const excluded=await manage(db,'excludeSession',null,null,hidden.session.id);
+  assert.equal(excluded.revision,1);assert.equal(excluded.excluded_sessions[0].session_id,hidden.session.id);
+  assert.deepEqual((await context(db)).facts,[]);assert.deepEqual((await context(db)).memories,[]);assert.deepEqual(await candidates(db),[]);
+  assert.equal(await store(db,savedCandidate),false);
+  await asUser(db,USER_A,()=>db.query('select public.restore_history($1::jsonb)',[JSON.stringify({sessions:[],events:[],memory_controls:{state:[{user_id:USER_A,companion_id:'alex',revision:0,history_cutoff:null}],facts:[],exclusions:[]}})]));
+  assert.equal((await manage(db,'list')).excluded_sessions.length,1);
+  assert.deepEqual((await context(db)).memories,[]);
+  const restored=await manage(db,'restoreSession',null,null,hidden.session.id);
+  assert.equal(restored.excluded_sessions.length,0);assert.equal((await context(db)).facts[0].value,'Seoul');assert.equal((await candidates(db)).length,1);
+  await manage(db,'forgetFact','location');
+  await asUser(db,USER_A,()=>db.query('select public.restore_history($1::jsonb)',[JSON.stringify({sessions:[],events:[],memory_controls:{state:[{companion_id:'alex',history_cutoff:null}],facts:[{companion_id:'alex',key:'location',value:'Seoul'}],exclusions:[]}})]));
+  const after=await context(db);assert.equal(after.facts[0].forgotten,true);assert.deepEqual(after.memories,[]);
+  const other=await memoryFixture(db,{user:USER_B});
+  await assert.rejects(manage(db,'excludeSession',null,null,other.session.id),/Owned companion session/);
+  await assert.rejects(manage(db,'excludeSession',null,null,hidden.session.id,USER_A,'mia'),/Owned companion session/);
+  await assert.rejects(asUser(db,USER_A,()=>db.query('select public.restore_history($1::jsonb)',[JSON.stringify({sessions:[],events:[],memory_controls:{facts:[{user_id:USER_B,companion_id:'alex',key:'name',value:'Intruder'}]}})])),/another user/);
+});
+
+test('index writes reject stale revision, hash, analysis, scope and invalid vectors; UTF8 documents are bounded',async t=>{
+  const db=await database(t);
+  const fixture=await memoryFixture(db,{content:{summary:'가'.repeat(5000),based_on:Array(500).fill(USER_A),scope:{ids:Array(500).fill(USER_A)}}});
+  const [candidate]=await candidates(db);assert.ok(Buffer.byteLength(candidate.document,'utf8')<=6000);assert.ok(candidate.document.startsWith('가'));assert.ok(!candidate.document.includes(USER_A));
+  assert.equal(await store(db,{...candidate,content_hash:'wrong'}),false);
+  assert.equal(await store(db,candidate,vector(),USER_B),false);
+  assert.equal(await store(db,candidate,vector(),USER_A,'mia'),false);
+  for(const invalid of [[],Array(511).fill(1),Array(512).fill(0),[...Array(511).fill(1),'NaN'],[...Array(511).fill(1),'Infinity']]) {
+    await assert.rejects(store(db,candidate,invalid),/Invalid memory vector/);
+    await assert.rejects(context(db,USER_A,'alex','',invalid),/Invalid memory vector/);
+  }
+  assert.equal(await store(db,candidate),true);assert.deepEqual(await candidates(db),[]);
+  await db.query(`update public.analyses set content='{"summary":"changed"}' where id=$1`,[fixture.analysis.id]);
+  assert.equal(await store(db,candidate),false);assert.equal((await candidates(db)).length,1);
+  const stale=(await candidates(db))[0];await manage(db,'setFact','name','Ada');assert.equal(await store(db,stale),false);
+});
+
+test('memory RPC grants and backup RLS preserve approval and ownership; stage budgets are independent',async t=>{
+  const db=await database(t);
+  await manage(db,'setFact','name','Ada');
+  await manage(db,'setFact','name','Other',null,USER_B);
+  await asUser(db,USER_A,async()=>{
+    for(const sql of ['select public.memory_context($1,\'alex\')','select public.memory_manage($1,\'alex\',\'list\')','select * from public.memory_index_candidates($1,\'alex\',\'test\')','select public.memory_store_embedding($1,\'alex\',null,\'test\',\'hash\',null,0)']) await assert.rejects(db.query(sql,[USER_A]),/permission denied/);
+    assert.equal((await db.query('select * from public.memory_state')).rows.length,1);
+    assert.equal((await db.query('select * from public.memory_fact_overrides')).rows[0].value,'Ada');
+    await assert.rejects(db.query('select * from public.memory_embeddings'),/permission denied/);
+    await assert.rejects(db.query("update public.memory_fact_overrides set value='Changed'"),/permission denied/);
+  });
+  for(const [kind,limit] of [['checkpoint',60],['part',80],['embedding',200]]) {
+    await db.query('insert into public.api_daily_usage(user_id,day,kind,reservations) values($1,current_date,$2,$3)',[USER_A,kind,limit-1]);
+    const run=await memoryRpc(db,'reserve_run',[USER_A,kind,`${kind}-ok`,null,180]);assert.equal(run.reserved,true);
+    const blocked=await memoryRpc(db,'reserve_run',[USER_A,kind,`${kind}-blocked`,null,180]);assert.equal(blocked.reason,'budget_exceeded');
+  }
+  await db.exec("delete from loop_private.approved_emails where email='owner@example.com'");
+  await assert.rejects(context(db),/Account not approved/);await assert.rejects(manage(db,'list'),/Account not approved/);await assert.rejects(candidates(db),/Account not approved/);
+  await assert.rejects(memoryRpc(db,'reserve_run',[USER_A,'part','unapproved',null,180]),/Account not approved/);
+  await asUser(db,USER_A,async()=>{for(const table of ['memory_state','memory_fact_overrides','memory_session_exclusions']) assert.deepEqual((await db.query(`select * from public.${table}`)).rows,[]);});
+});
+
+test('restore restrictions commit atomically with active backup sessions and repeated controls retain revision and cutoff',async t=>{
+  const db=await database(t);
+  const id='c1111111-1111-4111-8111-111111111111';
+  const backup={sessions:[{id,user_id:USER_A,companion_id:'alex',scenario:'Interrupted imported conversation',status:'active',created_at:'2026-10-01T00:00:00Z'}],events:[],memory_controls:{state:[],facts:[{companion_id:'alex',key:'name',value:'Ada'}],exclusions:[{companion_id:'alex',session_id:id}]}};
+  const restore=payload=>asUser(db,USER_A,()=>db.query('select public.restore_history($1::jsonb) as result',[JSON.stringify(payload)]));
+  assert.equal((await restore(backup)).rows[0].result.sessions_inserted,1);
+  const state=async()=>(await db.query('select revision,history_cutoff from public.memory_state where user_id=$1 and companion_id=\'alex\'',[USER_A])).rows[0];
+  const first=await state();assert.equal(Number(first.revision),1);
+  assert.equal((await db.query('select status from public.sessions where id=$1',[id])).rows[0].status,'active');
+  await restore(backup);assert.deepEqual(await state(),first);
+  await assert.rejects(manage(db,'forgetFact','name'),/Finish unfinished calls/);
+  const extra='c2222222-2222-4222-8222-222222222222';
+  await assert.rejects(restore({sessions:[{...backup.sessions[0],id:extra}],events:[],memory_controls:{facts:[{companion_id:'alex',key:'occupation',value:'nurse'}]}}),/Finish unfinished calls/);
+  assert.equal((await db.query('select count(*)::int n from public.sessions where id=$1',[extra])).rows[0].n,0);
+  assert.equal((await context(db)).facts[0].value,'Ada');assert.deepEqual((await context(db)).memories,[]);
+});
+
+test('retrieval scan and exclusion response caps are explicit',async t=>{
+  const db=await database(t);
+  await db.query(`insert into public.sessions(user_id,scenario,status,created_at,ended_at)
+    select $1,'bounded history','ended',now()-make_interval(secs=>n),now() from generate_series(1,2001) n`,[USER_A]);
+  await db.query(`insert into public.analyses(user_id,session_id,kind,content,model,created_at)
+    select user_id,id,'session',jsonb_build_object('summary','bounded keyword'),'fixture',created_at from public.sessions where user_id=$1`,[USER_A]);
+  const result=await context(db,USER_A,'alex','keyword',null,'test-512',30);assert.equal(result.limited,true);assert.equal(result.memories.length,12);
+  await db.query(`insert into public.memory_session_exclusions(user_id,companion_id,session_id) select user_id,companion_id,id from public.sessions where user_id=$1 limit 31`,[USER_A]);
+  const listed=await manage(db,'list');assert.equal(listed.excluded_sessions.length,30);assert.equal(listed.excluded_sessions_limited,true);
+});
+
+
+test('fact mutations never decrease a later cutoff restored from backup',async t=>{
+  const db=await database(t);
+  const cutoff='2099-01-01T00:00:00.000Z';
+  await asUser(db,USER_A,()=>db.query('select public.restore_history($1::jsonb)',[JSON.stringify({sessions:[],events:[],memory_controls:{state:[{companion_id:'alex',history_cutoff:cutoff}]}})]));
+  await manage(db,'setFact','name','Ada');
+  await manage(db,'forgetFact','name');
+  const {rows:[state]}=await db.query('select revision,history_cutoff from public.memory_state where user_id=$1 and companion_id=\'alex\'',[USER_A]);
+  assert.equal(new Date(state.history_cutoff).toISOString(),cutoff);
+  assert.equal(Number(state.revision),3);
+  assert.equal((await context(db)).facts[0].forgotten,true);
 });

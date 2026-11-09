@@ -239,7 +239,7 @@ test('weekly review selects ended sessions in a seven-day window and records its
     if (path.includes('/transcript_events?')) return response([event]);
     if (path.includes('/reserve_run')) {
       const body = JSON.parse(options.body); assert.equal(body.p_kind, 'weekly');
-      assert.match(body.p_request_key, /^v3:alex:\d{4}-\d{2}-\d{2}:[a-f0-9]{16}:[a-f0-9]{64}$/);
+      assert.match(body.p_request_key, /^v4:alex:\d{4}-\d{2}-\d{2}:[a-f0-9]{16}:[a-f0-9]{64}$/);
       return response({ reserved: true, job_id: sessionId, lease_token: eventId });
     }
     if (path.includes('api.openai.com')) {
@@ -329,6 +329,8 @@ test('each stored companion controls its voice, persona, and isolated retrieved 
           const session = JSON.parse(options.body.get('session')); connected = true;
           assert.equal(session.audio.output.voice, voice);
           assert.ok(session.instructions.includes(`Your name is ${name}.`));
+          assert.ok(session.instructions.includes('no chosen topic or roleplay setup is required'));
+          assert.equal(session.instructions.includes('welcoming the learner into the scenario'), false);
           assert.ok(session.instructions.includes(`${name} practice phrase`));
           for (const [, other] of profiles) if (other !== name) assert.equal(session.instructions.includes(`${other} practice phrase`), false);
           return new Response(sdp);
@@ -398,7 +400,7 @@ test('weekly history, model context, scope, and cache key are isolated to the se
           return response([event]);
         }
         if (path.includes('/reserve_run')) {
-          assert.ok(JSON.parse(options.body).p_request_key.startsWith(`v3:${companionId}:`));
+          assert.ok(JSON.parse(options.body).p_request_key.startsWith(`v4:${companionId}:`));
           return response({ reserved: true, job_id: sessionId, lease_token: eventId });
         }
         if (path.includes('/responses')) {
@@ -438,7 +440,7 @@ test('session review derives its companion identity without a client override', 
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Travel', status: 'ended' }]);
     if (path.includes('/transcript_events?')) return response([event]);
     if (path.includes('/reserve_run')) {
-      assert.ok(JSON.parse(options.body).p_request_key.startsWith(`v3:mia:${sessionId}:`));
+      assert.ok(JSON.parse(options.body).p_request_key.startsWith(`v4:mia:${sessionId}:`));
       return response({ reserved: true, job_id: sessionId, lease_token: eventId });
     }
     if (path.includes('/responses')) {
@@ -506,7 +508,7 @@ test('checkpoint uses server history, chains prior context and preserves compani
     if(path.includes('/sessions?'))return response([{id:sessionId,user_id:userId,companion_id:'mia',scenario:'Weekend',status:'active'}]);
     if(path.includes('/transcript_events?'))return response([event]);
     if(path.includes('/analysis_jobs?'))return response([]);
-    if(path.includes('/reserve_run')){assert.equal(body.p_kind,'checkpoint');assert.match(body.p_request_key,/^checkpoint:v3:/);return response({reserved:true,job_id:sessionId,lease_token:eventId});}
+    if(path.includes('/reserve_run')){assert.equal(body.p_kind,'checkpoint');assert.match(body.p_request_key,/^checkpoint:v4:/);return response({reserved:true,job_id:sessionId,lease_token:eventId});}
     if(path.includes('/responses')){assert.equal(JSON.parse(body.input).transcript_events[0].text,event.text);return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(content())}]}]});}
     if(path.includes('/complete_run')){persisted=body.p_result;return response({});}
     if(path.includes('/memory_context'))return memoryResponse();
@@ -686,7 +688,7 @@ test('checkpoint ignores previous revisions, routes independently, and voice fac
     if (path.includes('/analysis_jobs?')) {
       const params = new URL(path).searchParams; assert.equal(params.get('kind'), 'eq.checkpoint'); assert.ok(params.get('request_key').includes(':8:'));
       // Even if a database response includes stale rows, Edge checks metadata.
-      return response([{ result: { revision: 7, model: 'checkpoint-only-model', prompt_version: 'v3', covered_ids: [eventId], checkpoint: { summary: 'OLD PRIVATE NAME' } } }]);
+      return response([{ result: { revision: 7, model: 'checkpoint-only-model', prompt_version: 'v4', covered_ids: [eventId], checkpoint: { summary: 'OLD PRIVATE NAME' } } }]);
     }
     if (path.includes('/reserve_run')) { assert.equal(body.p_kind, 'checkpoint'); assert.ok(body.p_request_key.length < 200); return response({ reserved: true, job_id: sessionId, lease_token: eventId }); }
     if (path.includes('/responses')) {
@@ -710,7 +712,7 @@ test('checkpoint revision races fail closed for newly generated, cached and no-n
   try {
     for (const mode of ['generated', 'cached', 'covered']) {
       let reads = 0, generated = false, completed = false, failed = false;
-      const cached = { revision: 1, model: 'gpt-4.1-mini', prompt_version: 'v3', covered_ids: [eventId], checkpoint: { summary: 'stale' } };
+      const cached = { revision: 1, model: 'gpt-4.1-mini', prompt_version: 'v4', covered_ids: [eventId], checkpoint: { summary: 'stale' } };
       globalThis.fetch = async (url, options) => {
         const path = String(url), body = options?.body ? JSON.parse(options.body) : null;
         if (path.includes('/auth/')) return response(authUser);

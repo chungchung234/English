@@ -201,7 +201,7 @@ async function startCall() {
       if(event.type==='response.done') {
         current.responding=false;
         const tokens=event.response?.usage?.input_tokens||0;
-        current.needsCompact ||= tokens>=18000 || Date.now()-current.lastCompact>=10*60*1000;
+        current.needsCompact ||= /context.*(length|limit)|too_many_tokens/i.test(event.response?.status_details?.error?.code||'') || tokens>=18000 || Date.now()-current.lastCompact>=10*60*1000;
         if(current.needsCompact && Date.now()-current.lastCompactAttempt>=60000)setTimeout(()=>compactCall(current),250);
       }
       if(event.type==='input_audio_buffer.speech_started')call.speaking=true;

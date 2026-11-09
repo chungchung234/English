@@ -418,7 +418,7 @@ test('factual profile survives search eviction, follows speech date, isolates co
   assert.equal((await profile(USER_A,'mia'))[0].content.memory_profile[0].value,'Paris');
   assert.equal((await profile(USER_B,'alex'))[0].content.memory_profile[0].value,'London');
   await factSession(USER_A,'alex','location','',8,'Please forget where I live.');
-  rows=await profile(USER_A,'alex');assert.deepEqual(rows[0].content.memory_profile,[]);
+  rows=await profile(USER_A,'alex');assert.equal(rows[0].content.memory_profile[0].value,'');assert.equal(rows[0].content.memory_profile[0].forgotten,true);
   // Both the wrapper and raw search stay unavailable to browser roles.
   await asUser(db,USER_A,async()=>{
     await assert.rejects(()=>db.query('select * from public.memory_search_hits($1,$2,12,$3)',[USER_A,'coffee','alex']),/permission denied/);

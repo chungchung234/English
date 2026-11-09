@@ -33,9 +33,9 @@ begin
     order by item->>'key', spoken_at desc, analysis_id desc
   )
   select coalesce(jsonb_agg(jsonb_build_object('key',item->>'key','value',item->>'value',
-    'quote',item->>'quote','evidence_ids',item->'evidence_ids','session_id',session_id,'spoken_at',spoken_at)
+    'forgotten',(item->>'value' = ''),'quote',item->>'quote','evidence_ids',item->'evidence_ids','session_id',session_id,'spoken_at',spoken_at)
     order by item->>'key'), '[]'::jsonb)
-  into v_profile from slots where item->>'value' <> '';
+  into v_profile from slots;
 
   return query select populated.*
   from public.memory_search_hits(p_user_id,p_query,p_limit,p_companion_id) a

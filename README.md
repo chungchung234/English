@@ -68,11 +68,11 @@ python3 scripts/deploy.py --apply
 
 기존 저장소의 GitHub Pages를 기본 정적 호스팅으로 사용합니다. 다른 정적 호스트에도 `dist/`를 그대로 올릴 수 있습니다.
 
-1. 저장소 **Settings → Secrets and variables → Actions → Variables**에 공개 빌드 변수를 저장합니다.
+1. 저장소 **Settings → Secrets and variables → Actions**에 연결 설정을 저장합니다. `SUPABASE_ACCESS_TOKEN`을 Repository secret으로 저장하면 CI가 공개 키 조회와 Supabase 백엔드 배포를 진행합니다. OpenAI 키는 기존 Supabase 보안 설정을 그대로 사용합니다. 아래 공개 변수를 직접 설정하는 방법도 지원합니다.
    - `PUBLIC_SUPABASE_URL=https://domkmxmwmihcfadophfg.supabase.co`
    - `PUBLIC_SUPABASE_KEY`: Supabase의 publishable 또는 anon 공개 키. OpenAI 키나 service_role 키를 넣지 않습니다. 빌드가 비밀 키를 거부합니다.
 2. 저장소 **Settings → Pages → Source**를 **GitHub Actions**로 지정합니다.
-3. 소스를 `main`에 반영하면 `.github/workflows/pages.yml`이 공개 연결 정보를 포함한 정적 페이지를 빌드·게시합니다. GitHub에 소스 반영 및 Pages 활성화는 아직 수행하지 않았습니다.
+3. 소스를 `main`에 반영하면 `.github/workflows/pages.yml`이 공개 연결 정보를 포함한 정적 페이지를 빌드·게시합니다. 소스는 `main`에 반영됐습니다. Pages 자동 활성화도 시도하며 저장소 권한이 부족하면 위 설정을 직접 지정해야 합니다. 첫 실제 CI 실행은 공개 연결 정보 누락으로 빌드 단계에서 중단됐으며, 이후 CI는 Repository secret/variable 양쪽을 지원합니다.
 4. Actions 배포 결과에 표시된 실제 URL에서 이메일 로그인과 마이크 허용을 검증합니다. HTTPS가 필요합니다.
 
 직접 빌드하려면 같은 `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_KEY` 환경 변수를 설정한 뒤 실행합니다.
@@ -81,7 +81,7 @@ python3 scripts/deploy.py --apply
 npm run build -- --require-config
 ```
 
-빌드는 외부 JavaScript 런타임 의존성 없이 `dist/index.html` 하나로 앱을 묶고, 인라인 코드에 CSP 해시를 적용합니다. 방문자는 API 설정 화면 없이 이메일 로그인부터 시작합니다. 연결 정보 없이 로컬 빌드를 하면 ‘서비스 준비 중’ 화면이며, CI의 `--require-config`는 설정 누락 시 게시를 중단합니다.
+빌드는 외부 JavaScript 런타임 의존성 없이 `dist/index.html` 하나로 앱을 묶고, 인라인 코드에 CSP 해시를 적용합니다. 방문자는 API 설정 화면 없이 이메일 로그인부터 시작합니다. Supabase 관리 토큰이 있으면 공개 키는 관리 API에서 자동 조회하며 브라우저에 관리 토큰을 포함하지 않습니다. 연결 정보 없이 로컬 빌드를 하면 ‘서비스 준비 중’ 화면이며, CI의 `--require-config`는 설정 누락 시 게시를 중단합니다.
 
 세 키는 용도가 다릅니다: Supabase publishable 키는 공개 앱 연결용, `OPENAI_API_KEY`는 서버의 AI 호출용, `SUPABASE_ACCESS_TOKEN`은 운영자의 배포용입니다. 뒤의 두 키를 웹 빌드에 포함하지 않습니다.
 

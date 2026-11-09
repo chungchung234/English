@@ -38,6 +38,20 @@ end if;
 end $loop_setup$;
 commit;"""
 
+def management_request(ref, token, path, method='GET', payload=None):
+    request=urllib.request.Request(
+        f'https://api.supabase.com/v1/projects/{ref}/{path}',
+        data=json.dumps(payload).encode() if payload is not None else None,
+        headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'},method=method)
+    try:
+        with urllib.request.urlopen(request,timeout=90) as response:
+            data=response.read()
+            return json.loads(data) if data else None
+    except urllib.error.HTTPError as error:
+        raise SystemExit(f'Supabase {path.split("/")[0]} request failed (HTTP {error.code}). Check deployment token permissions; no provider response printed.')
+    except urllib.error.URLError:
+        raise SystemExit('Supabase management could not connect. Check destination access and provider availability.')
+
 def main():
     ref = os.environ.get('SUPABASE_PROJECT_REF', '')
     token = os.environ.get('SUPABASE_ACCESS_TOKEN', '')
@@ -48,18 +62,22 @@ def main():
     if '--apply' not in sys.argv:
         print('Preflight passed. --apply deploys the database migration and coach function.')
         return
+    metadata=management_request(ref,token,'secrets')
+    if not isinstance(metadata,list):
+        raise SystemExit('Could not verify the function secret names.')
+    names={item.get('name') for item in metadata}
+    if 'OPENAI_API_KEY' not in names:
+        raise SystemExit('Set OPENAI_API_KEY in the project Edge Functions Secrets before deploying.')
+    if 'ALLOWED_ORIGINS' not in names:
+        origin=os.environ.get('PUBLIC_SITE_ORIGIN','https://chungchung234.github.io')
+        import urllib.parse
+        parsed=urllib.parse.urlsplit(origin)
+        if parsed.scheme!='https' or parsed.path or parsed.query or parsed.fragment or parsed.username or not parsed.hostname:
+            raise SystemExit('PUBLIC_SITE_ORIGIN must be a complete HTTPS origin without a path.')
+        management_request(ref,token,'secrets','POST',[{'name':'ALLOWED_ORIGINS','value':origin}])
+        print('Configured the public site origin. Existing configured origins are preserved.')
     source = (ROOT/'supabase/migrations/202611090001_init.sql').read_text()
-    request = urllib.request.Request(
-        f'https://api.supabase.com/v1/projects/{ref}/database/query',
-        data=json.dumps({'query': migration_sql(source)}).encode(),
-        headers={'Authorization': 'Bearer '+token, 'Content-Type': 'application/json'}, method='POST')
-    try:
-        with urllib.request.urlopen(request, timeout=90) as response:
-            response.read()
-    except urllib.error.HTTPError as error:
-        raise SystemExit(f'Database deployment failed (HTTP {error.code}). Check token permissions and project access; no response body printed.')
-    except urllib.error.URLError:
-        raise SystemExit('Database deployment could not connect. Check allowed destinations and provider access.')
+    management_request(ref,token,'database/query','POST',{'query':migration_sql(source)})
     print('Database migration committed or verified already applied.')
     cli_env = {**os.environ, 'SUPABASE_HOME': str(ROOT.parent/'.supabase-cli')}
     # Provider secrets must already be configured in the dashboard. The proxy

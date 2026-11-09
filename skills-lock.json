@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "liquid-glass": {
+      "source": "openai/plugins",
+      "sourceType": "github",
+      "skillPath": "plugins/build-macos-apps/skills/liquid-glass/SKILL.md",
+      "computedHash": "64116571e9b054fbe1b3fec6d3502eb75e3f9fd03f7fd8bbb0d4f0e5e66cbb4f"
+    }
+  }
+}

@@ -1,76 +1,235 @@
-// End-to-end release check. Uses only temporary confirmed test accounts and
-// synthetic speech; deletes those accounts and their rows when finished.
+// Actual deployed-release acceptance using temporary confirmed accounts and
+// synthetic microphone speech. Runtime credentials and transcripts stay private.
 import { chromium } from 'playwright';
 import { randomUUID } from 'node:crypto';
 import { mkdir } from 'node:fs/promises';
-const ref=process.env.SUPABASE_PROJECT_REF||'domkmxmwmihcfadophfg';
-const base=`https://${ref}.supabase.co`;
-const site=process.env.SITE_URL;
-if(!site||!process.env.SUPABASE_ACCESS_TOKEN||!process.env.SMOKE_AUDIO)throw Error('Live smoke needs site URL, provider authorization and synthetic audio.');
-const origin=new URL(site).origin;
-async function json(url,options={}){
- let response;try{response=await fetch(url,{...options,signal:AbortSignal.timeout(120000)});}catch{throw Error(`Could not reach ${new URL(url).hostname}.`);}
- const data=await response.json().catch(()=>null);
- if(!response.ok){const code=typeof data?.error?.code==='string'?data.error.code:'';throw Error(`${options.method||'GET'} ${new URL(url).pathname}: HTTP ${response.status} ${code}`);}
- return data;
+import { pathToFileURL } from 'node:url';
+
+class SmokeError extends Error {}
+const companions = [
+  { id: 'alex', name: 'Alex', voice: 'cedar' },
+  { id: 'mia', name: 'Mia', voice: 'marin' },
+  { id: 'juno', name: 'Juno', voice: 'verse' },
+];
+const ensure = (condition, message) => { if (!condition) throw new SmokeError(message); };
+const pass = message => console.log(`::notice title=Live release check::${message}`);
+
+export function sanitizeStatus(value) {
+  return String(value || '').replace(/[\r\n\t]+/g, ' ')
+    .replace(/Bearer\s+\S+/gi, '[credential]')
+    .replace(/\b(?:sk-|sb_secret_|sb_publishable_)[A-Za-z0-9_-]+/g, '[credential]')
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[credential]')
+    .replace(/https?:\/\/[^\s]+/g, '[URL]')
+    .replace(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+/gi, '[email]')
+    .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '[identifier]')
+    .replace(/\b[A-Za-z0-9_-]{40,}\b/g, '[private value]').slice(0, 280);
 }
-const keys=await json(`https://api.supabase.com/v1/projects/${ref}/api-keys?reveal=true`,{headers:{Authorization:`Bearer ${process.env.SUPABASE_ACCESS_TOKEN}`}});
-const publicKey=keys.find(k=>k.name==='anon')?.api_key||keys.find(k=>k.type==='publishable')?.api_key;
-const serviceKey=keys.find(k=>k.name==='service_role')?.api_key;
-if(!publicKey||!serviceKey)throw Error('Provider public/admin keys are required for isolated release tests.');
-const adminHeaders={apikey:serviceKey,Authorization:`Bearer ${serviceKey}`,'Content-Type':'application/json'};
-const created=[];let browser;
-const userRequest=(user,path,body)=>json(base+path,{method:body===undefined?'GET':'POST',headers:{apikey:publicKey,Authorization:`Bearer ${user.access_token}`,Origin:origin,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
-try{
- for(let i=0;i<2;i++){
-  const email=`loop-smoke-${randomUUID()}@example.invalid`,password=randomUUID()+randomUUID();
-  const user=await json(base+'/auth/v1/admin/users',{method:'POST',headers:adminHeaders,body:JSON.stringify({email,password,email_confirm:true})});
-  created.push({id:user.id});
-  const session=await json(base+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:publicKey,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
-  created[i]=session;
- }
- console.log('PASS: temporary test accounts authenticated against live Supabase.');
- const [learner,other]=created;
- browser=await chromium.launch({headless:true,args:['--no-sandbox','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream',`--use-file-for-fake-audio-capture=${process.env.SMOKE_AUDIO}`]});
- const context=await browser.newContext({permissions:['microphone'],viewport:{width:390,height:844}});
- await context.addInitScript(({base,session})=>localStorage.setItem('loop.auth:'+base,JSON.stringify({...session,expires_at:Math.floor(Date.now()/1000)+session.expires_in})),{base,session:learner});
- const page=await context.newPage();page.setDefaultTimeout(90000);
- await page.goto(site,{waitUntil:'networkidle'});
- await page.locator('#workspace').waitFor({state:'visible'});
- await page.locator('#start-call').click();
- await page.waitForFunction(()=>document.querySelector('#call-status')?.textContent.includes('통화 중'),{},{timeout:60000});
- console.log('PASS: real WebRTC voice connection established on published site.');
- await page.waitForFunction(()=>Array.from(document.querySelectorAll('#transcript li')).some(li=>li.querySelector('b')?.textContent==='YOU'&&/friend|park|caf[eé]|yesterday|alex/i.test(li.textContent)),{},{timeout:90000});
- await page.waitForFunction(()=>Array.from(document.querySelectorAll('#transcript li')).some(li=>li.querySelector('b')?.textContent==='ALEX'),{},{timeout:90000});
- await page.locator('#end-call').click();
- await page.waitForFunction(()=>document.querySelector('#call-status')?.textContent==='통화와 피드백 저장 완료',{},{timeout:120000});
- console.log('PASS: synthetic speech transcribed, model replied, cloud transcript and evidence-backed feedback saved.');
- const sessions=await userRequest(learner,'/rest/v1/sessions?select=id,status');
- if(sessions.length!==1||sessions[0].status!=='ended')throw Error('Live session did not finish exactly once.');
- const id=sessions[0].id;
- const events=await userRequest(learner,`/rest/v1/transcript_events?select=id,speaker&session_id=eq.${id}`);
- if(!events.some(e=>e.speaker==='user')||!events.some(e=>e.speaker==='assistant'))throw Error('Both speakers were not saved.');
- const hidden=await userRequest(other,`/rest/v1/transcript_events?select=id&session_id=eq.${id}`);
- if(hidden.length)throw Error('Cross-account transcript access was allowed.');
- const hiddenAnalyses=await userRequest(other,`/rest/v1/analyses?select=id&session_id=eq.${id}`);
- if(hiddenAnalyses.length)throw Error('Cross-account analysis access was allowed.');
- const memory=await userRequest(learner,'/functions/v1/coach/memory',{});
- if(!memory.memories?.length)throw Error('Saved learning memory was not retrieved.');
- await page.reload({waitUntil:'networkidle'});
- await page.locator('.history-entry').first().waitFor({state:'visible'});
- if(await page.locator('.analysis').count()===0)throw Error('Feedback did not reload.');
- console.log('PASS: reload restores history and feedback; other account cannot read transcripts or analyses.');
- const weekly=await userRequest(learner,'/functions/v1/coach/weekly',{});
- if(weekly.analysis?.kind!=='weekly'||!weekly.analysis?.source_event_ids?.length)throw Error('Weekly analysis did not preserve evidence.');
- console.log('PASS: upper-tier weekly analysis completed with source references.');
- await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/live-mobile.png',fullPage:true});
- console.log('Live release checks passed. Email delivery and managed backup restore are separate acceptance checks.');
-}catch(error){
- // Never serialize request bodies, credentials, browser storage or provider data.
- console.error('::error title=Live release check::'+error.message.replaceAll('%','%25').replaceAll('\n','%0A'));
- process.exitCode=1;
-}finally{
- await browser?.close();
- for(const session of created){const id=session.user?.id||session.id;if(!id)continue;try{await json(base+'/auth/v1/admin/users/'+id,{method:'DELETE',headers:adminHeaders});}catch{console.error('::warning::Temporary test account cleanup failed; inspect the test account names in Supabase Auth.');process.exitCode=1;}}
- console.log('Temporary account cleanup attempted.');
+
+export function verifyEvidence(content, events) {
+  const users = new Map(events.filter(event => event.speaker === 'user').map(event => [event.id, event]));
+  for (const key of ['strengths', 'corrections', 'practice', 'patterns']) {
+    for (const item of content[key] || []) {
+      ensure(Array.isArray(item.evidence_ids) && item.evidence_ids.length > 0 && item.evidence_ids.every(id => users.has(id)), 'Feedback contains an unsupported evidence reference.');
+      if (key === 'corrections') ensure(typeof item.original === 'string' && item.original.length > 0 && item.evidence_ids.some(id => users.get(id).text.includes(item.original)), 'Correction quotation does not match saved user speech.');
+    }
+  }
+}
+
+export function verifyMemory(memory, profile, sessions, events) {
+  ensure(memory.companionId === profile.id && Array.isArray(memory.memories) && memory.memories.length > 0, 'Companion learning memory was not retrieved.');
+  const ownedSessions = new Set(sessions.filter(session => session.companion_id === profile.id).map(session => session.id));
+  for (const item of memory.memories) {
+    ensure(ownedSessions.has(item.session_id), 'Memory crossed a companion boundary.');
+    const ownEvents = events.filter(event => event.session_id === item.session_id);
+    const ids = new Set(ownEvents.map(event => event.id));
+    ensure(Array.isArray(item.source_event_ids) && item.source_event_ids.every(id => ids.has(id)), 'Memory evidence crossed a companion boundary.');
+    verifyEvidence(item, ownEvents);
+  }
+}
+
+async function main() {
+  const ref = process.env.SUPABASE_PROJECT_REF || 'domkmxmwmihcfadophfg';
+  const base = `https://${ref}.supabase.co`, site = process.env.SITE_URL;
+  if (!site || !process.env.SUPABASE_ACCESS_TOKEN || !process.env.SMOKE_AUDIO) throw new SmokeError('Live smoke needs site URL, provider authorization and synthetic audio.');
+  const origin = new URL(site).origin;
+  async function json(url, options = {}) {
+    let response;
+    try { response = await fetch(url, { ...options, signal: AbortSignal.timeout(120_000) }); }
+    catch { throw new SmokeError('A release-check provider request could not be completed.'); }
+    const data = await response.json().catch(() => null);
+    if (!response.ok) throw new SmokeError(`Release-check ${options.method || 'GET'} request failed with HTTP ${response.status}.`);
+    return data;
+  }
+  let browser, page, stage = 'provider configuration', lastStatus = {};
+  const created = [];
+  let adminHeaders;
+  async function statusSnapshot() {
+    if (!page || page.isClosed()) return lastStatus;
+    // These are the only UI values allowed in diagnostics. Never inspect browser
+    // storage, request/response bodies, console messages, or transcript text.
+    const statuses = {};
+    for (const selector of ['#notice', '#call-status', '#save-status']) {
+      statuses[selector] = sanitizeStatus(await page.locator(selector).textContent({ timeout: 2000 }).catch(() => 'unavailable'));
+    }
+    lastStatus = statuses;
+    return statuses;
+  }
+  try {
+    const keys = await json(`https://api.supabase.com/v1/projects/${ref}/api-keys?reveal=true`, { headers: { Authorization: `Bearer ${process.env.SUPABASE_ACCESS_TOKEN}` } });
+    const publicKey = keys.find(key => key.name === 'anon')?.api_key || keys.find(key => key.type === 'publishable')?.api_key;
+    const serviceKey = keys.find(key => key.name === 'service_role')?.api_key;
+    ensure(publicKey && serviceKey, 'Provider public/admin keys are required for isolated release checks.');
+    adminHeaders = { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, 'Content-Type': 'application/json' };
+    const userRequest = (user, path, body) => json(base + path, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { apikey: publicKey, Authorization: `Bearer ${user.access_token}`, Origin: origin, 'Content-Type': 'application/json' },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    stage = 'temporary account authentication';
+    const users = [];
+    for (let i = 0; i < 2; i++) {
+      const email = `voice-smoke-${randomUUID()}@example.invalid`, password = randomUUID() + randomUUID();
+      const user = await json(base + '/auth/v1/admin/users', { method: 'POST', headers: adminHeaders, body: JSON.stringify({ email, password, email_confirm: true }) });
+      // Preserve the ID even if the following password grant fails.
+      created.push(user.id);
+      users.push(await json(base + '/auth/v1/token?grant_type=password', { method: 'POST', headers: { apikey: publicKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) }));
+    }
+    const [learner, other] = users;
+    pass('Two temporary email-verified test accounts authenticated against live Supabase.');
+    await mkdir('test-results', { recursive: true });
+    for (const profile of companions) {
+      stage = `${profile.name}: published mobile home`;
+      // A fresh browser process resets the offline WAV microphone capture for
+      // each call; this avoids depending on Chromium's shared capture lifetime.
+      browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${process.env.SMOKE_AUDIO}`] });
+      const context = await browser.newContext({ permissions: ['microphone'], viewport: { width: 390, height: 844 } });
+      await context.addInitScript(({ base, session }) => {
+        localStorage.setItem('loop.auth:' + base, JSON.stringify({ ...session, expires_at: Math.floor(Date.now() / 1000) + session.expires_in }));
+        // Observe real provider events, retaining only counts and public voice
+        // names. No event body, SDP, or transcript is copied into test output.
+        globalThis.__liveSmoke = { userTurns: 0, userCommits: 0, assistantTurns: 0, assistantAfterUser: 0, voices: [] };
+        const create = RTCPeerConnection.prototype.createDataChannel;
+        RTCPeerConnection.prototype.createDataChannel = function (...args) {
+          const channel = create.apply(this, args);
+          channel.addEventListener('message', message => {
+            let event; try { event = JSON.parse(message.data); } catch { return; }
+            const observed = globalThis.__liveSmoke;
+            if (event.type === 'input_audio_buffer.committed') observed.userCommits++;
+            if (event.type === 'conversation.item.input_audio_transcription.completed' && event.transcript?.trim()) observed.userTurns++;
+            if (event.type === 'response.output_audio_transcript.done' && event.transcript?.trim()) {
+              observed.assistantTurns++;
+              if (observed.userCommits > 0) observed.assistantAfterUser++;
+            }
+            if (event.type === 'session.created' || event.type === 'session.updated') {
+              const voice = event.session?.audio?.output?.voice || event.session?.voice;
+              if (typeof voice === 'string' && !observed.voices.includes(voice)) observed.voices.push(voice);
+            }
+          });
+          return channel;
+        };
+      }, { base, session: learner });
+      page = await context.newPage(); page.setDefaultTimeout(90_000);
+      await page.goto(site, { waitUntil: 'networkidle' });
+      await page.locator('#workspace').waitFor({ state: 'visible' });
+      await page.waitForFunction(() => document.querySelector('#models')?.textContent.includes('gpt-'), {}, { timeout: 60_000 });
+      ensure((await page.locator('#companion-name').textContent()) === 'Alex', 'A fresh mobile session did not default to Alex.');
+      await page.locator('#companion-open').click();
+      await page.locator(`[data-companion="${profile.id}"]`).click();
+      await page.waitForFunction(name => document.querySelector('#companion-name')?.textContent === name, profile.name);
+      await page.locator('[data-view="call"]').click();
+      // Choose a neutral scenario through the UI instead of the legacy topic
+      // containing Alex's name when testing Mia or Juno.
+      await page.locator('#topic-open').click();
+      await page.locator('#scenario').selectOption({ label: '오늘 있었던 일' });
+      await page.locator('#topic-done').click();
+      await page.screenshot({ path: `test-results/live-${profile.id}-home.png`, fullPage: true });
+      stage = `${profile.name}: actual WebRTC and provider transcription`;
+      await page.locator('#start-call').click();
+      await page.waitForFunction(() => document.querySelector('#call-status')?.textContent.includes('통화 중'), {}, { timeout: 60_000 });
+      await page.waitForFunction(expected => globalThis.__liveSmoke.voices.includes(expected), profile.voice, { timeout: 30_000 });
+      await page.waitForFunction(() => globalThis.__liveSmoke.userTurns > 0 && Array.from(document.querySelectorAll('#transcript li')).some(li => li.querySelector('b')?.textContent === 'YOU' && /friend|park|caf[eé]|yesterday|today/i.test(li.textContent)), {}, { timeout: 90_000 });
+      await page.waitForFunction(name => globalThis.__liveSmoke.assistantAfterUser > 0 && Array.from(document.querySelectorAll('#transcript li')).some(li => li.querySelector('b')?.textContent === name.toUpperCase()), profile.name, { timeout: 90_000 });
+      await page.screenshot({ path: `test-results/live-${profile.id}-call.png`, fullPage: true });
+      pass(`${profile.name}: actual WebRTC connected, provider confirmed ${profile.voice}, and both speech transcripts reached the app.`);
+      stage = `${profile.name}: automatic transcript and feedback save`;
+      await page.locator('#end-call').click();
+      await page.waitForFunction(() => document.querySelector('#call-status')?.textContent === '통화와 피드백 저장 완료', {}, { timeout: 120_000 });
+      await page.locator('[data-view="review"]').click();
+      await page.locator('#review-content .analysis').first().waitFor({ state: 'visible' });
+      await page.screenshot({ path: `test-results/live-${profile.id}-review.png`, fullPage: true });
+      pass(`${profile.name}: call ended and automatic cloud transcript plus feedback save completed.`);
+      stage = `${profile.name}: reload restores selected companion, history, and visible feedback`;
+      await page.reload({ waitUntil: 'networkidle' });
+      await page.locator('#workspace').waitFor({ state: 'visible' });
+      await page.waitForFunction(name => document.querySelector('#companion-name')?.textContent === name, profile.name);
+      await page.locator('[data-view="history"]').click();
+      await page.locator('#history .history-entry').first().waitFor({ state: 'visible' });
+      ensure(await page.locator('#history .history-entry').count() === 1, 'Reloaded history contains another companion conversation.');
+      await page.locator('[data-view="review"]').click();
+      await page.locator('#review-content .analysis').first().waitFor({ state: 'visible' });
+      await statusSnapshot();
+      pass(`${profile.name}: reload retained the selected friend and restored visible scoped history and feedback.`);
+      await browser.close(); browser = undefined; page = undefined;
+    }
+
+    stage = 'exact saved companion sessions and evidence';
+    const sessions = await userRequest(learner, '/rest/v1/sessions?select=id,status,companion_id');
+    ensure(sessions.length === 3, 'Live calls did not create exactly three sessions.');
+    for (const profile of companions) ensure(sessions.filter(session => session.companion_id === profile.id && session.status === 'ended').length === 1, 'Each companion must have exactly one ended session.');
+    const events = await userRequest(learner, '/rest/v1/transcript_events?select=id,session_id,speaker,text');
+    const analyses = await userRequest(learner, '/rest/v1/analyses?select=id,session_id,kind,content,source_event_ids');
+    for (const profile of companions) {
+      const session = sessions.find(session => session.companion_id === profile.id);
+      const ownEvents = events.filter(event => event.session_id === session.id);
+      ensure(ownEvents.some(event => event.speaker === 'user' && event.text.trim()) && ownEvents.some(event => event.speaker === 'assistant' && event.text.trim()), 'A companion call is missing saved speech from one speaker.');
+      const reviews = analyses.filter(analysis => analysis.kind === 'session' && analysis.session_id === session.id);
+      ensure(reviews.length === 1 && reviews[0].content?.scope?.companionId === profile.id, 'A companion feedback record is missing, duplicated, or misassigned.');
+      const ids = new Set(ownEvents.map(event => event.id));
+      ensure(reviews[0].source_event_ids?.length > 0 && reviews[0].source_event_ids.every(id => ids.has(id)), 'Saved feedback sources crossed a session boundary.');
+      verifyEvidence(reviews[0].content, ownEvents);
+      verifyMemory(await userRequest(learner, '/functions/v1/coach/memory', { companionId: profile.id }), profile, sessions, events);
+    }
+    pass('Exactly one ended session per Alex, Mia, and Juno; saved speech, feedback citations, and retrieved memories stay within each friend.');
+
+    stage = 'Juno weekly analysis scope and evidence';
+    const weekly = await userRequest(learner, '/functions/v1/coach/weekly', { companionId: 'juno' });
+    const junoSession = sessions.find(session => session.companion_id === 'juno');
+    const junoEvents = events.filter(event => event.session_id === junoSession.id), junoIds = new Set(junoEvents.map(event => event.id));
+    ensure(weekly.analysis?.kind === 'weekly' && weekly.analysis.content?.scope?.companionId === 'juno' && weekly.analysis.content.scope.session_count === 1, 'Weekly review was not scoped to Juno alone.');
+    ensure(weekly.analysis.source_event_ids?.length > 0 && weekly.analysis.source_event_ids.every(id => junoIds.has(id)), 'Weekly evidence crossed a companion boundary.');
+    ensure(weekly.analysis.content.based_on?.length > 0 && weekly.analysis.content.based_on.every(source => source.session_id === junoSession.id && junoIds.has(source.event_id)), 'Weekly provenance crossed a companion boundary.');
+    verifyEvidence(weekly.analysis.content, junoEvents);
+    pass('Upper-tier Juno weekly analysis completed with Juno-only scope, source references, and validated citations.');
+
+    stage = 'cross-account database and memory isolation';
+    for (const table of ['sessions', 'transcript_events', 'analyses']) {
+      const hidden = await userRequest(other, `/rest/v1/${table}?select=id`);
+      ensure(Array.isArray(hidden) && hidden.length === 0, 'Another account could read private learning records.');
+    }
+    for (const profile of companions) {
+      const hidden = await userRequest(other, '/functions/v1/coach/memory', { companionId: profile.id });
+      ensure(hidden.companionId === profile.id && Array.isArray(hidden.memories) && hidden.memories.length === 0, 'Another account could retrieve private companion memories.');
+    }
+    pass('Second account cannot read any private sessions, transcripts, analyses, or memories for any companion.');
+    pass('Live three-companion release checks passed. Email delivery and managed backup restore remain separate acceptance checks.');
+  } catch (error) {
+    const statuses = await statusSnapshot();
+    const reason = error instanceof SmokeError ? error.message : 'Browser interaction or application readiness check failed.';
+    const message = `${stage}: ${reason}; ${Object.entries(statuses).map(([selector, text]) => `${selector}=${text}`).join('; ')}`;
+    // Only fixed diagnostic descriptions and the three sanitized status fields.
+    console.error('::error title=Live release check::' + message.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A'));
+    process.exitCode = 1;
+  } finally {
+    try { await browser?.close(); } catch { /* Account cleanup must still run. */ }
+    for (const id of created) {
+      if (!id) continue;
+      try { await json(base + '/auth/v1/admin/users/' + id, { method: 'DELETE', headers: adminHeaders }); }
+      catch { console.error('::warning::Temporary test account cleanup failed; inspect the test accounts in Supabase Auth.'); process.exitCode = 1; }
+    }
+    console.log('Temporary account cleanup attempted.');
+  }
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(() => { console.error('::error title=Live release check::Release-check configuration is incomplete or invalid.'); process.exitCode = 1; });
 }

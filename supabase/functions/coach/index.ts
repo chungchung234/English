@@ -1,7 +1,7 @@
-import { AppError, LIMITS, allowKeys, allowedOrigins, analysisSchema, boundedJson, bytes, object, requireUuid, transcriptFingerprint, validateAnalysis, validateSdp, type TranscriptEvent } from './core.ts';
+import { AppError, COMPANIONS, LIMITS, allowKeys, allowedOrigins, analysisSchema, boundedJson, bytes, companionProfile, object, requireCompanionId, requireUuid, transcriptFingerprint, validateAnalysis, validateSdp, type CompanionId, type TranscriptEvent } from './core.ts';
 
 type Env = { supabase: string; serviceKey: string; openai: string; allowedEmails: Set<string>; publicAccess: boolean; voice: string; coach: string; analysis: string };
-type Session = { id: string; user_id: string; scenario: string; status: 'active' | 'ended'; ended_at: string | null };
+type Session = { id: string; user_id: string; companion_id: CompanionId; scenario: string; status: 'active' | 'ended'; ended_at: string | null };
 type Run = { job_id: string; lease_token: string; state: string; reserved: boolean; reason: string; result: unknown };
 const envValue = (name: string) => Deno.env.get(name);
 function environment(): Env {
@@ -61,9 +61,9 @@ async function readBody(req: Request): Promise<Record<string, unknown>> {
 }
 function query(values: Record<string, string>) { return new URLSearchParams(values).toString(); }
 async function ownedSession(env: Env, userId: string, sessionId: string): Promise<Session> {
-  const rows = await rest(env, `sessions?${query({ select: 'id,user_id,scenario,status,ended_at', id: `eq.${sessionId}`, user_id: `eq.${userId}`, limit: '1' })}`) as Session[];
+  const rows = await rest(env, `sessions?${query({ select: 'id,user_id,companion_id,scenario,status,ended_at', id: `eq.${sessionId}`, user_id: `eq.${userId}`, limit: '1' })}`) as Session[];
   if (!rows.length) throw new AppError(404, 'SESSION_NOT_FOUND', 'This session was not found.');
-  return rows[0];
+  return { ...rows[0], companion_id: requireCompanionId(rows[0].companion_id) };
 }
 async function allRows<T>(env: Env, table: string, filter: Record<string, string>, max: number): Promise<T[]> {
   const rows: T[] = [];
@@ -93,11 +93,11 @@ async function transcript(env: Env, userId: string, sessions: string[]): Promise
   if (!events.some(e => e.speaker === 'user' && e.text.trim())) throw new AppError(422, 'NO_TRANSCRIPT', 'Sync at least one spoken turn before requesting feedback.');
   return events;
 }
-async function memories(env: Env, userId: string, session?: Session, search?: string) {
+async function memories(env: Env, userId: string, companionId: CompanionId, session?: Session, search?: string) {
   type MemoryRow = { id: string; session_id: string; content: { summary?: string; corrections?: Record<string, unknown>[]; practice?: Record<string, unknown>[] }; source_event_ids: string[]; created_at: string };
   // Search every completed session's latest analysis, including old sessions. The
   // database ranks text matches before recent fallback; no recent-only prefilter.
-  const rows = await rpc(env, 'memory_search', { p_user_id: userId, p_query: search ?? session?.scenario ?? '', p_limit: 12 }) as MemoryRow[];
+  const rows = await rpc(env, 'memory_search', { p_user_id: userId, p_query: search ?? session?.scenario ?? '', p_limit: 12, p_companion_id: companionId }) as MemoryRow[];
   const selected = rows.filter(row => row.session_id !== session?.id && typeof row.content?.summary === 'string' && row.content.summary.length <= 3000).map(row => {
     const evidenceValid = (item: Record<string, unknown>) => Array.isArray(item.evidence_ids) && item.evidence_ids.length > 0 && item.evidence_ids.every(id => row.source_event_ids.includes(String(id)));
     const corrections = (Array.isArray(row.content.corrections) ? row.content.corrections : []).filter(item => evidenceValid(item) && ['original', 'improved', 'reason'].every(key => typeof item[key] === 'string' && (item[key] as string).length <= 3000)).slice(0, 3).map(({ original, improved, reason, evidence_ids }) => ({ original, improved, reason, evidence_ids }));
@@ -107,7 +107,7 @@ async function memories(env: Env, userId: string, session?: Session, search?: st
   });
   let limited = false;
   while (bytes(JSON.stringify(selected)) > LIMITS.memoryBytes) { selected.pop(); limited = true; }
-  return { memories: selected, limited, selection: 'text relevance across all completed sessions, with recent fallback; up to twelve records and three corrections/practice expressions per record' };
+  return { companionId, memories: selected, limited, selection: 'text relevance across this companion’s completed sessions, with recent fallback; up to twelve records and three corrections/practice expressions per record' };
 }
 async function reserve(env: Env, userId: string, kind: string, key: string, sessionId: string | null): Promise<Run> {
   const run = await rpc(env, 'reserve_run', { p_user_id: userId, p_kind: kind, p_request_key: key, p_session_id: sessionId, p_lease_seconds: 180 }) as Run;
@@ -125,12 +125,13 @@ async function voice(env: Env, userId: string, body: Record<string, unknown>) {
   const sessionId = requireUuid(body.sessionId), sdp = validateSdp(body.sdp);
   const session = await ownedSession(env, userId, sessionId);
   if (session.status !== 'active') throw new AppError(409, 'SESSION_ENDED', 'Start a new conversation to use voice.');
-  const memory = await memories(env, userId, session);
+  const companion = companionProfile(session.companion_id);
+  const memory = await memories(env, userId, session.companion_id, session);
   const run = await reserve(env, userId, 'voice', sessionId, sessionId);
   if (!run.reserved) throw new AppError(409, 'VOICE_ALREADY_STARTED', 'This voice connection has already been started. Create a new session to reconnect.');
   try {
     const form = new FormData(); form.set('sdp', sdp);
-    form.set('session', JSON.stringify({ type: 'realtime', model: env.voice, max_output_tokens: 512, instructions: `${SAFETY}\nHave a natural English conversation with brief replies. Ask one question at a time, match the learner's pace, and offer gentle corrections only when useful. Begin by welcoming the learner into the scenario. Naturally invite the learner to reuse at most two expressions from the retrieved practice or improved corrections. Prior summaries are fallible context; never assume mastery or claim to remember unsupported details.\nUNTRUSTED_CONTEXT_JSON:\n${boundedJson({ scenario: session.scenario, memory }, 20_000)}`, audio: { input: { transcription: { model: 'gpt-4o-mini-transcribe' }, turn_detection: { type: 'server_vad' } }, output: { voice: 'marin' } } }));
+    form.set('session', JSON.stringify({ type: 'realtime', model: env.voice, max_output_tokens: 512, instructions: `${SAFETY}\nYour name is ${companion.name}. ${companion.description} You are an AI companion; never claim to be a human or invent a real-world relationship. Only use the supplied history with your own companion identity. Have a natural English conversation with brief replies. Ask one question at a time, match the learner's pace, and offer gentle corrections only when useful. Begin by welcoming the learner into the scenario. Naturally invite the learner to reuse at most two expressions from the retrieved practice or improved corrections. Prior summaries are fallible context; never assume mastery or claim to remember unsupported details.\nUNTRUSTED_CONTEXT_JSON:\n${boundedJson({ companionId: companion.id, scenario: session.scenario, memory }, 20_000)}`, audio: { input: { transcription: { model: 'gpt-4o-mini-transcribe' }, turn_detection: { type: 'server_vad' } }, output: { voice: companion.voice } } }));
     const response = await request('https://api.openai.com/v1/realtime/calls', { method: 'POST', headers: { Authorization: `Bearer ${env.openai}` }, body: form }, 40_000);
     if (!response.ok) throw new AppError(502, 'VOICE_UNAVAILABLE', 'Voice could not connect. Please start a new session and retry.');
     const answer = validateSdp(await response.text());
@@ -155,31 +156,33 @@ async function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session
   return { content: validateAnalysis(content, events, kind), model };
 }
 async function review(env: Env, userId: string, body: Record<string, unknown>, kind: 'session' | 'weekly') {
-  allowKeys(body, kind === 'session' ? ['sessionId'] : []);
-  let sessions: Session[], key: string, sessionId: string | null = null;
+  allowKeys(body, kind === 'session' ? ['sessionId'] : ['companionId']);
+  let sessions: Session[], key: string, sessionId: string | null = null, companionId: CompanionId;
   const through = new Date(), since = new Date(through.getTime() - 7 * 86_400_000);
   if (kind === 'session') {
     sessionId = requireUuid(body.sessionId);
     const session = await ownedSession(env, userId, sessionId);
     if (session.status !== 'ended') throw new AppError(409, 'SESSION_ACTIVE', 'End and sync the conversation before requesting feedback.');
-    sessions = [session]; key = sessionId;
+    sessions = [session]; key = sessionId; companionId = session.companion_id;
   } else {
-    sessions = await allRows<Session>(env, 'sessions', { select: 'id,user_id,scenario,status,ended_at', user_id: `eq.${userId}`, status: 'eq.ended', ended_at: `gte.${since.toISOString()}`, and: `(ended_at.lte.${through.toISOString()})`, order: 'ended_at.asc,id.asc' }, LIMITS.sessions);
+    companionId = requireCompanionId(body.companionId);
+    sessions = await allRows<Session>(env, 'sessions', { select: 'id,user_id,companion_id,scenario,status,ended_at', user_id: `eq.${userId}`, companion_id: `eq.${companionId}`, status: 'eq.ended', ended_at: `gte.${since.toISOString()}`, and: `(ended_at.lte.${through.toISOString()})`, order: 'ended_at.asc,id.asc' }, LIMITS.sessions);
     if (!sessions.length) throw new AppError(422, 'NO_SESSIONS', 'Complete a conversation before requesting a weekly review.');
+    if (sessions.some(session => requireCompanionId(session.companion_id) !== companionId)) throw new AppError(503, 'INCOMPLETE_HISTORY', 'This companion’s conversation history could not be verified. Please retry.');
     // One cached result per UTC day controls repeated analysis cost.
     key = through.toISOString().slice(0, 10);
   }
   const events = await transcript(env, userId, sessions.map(s => s.id));
   // Delayed offline uploads and restored events change the key, so an earlier
   // completed job cannot return an analysis for a stale transcript.
-  key = `${key}:${await transcriptFingerprint(events)}`;
-  const context = { scenarios: sessions.map(s => ({ session_id: s.id, scenario: s.scenario, ended_at: s.ended_at })), ...(kind === 'weekly' ? { period_start: since.toISOString(), period_end: through.toISOString() } : {}) };
+  key = `${companionId}:${key}:${await transcriptFingerprint(events)}`;
+  const context = { companion: companionProfile(companionId), scenarios: sessions.map(s => ({ session_id: s.id, scenario: s.scenario, ended_at: s.ended_at })), ...(kind === 'weekly' ? { period_start: since.toISOString(), period_end: through.toISOString() } : {}) };
   boundedJson({ context, transcript_events: events });
   const run = await reserve(env, userId, kind, key, sessionId);
   if (!run.reserved) return run.result;
   try {
     const generated = await modelAnalysis(env, events, kind, context);
-    const content = { ...generated.content, scope: { session_count: sessions.length, event_count: events.length, user_event_count: events.filter(e => e.speaker === 'user').length, ...(kind === 'weekly' ? { period_start: since.toISOString(), period_end: through.toISOString() } : {}) }, based_on: events.map(e => ({ event_id: e.id, session_id: e.session_id, timestamp: e.timestamp })) };
+    const content = { ...generated.content, scope: { companionId, session_count: sessions.length, event_count: events.length, user_event_count: events.filter(e => e.speaker === 'user').length, ...(kind === 'weekly' ? { period_start: since.toISOString(), period_end: through.toISOString() } : {}) }, based_on: events.map(e => ({ event_id: e.id, session_id: e.session_id, timestamp: e.timestamp })) };
     return await rpc(env, 'complete_analysis_run', { p_job_id: run.job_id, p_lease_token: run.lease_token, p_content: content, p_model: generated.model, p_source_event_ids: events.map(event => event.id) });
   } catch (error) { await failRun(env, run, error instanceof AppError ? error.code : 'ANALYSIS_FAILED'); throw error; }
 }
@@ -196,16 +199,18 @@ export async function handler(req: Request): Promise<Response> {
     if (!['config', 'voice', 'review', 'weekly', 'memory'].includes(endpoint || '')) throw new AppError(404, 'NOT_FOUND', 'This endpoint was not found.');
     if (req.method !== 'POST' && !(endpoint === 'config' && req.method === 'GET')) throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Use POST for this endpoint.');
     const env = environment(), userId = await authenticate(req, env);
-    if (endpoint === 'config') return json({ models: { voice: env.voice, coach: env.coach, analysis: env.analysis } }, 200, cors);
+    if (endpoint === 'config') return json({ models: { voice: env.voice, coach: env.coach, analysis: env.analysis }, companions: COMPANIONS }, 200, cors);
     const body = await readBody(req);
     let result: unknown;
     if (endpoint === 'voice') result = await voice(env, userId, body);
     else if (endpoint === 'review' || endpoint === 'weekly') result = await review(env, userId, body, endpoint === 'review' ? 'session' : 'weekly');
     else {
-      allowKeys(body, ['sessionId', 'query']);
+      allowKeys(body, ['sessionId', 'query', 'companionId']);
       if (body.query !== undefined && (typeof body.query !== 'string' || body.query.length > 300)) throw new AppError(400, 'INVALID_QUERY', 'Memory search must be at most 300 characters.');
+      const requested = body.companionId === undefined ? undefined : requireCompanionId(body.companionId);
       const session = body.sessionId === undefined ? undefined : await ownedSession(env, userId, requireUuid(body.sessionId));
-      result = await memories(env, userId, session, body.query as string | undefined);
+      if (session && requested !== undefined && requested !== session.companion_id) throw new AppError(400, 'COMPANION_MISMATCH', 'The selected friend does not match this conversation.');
+      result = await memories(env, userId, session?.companion_id ?? requested ?? 'alex', session, body.query as string | undefined);
     }
     return json(result, 200, cors);
   } catch (error) {

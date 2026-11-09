@@ -14,7 +14,9 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 
-def migration_sql(source: str) -> str:
+def migration_sql(source: str, version: str = '202611090001') -> str:
+    if not re.fullmatch(r'[0-9]{12,14}', version):
+        raise ValueError('Invalid migration version')
     digest = hashlib.sha256(source.encode()).hexdigest()
     # The complete migration and its marker commit atomically. A changed existing
     # migration is refused; future schema changes must be separate migrations.
@@ -27,13 +29,13 @@ create table if not exists loop_private.migrations(version text primary key, sha
 do $loop_setup$
 declare existing text;
 begin
-select sha256 into existing from loop_private.migrations where version='202611090001';
+select sha256 into existing from loop_private.migrations where version='{version}';
 if existing is not null and existing <> '{digest}' then
 raise exception 'Existing migration checksum differs; create a new migration';
 end if;
 if existing is null then
 execute '{literal}';
-insert into loop_private.migrations values ('202611090001','{digest}');
+insert into loop_private.migrations values ('{version}','{digest}');
 end if;
 end $loop_setup$;
 commit;"""
@@ -76,9 +78,10 @@ def main():
             raise SystemExit('PUBLIC_SITE_ORIGIN must be a complete HTTPS origin without a path.')
         management_request(ref,token,'secrets','POST',[{'name':'ALLOWED_ORIGINS','value':origin}])
         print('Configured the public site origin. Existing configured origins are preserved.')
-    source = (ROOT/'supabase/migrations/202611090001_init.sql').read_text()
-    management_request(ref,token,'database/query','POST',{'query':migration_sql(source)})
-    print('Database migration committed or verified already applied.')
+    for migration in sorted((ROOT/'supabase/migrations').glob('*.sql')):
+        version=migration.name.split('_',1)[0]
+        management_request(ref,token,'database/query','POST',{'query':migration_sql(migration.read_text(),version)})
+        print('Database migration '+version+' committed or verified already applied.')
     cli_env = {**os.environ, 'SUPABASE_HOME': str(ROOT.parent/'.supabase-cli')}
     # Provider secrets must already be configured in the dashboard. The proxy
     # OpenAI binding is deliberately NOT forwarded into another provider.

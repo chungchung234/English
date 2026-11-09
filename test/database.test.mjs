@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 
-const migrationUrl = new URL('../supabase/migrations/202611090001_init.sql', import.meta.url);
-const migration = await readFile(migrationUrl, 'utf8');
+const migrationsUrl = new URL('../supabase/migrations/', import.meta.url);
+const migrationFiles = (await readdir(migrationsUrl)).filter((name) => name.endsWith('.sql')).sort();
+const migrations = await Promise.all(migrationFiles.map((name) => readFile(new URL(name, migrationsUrl), 'utf8')));
 
 const USER_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const USER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -31,7 +32,7 @@ async function database(t) {
     grant usage on schema auth, public to anon, authenticated, service_role;
     grant execute on function auth.uid() to public;
   `);
-  await db.exec(migration);
+  for (const migration of migrations) await db.exec(migration);
   await db.query('insert into auth.users(id) values ($1), ($2)', [USER_A, USER_B]);
   return db;
 }
@@ -55,11 +56,11 @@ async function asService(db, work) {
   }
 }
 
-async function makeSession(db, userId, scenario = 'Coffee shop') {
+async function makeSession(db, userId, scenario = 'Coffee shop', companionId = 'alex') {
   return asUser(db, userId, async () => {
     const { rows } = await db.query(
-      'insert into public.sessions(scenario) values ($1) returning id, user_id',
-      [scenario],
+      'insert into public.sessions(scenario, companion_id) values ($1, $2) returning id, user_id, companion_id',
+      [scenario, companionId],
     );
     return rows[0];
   });
@@ -315,4 +316,76 @@ test('memory search includes older matches, uses the latest analysis per session
 
   const resultB = await asService(db, async () => (await search(USER_B)).rows);
   assert.deepEqual(resultB.map((row) => row.session_id), [userBSession.id]);
+});
+
+test('companion memory stays scoped, legacy sessions default to Alex, and restore preserves companion identity', async (t) => {
+  const db = await database(t);
+  const alex = await makeSession(db, USER_A, 'Alex practice', 'alex');
+  const mia = await makeSession(db, USER_A, 'Mia practice', 'mia');
+  const juno = await makeSession(db, USER_A, 'Juno practice', 'juno');
+  const privateAlex = await makeSession(db, USER_B, 'Other user Alex', 'alex');
+
+  const insertAnalysis = (userId, sessionId, content) => db.query(
+    `insert into public.analyses(user_id, session_id, kind, content, model)
+     values ($1, $2, 'session', $3::jsonb, 'test-model')`,
+    [userId, sessionId, JSON.stringify(content)],
+  );
+  await insertAnalysis(USER_A, alex.id, { note: 'Alex says use steady pacing' });
+  await insertAnalysis(USER_A, mia.id, { note: 'Mia says use bright vowels' });
+  await insertAnalysis(USER_A, juno.id, { note: 'Juno says use clear consonants' });
+  await insertAnalysis(USER_B, privateAlex.id, { note: 'Private Alex practice' });
+
+  const search = (userId, companion) => db.query(
+    'select user_id, session_id, content from public.memory_search($1, $2, 12, $3)',
+    [userId, 'use', companion],
+  );
+  const searchA = async (companion) => asService(db, async () => (await search(USER_A, companion)).rows);
+  const alexRows = await searchA('alex');
+  const miaRows = await searchA('mia');
+  const junoRows = await searchA('juno');
+  assert.deepEqual(alexRows.map((row) => row.session_id), [alex.id]);
+  assert.deepEqual(miaRows.map((row) => row.session_id), [mia.id]);
+  assert.deepEqual(junoRows.map((row) => row.session_id), [juno.id]);
+  assert.ok([...alexRows, ...miaRows, ...junoRows].every((row) => row.user_id === USER_A));
+  const defaultSearch = await asService(db, async () => (await db.query(
+    "select session_id from public.memory_search($1, 'pacing', 12)", [USER_A],
+  )).rows);
+  assert.deepEqual(defaultSearch.map((row) => row.session_id), [alex.id]);
+
+  const legacyId = '77777777-7777-4777-8777-777777777777';
+  const restoredMiaId = '88888888-8888-4888-8888-888888888888';
+  const baseTime = '2026-11-08T09:00:00.000Z';
+  const backup = {
+    sessions: [
+      { id: legacyId, scenario: 'Old backup', status: 'active', created_at: baseTime },
+      { id: restoredMiaId, scenario: 'Mia backup', status: 'active', created_at: baseTime, companion_id: 'mia' },
+    ],
+    events: [],
+  };
+  await asUser(db, USER_A, () => db.query('select public.restore_history($1::jsonb)', [JSON.stringify(backup)]));
+  const restored = await db.query('select id, companion_id from public.sessions where id = any($1::uuid[]) order by id', [[legacyId, restoredMiaId]]);
+  assert.deepEqual(restored.rows, [
+    { id: legacyId, companion_id: 'alex' },
+    { id: restoredMiaId, companion_id: 'mia' },
+  ]);
+
+  await assert.rejects(
+    asUser(db, USER_A, () => db.query('select public.restore_history($1::jsonb)', [JSON.stringify({ sessions: [{ ...backup.sessions[0], id: '99999999-9999-4999-8999-999999999999', companion_id: 'unknown' }] })])),
+    /companion/i,
+  );
+  await assert.rejects(
+    asUser(db, USER_A, () => db.query('select public.restore_history($1::jsonb)', [JSON.stringify({ sessions: [{ ...backup.sessions[0], id: 'aaaaaaaa-9999-4999-8999-999999999999', companion_id: null }] })])),
+    /companion/i,
+  );
+  await assert.rejects(
+    asUser(db, USER_A, () => db.query('select public.restore_history($1::jsonb)', [JSON.stringify({ sessions: [{ ...backup.sessions[1], id: restoredMiaId, companion_id: 'juno' }] })])),
+    /conflicts with existing session/i,
+  );
+
+  const visibleToB = await asUser(db, USER_B, () => db.query('select id from public.sessions'));
+  assert.deepEqual(visibleToB.rows.map((row) => row.id), [privateAlex.id]);
+  await assert.rejects(
+    asUser(db, USER_A, () => db.query("insert into public.sessions(scenario, companion_id) values ('Invalid', 'unknown')")),
+    /companion/i,
+  );
 });

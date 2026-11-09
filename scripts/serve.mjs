@@ -10,7 +10,7 @@ http.createServer(async(req,res)=>{
   const location=pathname.startsWith('/src/')?path.join(root,pathname):path.join(root,'web',pathname==='/'?'index.html':pathname);
   if(!location.startsWith(root+path.sep)||(!location.startsWith(path.join(root,'web')+path.sep)&&!location.startsWith(path.join(root,'src')+path.sep)))throw Error('Not found');
   const data=await readFile(location);
-  const type={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8'}[path.extname(location)]||'application/octet-stream';
+  const type={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.webp':'image/webp','.png':'image/png'}[path.extname(location)]||'application/octet-stream';
   res.writeHead(200,{'Content-Type':type,'Cache-Control':'no-store','Permissions-Policy':'microphone=(self)'});res.end(data);
  }catch{res.writeHead(404);res.end('Not found');}
 }).listen(port,'127.0.0.1',()=>console.log(`Local validation server on port ${port}`));

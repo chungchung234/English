@@ -33,11 +33,11 @@ async function main() {
   if (!/^[a-z0-9]{20}$/.test(ref)) throw new SetupError('A valid project reference is required.');
   const endpoint = `https://api.supabase.com/v1/projects/${ref}/config/auth`;
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
-  const html = '<div style="font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif;padding:24px;max-width:440px"><h1 style="font-size:24px">Face-off 로그인 코드</h1><p>영어 연습을 이어가려면 아래 코드를 로그인 화면에 입력해 주세요.</p><p style="font-size:32px;letter-spacing:6px;font-weight:700">{{ .Token }}</p><p>로그인을 요청하지 않으셨다면 이 메일을 무시하세요.</p></div>';
+  const html = '<div style="font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif;padding:24px;max-width:440px"><h1 style="font-size:24px">시시콜콜 로그인 코드</h1><p>영어 연습을 이어가려면 아래 코드를 로그인 화면에 입력해 주세요.</p><p style="font-size:32px;letter-spacing:6px;font-weight:700">{{ .Token }}</p><p>로그인을 요청하지 않으셨다면 이 메일을 무시하세요.</p></div>';
   const desired = {
     site_url: 'https://chungchung234.github.io/English/',
-    mailer_subjects_magic_link: '[Face-off] 로그인 인증코드',
-    mailer_subjects_confirmation: '[Face-off] 가입 인증코드',
+    mailer_subjects_magic_link: '[시시콜콜] 로그인 인증코드',
+    mailer_subjects_confirmation: '[시시콜콜] 가입 인증코드',
     mailer_templates_magic_link_content: html,
     mailer_templates_confirmation_content: html,
   };
@@ -61,7 +61,7 @@ async function main() {
   for (const key of smtpKeys) {
     if (JSON.stringify(before[key]) !== JSON.stringify(after[key])) throw new SetupError(`Existing SMTP setting changed during configuration: ${key}`);
   }
-  console.log('::notice title=Email login prepared::Face-off login and signup code templates verified by exact readback. Existing SMTP configuration unchanged.');
+  console.log('::notice title=Email login prepared::시시콜콜 login and signup code templates verified by exact readback. Existing SMTP configuration unchanged.');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -186,7 +186,7 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.equal(session.model, 'gpt-realtime-mini');
       assert.equal(session.max_output_tokens, 512);
       assert.equal(session.audio.input.transcription.model, 'gpt-4o-mini-transcribe');
-      assert.equal(session.audio.output.voice, 'marin');
+      assert.equal(session.audio.output.voice, 'cedar');
       assert.equal(options.headers.Authorization, 'Bearer test-openai');
       return new Response(sdp);
     }
@@ -214,7 +214,7 @@ test('memory retrieves old relevant corrections and practice through all-history
   try {
     const result = await handler(request('memory', { query: 'market' }));
     assert.equal(result.status, 200); const body = await result.json();
-    assert.deepEqual(search, { p_user_id: userId, p_query: 'market', p_limit: 12 });
+    assert.deepEqual(search, { p_user_id: userId, p_query: 'market', p_limit: 12, p_companion_id: 'alex' });
     assert.equal(body.memories[0].created_at, '2020-01-01T00:00:00Z');
     assert.equal(body.memories[0].corrections[0].improved, 'I went');
     assert.equal(body.memories[0].practice[0].expression, 'Yesterday I went to the market.');
@@ -237,7 +237,7 @@ test('weekly review selects ended sessions in a seven-day window and records its
     if (path.includes('/transcript_events?')) return response([event]);
     if (path.includes('/reserve_run')) {
       const body = JSON.parse(options.body); assert.equal(body.p_kind, 'weekly');
-      assert.match(body.p_request_key, /^\d{4}-\d{2}-\d{2}:[a-f0-9]{64}$/);
+      assert.match(body.p_request_key, /^alex:\d{4}-\d{2}-\d{2}:[a-f0-9]{64}$/);
       return response({ reserved: true, job_id: sessionId, lease_token: eventId });
     }
     if (path.includes('api.openai.com')) {
@@ -290,4 +290,162 @@ test('public mode rejects unverified accounts before DB access or model spending
   globalThis.fetch=async()=>{count++;return response({...authUser,email:'new-user@example.org',email_confirmed_at:null});};
   try{assert.equal((await handler(request('voice',{sessionId,sdp}))).status,403);assert.equal(count,1);}
   finally{globalThis.fetch=original;config.ACCESS_MODE=mode;}
+});
+
+test('config exposes exactly the three companion profiles and their voices', async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = async () => response(authUser);
+  try {
+    const result = await handler(new Request('https://project.supabase.co/functions/v1/coach/config', { headers: { Origin: 'https://example.com', Authorization: 'Bearer test-user' } }));
+    assert.equal(result.status, 200);
+    const data = await result.json();
+    assert.deepEqual(data.companions.map(({ id, voice }) => [id, voice]), [['mia', 'marin'], ['alex', 'cedar'], ['juno', 'verse']]);
+    assert.equal(data.models.voice, 'gpt-realtime-mini');
+    assert.equal(JSON.stringify(data).includes('test-service'), false);
+  } finally { globalThis.fetch = original; }
+});
+
+test('each stored companion controls its voice, persona, and isolated retrieved practice', async () => {
+  const original = globalThis.fetch;
+  const profiles = [['mia', 'Mia', 'marin'], ['alex', 'Alex', 'cedar'], ['juno', 'Juno', 'verse']];
+  try {
+    for (const [id, name, voice] of profiles) {
+      let searched = false, connected = false;
+      globalThis.fetch = async (url, options) => {
+        const path = String(url);
+        if (path.includes('/auth/')) return response(authUser);
+        if (path.includes('/sessions?')) {
+          assert.ok(new URL(path).searchParams.get('select').includes('companion_id'));
+          return response([{ id: sessionId, user_id: userId, companion_id: id, status: 'active', scenario: 'Travel' }]);
+        }
+        if (path.includes('/memory_search')) {
+          assert.equal(JSON.parse(options.body).p_companion_id, id); searched = true;
+          return response([{ id: eventId, session_id: eventId, content: { ...content(), summary: `${name} remembers practicing travel.`, practice: [{ expression: `${name} practice phrase`, evidence_ids: [eventId] }] }, source_event_ids: [eventId], created_at: '2026-01-01T00:00:00Z' }]);
+        }
+        if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
+        if (path.includes('/realtime/calls')) {
+          const session = JSON.parse(options.body.get('session')); connected = true;
+          assert.equal(session.audio.output.voice, voice);
+          assert.ok(session.instructions.includes(`Your name is ${name}.`));
+          assert.ok(session.instructions.includes(`${name} practice phrase`));
+          for (const [, other] of profiles) if (other !== name) assert.equal(session.instructions.includes(`${other} practice phrase`), false);
+          return new Response(sdp);
+        }
+        if (path.includes('/complete_run')) return response({ connected: true });
+        throw new Error('Unexpected cross-companion query');
+      };
+      assert.equal((await handler(request('voice', { sessionId, sdp }))).status, 200);
+      assert.equal(searched, true); assert.equal(connected, true);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('memory derives the stored companion and rejects an explicit mismatch before retrieval', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const companionId of [undefined, 'juno', 'mia']) {
+      let searched = false;
+      globalThis.fetch = async (url, options) => {
+        const path = String(url);
+        if (path.includes('/auth/')) return response(authUser);
+        if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'juno', scenario: 'Travel', status: 'active' }]);
+        if (path.includes('/memory_search')) { searched = true; assert.equal(JSON.parse(options.body).p_companion_id, 'juno'); return response([]); }
+        throw new Error('Unexpected request');
+      };
+      const result = await handler(request('memory', { sessionId, ...(companionId === undefined ? {} : { companionId }) }));
+      if (companionId === 'mia') {
+        assert.equal(result.status, 400); assert.equal((await result.json()).error.code, 'COMPANION_MISMATCH'); assert.equal(searched, false);
+      } else { assert.equal(result.status, 200); assert.equal((await result.json()).companionId, 'juno'); assert.equal(searched, true); }
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('invalid companion enums and voice/review client overrides fail before history retrieval', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const [endpoint, body, code] of [
+      ['weekly', { companionId: 'unknown' }, 'INVALID_COMPANION'],
+      ['weekly', { companionId: null }, 'INVALID_COMPANION'],
+      ['memory', { companionId: 'Mia' }, 'INVALID_COMPANION'],
+      ['memory', { companionId: '' }, 'INVALID_COMPANION'],
+      ['voice', { sessionId, sdp, companionId: 'mia' }, 'INVALID_BODY'],
+      ['review', { sessionId, companionId: 'mia' }, 'INVALID_BODY'],
+    ]) {
+      let calls = 0;
+      globalThis.fetch = async url => { calls++; assert.ok(String(url).includes('/auth/')); return response(authUser); };
+      const result = await handler(request(endpoint, body));
+      assert.equal(result.status, 400); assert.equal((await result.json()).error.code, code); assert.equal(calls, 1);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('weekly history, model context, scope, and cache key are isolated to the selected companion', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const companionId of ['mia', 'juno']) {
+      let stored;
+      globalThis.fetch = async (url, options) => {
+        const path = String(url);
+        if (path.includes('/auth/')) return response(authUser);
+        if (path.includes('/sessions?')) {
+          assert.equal(new URL(path).searchParams.get('companion_id'), `eq.${companionId}`);
+          return response([{ id: sessionId, user_id: userId, companion_id: companionId, scenario: 'Travel', status: 'ended', ended_at: event.timestamp }]);
+        }
+        if (path.includes('/transcript_events?')) {
+          assert.equal(new URL(path).searchParams.get('session_id'), `in.(${sessionId})`);
+          return response([event]);
+        }
+        if (path.includes('/reserve_run')) {
+          assert.ok(JSON.parse(options.body).p_request_key.startsWith(`${companionId}:`));
+          return response({ reserved: true, job_id: sessionId, lease_token: eventId });
+        }
+        if (path.includes('/responses')) {
+          const input = JSON.parse(JSON.parse(options.body).input);
+          assert.equal(input.context.companion.id, companionId);
+          return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify({ ...content(), patterns: [] }) }] }] });
+        }
+        if (path.includes('/complete_analysis_run')) { stored = JSON.parse(options.body).p_content; return response({ analysis: { content: stored } }); }
+        throw new Error('Unexpected request');
+      };
+      assert.equal((await handler(request('weekly', { companionId }))).status, 200);
+      assert.equal(stored.scope.companionId, companionId); assert.equal(stored.scope.session_count, 1);
+      assert.deepEqual(stored.based_on.map(item => item.event_id), [eventId]);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('weekly rejects any unexpected cross-companion database rows before model spending', async () => {
+  const original = globalThis.fetch; let calls = 0;
+  globalThis.fetch = async url => {
+    calls++; const path = String(url);
+    if (path.includes('/auth/')) return response(authUser);
+    assert.ok(path.includes('/sessions?'));
+    return response([{ id: sessionId, user_id: userId, companion_id: 'alex', scenario: 'Travel', status: 'ended' }]);
+  };
+  try {
+    const result = await handler(request('weekly', { companionId: 'mia' }));
+    assert.equal(result.status, 503); assert.equal((await result.json()).error.code, 'INCOMPLETE_HISTORY'); assert.equal(calls, 2);
+  } finally { globalThis.fetch = original; }
+});
+
+test('session review derives its companion identity without a client override', async () => {
+  const original = globalThis.fetch; let stored;
+  globalThis.fetch = async (url, options) => {
+    const path = String(url);
+    if (path.includes('/auth/')) return response(authUser);
+    if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Travel', status: 'ended' }]);
+    if (path.includes('/transcript_events?')) return response([event]);
+    if (path.includes('/reserve_run')) {
+      assert.ok(JSON.parse(options.body).p_request_key.startsWith(`mia:${sessionId}:`));
+      return response({ reserved: true, job_id: sessionId, lease_token: eventId });
+    }
+    if (path.includes('/responses')) {
+      assert.equal(JSON.parse(JSON.parse(options.body).input).context.companion.name, 'Mia');
+      return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(content()) }] }] });
+    }
+    if (path.includes('/complete_analysis_run')) { stored = JSON.parse(options.body).p_content; return response({ analysis: { content: stored } }); }
+    throw new Error('Unexpected request');
+  };
+  try { assert.equal((await handler(request('review', { sessionId }))).status, 200); assert.equal(stored.scope.companionId, 'mia'); }
+  finally { globalThis.fetch = original; }
 });

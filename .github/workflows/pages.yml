@@ -1,4 +1,4 @@
-name: Publish Loop website
+name: Publish 시시콜콜 website
 on:
   push:
     branches: [main]
@@ -54,6 +54,10 @@ jobs:
         with:
           path: dist
   deploy:
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
     needs: build
     environment:
       name: github-pages
@@ -74,7 +78,7 @@ jobs:
           npx playwright install --with-deps chromium
           sudo apt-get update
           sudo apt-get install -y espeak-ng
-          espeak-ng -s 145 -w /tmp/loop-utterance.wav "Hello Alex. Yesterday I went to a cafe with my friend. Today I am thinking of visiting a park."
+          espeak-ng -s 145 -w /tmp/loop-utterance.wav "Hi there. Yesterday I went to a cafe with my friend. Today I am thinking of visiting a park."
           python3 scripts/synthetic-audio.py /tmp/loop-utterance.wav /tmp/loop-smoke.wav
       - name: Verify live voice, memory and account isolation
         run: node scripts/live-smoke.mjs
@@ -83,3 +87,21 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SITE_URL: ${{ steps.deployment.outputs.page_url }}
           SMOKE_AUDIO: /tmp/loop-smoke.wav
+      - name: Save synthetic release screenshots
+        if: always()
+        run: |
+          python3 - <<'PYSCREEN'
+          from pathlib import Path
+          import shutil
+          out=Path('docs/release-evidence')
+          for image in Path('test-results').glob('live-*.png'):
+              out.mkdir(parents=True,exist_ok=True)
+              shutil.copyfile(image,out/image.name)
+          PYSCREEN
+          if [ ! -d docs/release-evidence ]; then exit 0; fi
+          git checkout -b release-evidence-${{ github.run_id }}
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+          git add docs/release-evidence
+          git commit -m "Capture isolated synthetic release verification"
+          git push origin HEAD:refs/heads/release-evidence-${{ github.run_id }}

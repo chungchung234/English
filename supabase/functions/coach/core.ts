@@ -2,6 +2,17 @@
 export class AppError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
 }
+export const COMPANIONS = [
+  { id: 'mia', name: 'Mia', voice: 'marin', description: 'A warm, thoughtful female AI companion. Listen patiently, show gentle curiosity, and encourage the learner with specific, considerate replies.' },
+  { id: 'alex', name: 'Alex', voice: 'cedar', description: 'A calm, practical male AI companion. Speak clearly, offer grounded everyday examples, and help the learner work through one small step at a time.' },
+  { id: 'juno', name: 'Juno', voice: 'verse', description: 'A playful, friendly AI companion. Use gentle light banter and creative questions while staying kind, respectful, and easy to understand.' },
+] as const;
+export type CompanionId = typeof COMPANIONS[number]['id'];
+export function requireCompanionId(value: unknown = 'alex'): CompanionId {
+  if (typeof value !== 'string' || !COMPANIONS.some(companion => companion.id === value)) throw new AppError(400, 'INVALID_COMPANION', 'Choose Mia, Alex, or Juno.');
+  return value as CompanionId;
+}
+export function companionProfile(id: CompanionId) { return COMPANIONS.find(companion => companion.id === id)!; }
 // UTF-8 bytes conservatively bound input tokens too (at most one token per byte).
 export const LIMITS = { bodyBytes: 120_000, sdpBytes: 100_000, events: 1500, sessions: 80, inputBytes: 120_000, memoryBytes: 16_000 };
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

@@ -33,4 +33,4 @@
 
 실제 수신함 도착과 승인 계정의 로그인은 SMTP 자격 증명 갱신 후 별도로 확인해야 한다.
 
-게시된 `2b8505a16b30fdeb8f626a3a1efc87299400deb8`의 HTML을 정상 HTTPS 검증으로 가져와 서비스 origin에서 렌더링했다. 인증 API 응답만 합성 429로 대체했으며 실제 메일은 보내지 않았다. [검증 기록](email-login/verification.json)과 [390px 화면](email-login/rate-limit.png)에서 재발송 잠금, 기존 코드 입력, 버튼 가림 없음, 가로 넘침 없음, 브라우저 오류 없음을 확인했다. [배포 실행](https://github.com/chungchung234/English/actions/runs/42670511024)의 실제 메일 전달 검증과는 구분한다.
+게시된 `2b8505a16b30fdeb8f626a3a1efc87299400deb8`의 HTML을 정상 HTTPS 검증으로 가져와 서비스 origin에서 렌더링했다. 인증 API 응답만 합성 429로 대체했으며 실제 메일은 보내지 않았다. [검증 기록](email-login/verification.json)과 [390px 화면](email-login/rate-limit.png)에서 재발송 잠금, 기존 코드 입력, 버튼 가림 없음, 가로 넘침 없음, 브라우저 오류 없음을 확인했다. [배포 자동 검사](https://github.com/chungchung234/English/actions/runs/42670511024) 역시 실제 메일 전달을 검증하지 않는다.

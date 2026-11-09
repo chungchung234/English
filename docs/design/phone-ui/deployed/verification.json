@@ -1,0 +1,33 @@
+{
+  "verifiedAt": "2026-11-09T17:57:42.420Z",
+  "site": "https://chungchung234.github.io/English/",
+  "appCommit": "7bc1c66ca29c94af65e874a69d01fbaa4bf85873",
+  "workflow": "https://github.com/chungchung234/English/actions/runs/42668898340",
+  "httpStatus": 200,
+  "htmlBytes": 169083,
+  "htmlSha256": "e4b5a7478a3755b9ba0cbb174dde2e77f680b1154844358d2ca9dc9c3eb85245",
+  "assets": [
+    {
+      "name": "alex",
+      "url": "https://chungchung234.github.io/English/assets/ai-alex.cc68fe3acd91.webp",
+      "bytes": 515878,
+      "sha256": "cc68fe3acd919db19a6a8f2f5a54bd093e2b49af0807bfb4299c9c4ee56af37d"
+    },
+    {
+      "name": "mia",
+      "url": "https://chungchung234.github.io/English/assets/ai-mia.c2811706559f.webp",
+      "bytes": 491026,
+      "sha256": "c2811706559f2d38ba5c0801531f8bdb3c338a587b37e1e36aecb980444e80b3"
+    },
+    {
+      "name": "juno",
+      "url": "https://chungchung234.github.io/English/assets/ai-juno.9af4cc7fb746.webp",
+      "bytes": 458512,
+      "sha256": "9af4cc7fb746af15fd7d599b6e4f54f21c6ebc8593cd8ca52f84f295f15e52da"
+    }
+  ],
+  "syntheticData": true,
+  "realUserDataAccessed": false,
+  "providerVoiceTested": false,
+  "browserErrors": []
+}

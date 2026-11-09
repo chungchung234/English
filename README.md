@@ -2,7 +2,7 @@
 
 모바일 브라우저에서 링크로 접속하는 가벼운 영어 말하기 서비스입니다. 이메일 로그인, 자연스러운 영어 통화, 대화 자동 저장, 개인별 장기 이력, 통화·주간 분석을 제공합니다. 특정 AI 채팅 앱 설치나 사용자별 API 설정은 필요하지 않습니다. 정적 웹 호스팅과 관리형 Supabase를 사용하므로 상시 서버를 직접 운영하지 않습니다.
 
-**현재 상태:** [서비스 링크](https://chungchung234.github.io/English/)에서 로그인 화면에 접근할 수 있으며, 보호된 데이터·AI 기능은 승인된 계정만 이용합니다. 승인된 캐릭터·단계별 모션과 [연구·디자인 결정](docs/design/research-and-decisions.md)을 반영했습니다. [최종 배포 검사](https://github.com/chungchung234/English/actions/runs/42664184362)가 통과했고 [게시 화면·검증 범위](docs/design/research-and-decisions.md#배포와-검증-기록)를 기록했습니다.
+**현재 상태:** [서비스 링크](https://chungchung234.github.io/English/)에서 로그인 화면에 접근할 수 있으며, 보호된 데이터·AI 기능은 승인된 계정만 이용합니다. 승인된 캐릭터·단계별 모션과 [연구·디자인 결정](docs/design/research-and-decisions.md)을 유지하고 모바일 연락처·통화 UI를 배포했습니다. [최신 배포 검사](https://github.com/chungchung234/English/actions/runs/42668898340)가 통과했으며 [게시 화면·검증 범위](docs/design/phone-ui-qa.md)를 기록했습니다. [이전 캐릭터 배포 기록](docs/design/research-and-decisions.md#배포와-검증-기록)도 보존합니다.
 
 [이전 공개 모드 검증](https://github.com/chungchung234/English/actions/runs/42639444223)에서는 세 캐릭터의 실제 WebRTC·전사·응답·기억 분리가 통과했습니다. 이는 현재 승인 계정의 실제 기기 재검증과는 별도 기록입니다. 현재의 비승인 테스트 계정은 접근 차단을 확인하며, 검증 목적으로 승인 목록을 바꾸지 않습니다. 이메일 전달과 DB 재해 복구는 아래 운영 과제로 남습니다.
 

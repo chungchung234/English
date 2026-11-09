@@ -40,8 +40,10 @@ jobs:
           npm run check
           npm test
           npm run eval:memory
-      - name: Validate memory controls and mobile browser
-        run: npm run test:browser
+      - name: Validate character rendering, memory controls and mobile browser
+        run: |
+          npm run test:presence
+          npm run test:browser
         env:
           CHROMIUM_PATH: /usr/bin/google-chrome
       - name: Resolve public site connection

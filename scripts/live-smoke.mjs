@@ -131,16 +131,18 @@ async function main() {
       stage = `${profile.name}: published mobile home`;
       // A fresh browser process resets the offline WAV microphone capture for
       // each call; this avoids depending on Chromium's shared capture lifetime.
-      browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${process.env.SMOKE_AUDIO}`] });
+      browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${process.env.SMOKE_AUDIO}`] });
       const context = await browser.newContext({ permissions: ['microphone'], viewport: { width: 390, height: 844 } });
       await context.addInitScript(({ base, session }) => {
         localStorage.setItem('loop.auth:' + base, JSON.stringify({ ...session, expires_at: Math.floor(Date.now() / 1000) + session.expires_in }));
         // Observe real provider events, retaining only counts and public voice
         // names. No event body, SDP, or transcript is copied into test output.
-        globalThis.__liveSmoke = { userTurns: 0, userCommits: 0, assistantTurns: 0, assistantAfterUser: 0, voices: [] };
+        globalThis.__liveSmoke = { userTurns: 0, userCommits: 0, assistantTurns: 0, assistantAfterUser: 0, voices: [], connectionState: 'new' };
         const create = RTCPeerConnection.prototype.createDataChannel;
         RTCPeerConnection.prototype.createDataChannel = function (...args) {
           const channel = create.apply(this, args);
+          globalThis.__liveSmoke.connectionState = this.connectionState;
+          this.addEventListener('connectionstatechange', () => { globalThis.__liveSmoke.connectionState = this.connectionState; });
           channel.addEventListener('message', message => {
             let event; try { event = JSON.parse(message.data); } catch { return; }
             const observed = globalThis.__liveSmoke;
@@ -175,7 +177,7 @@ async function main() {
       await page.screenshot({ path: `test-results/live-${profile.id}-home.png`, fullPage: true });
       stage = `${profile.name}: actual WebRTC and provider transcription`;
       await page.locator('#start-call').click();
-      await page.waitForFunction(() => document.querySelector('#call-status')?.textContent.includes('통화 중'), {}, { timeout: 60_000 });
+      await page.waitForFunction(() => globalThis.__liveSmoke.connectionState === 'connected', {}, { timeout: 60_000 });
       await page.waitForFunction(expected => globalThis.__liveSmoke.voices.includes(expected), profile.voice, { timeout: 30_000 });
       await page.waitForFunction(() => globalThis.__liveSmoke.userTurns > 0 && Array.from(document.querySelectorAll('#transcript li')).some(li => li.querySelector('b')?.textContent === 'YOU' && /friend|park|caf[eé]|yesterday|today/i.test(li.textContent)), {}, { timeout: 90_000 });
       await page.waitForFunction(name => globalThis.__liveSmoke.assistantAfterUser > 0 && Array.from(document.querySelectorAll('#transcript li')).some(li => li.querySelector('b')?.textContent === name.toUpperCase()), profile.name, { timeout: 90_000 });

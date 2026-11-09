@@ -389,3 +389,49 @@ test('companion memory stays scoped, legacy sessions default to Alex, and restor
     /companion/i,
   );
 });
+
+test('factual profile survives search eviction, follows speech date, isolates companions and honors forget', async t => {
+  const db=await database(t);
+  async function factSession(user,companion,key,value,day,quote='I live in Seoul.') {
+    const session=await makeSession(db,user,'Ordinary conversation',companion);
+    const {rows:[speech]}=await db.query(`insert into public.transcript_events(user_id,session_id,event_key,speaker,text,timestamp) values ($1,$2,'fact','user',$3,$4) returning id`,[user,session.id,quote,`2026-11-${String(day).padStart(2,'0')}T12:00:00Z`]);
+    await db.query(`insert into public.analyses(user_id,session_id,kind,content,model,source_event_ids) values ($1,$2,'session',$3,'test',$4)`,[user,session.id,JSON.stringify({summary:'Conversation',memory_facts:[{key,value,quote,evidence_ids:[speech.id]}]}),[speech.id]]);
+    return session;
+  }
+  const old=await factSession(USER_A,'alex','location','Seoul',1);
+  await factSession(USER_A,'alex','location','Busan',5,'I moved to Busan.');
+  await factSession(USER_A,'mia','location','Paris',6,'I live in Paris.');
+  await factSession(USER_B,'alex','location','London',6,'I live in London.');
+  // A late re-analysis of the old call must not overwrite a newer spoken fact.
+  await db.query(`update public.analyses set created_at=now()+interval '1 day' where session_id=$1`,[old.id]);
+  for(let i=0;i<14;i++){
+    const session=await makeSession(db,USER_A,'Recent coffee practice');
+    await db.query(`insert into public.analyses(user_id,session_id,kind,content,model,created_at) values ($1,$2,'session','{"summary":"Coffee"}','test',now()+interval '2 days')`,[USER_A,session.id]);
+  }
+  const profile=async(user,companion)=>asService(db,async()=>{
+    const {rows}=await db.query('select session_id,content from public.memory_search($1,$2,12,$3)',[user,'coffee',companion]);
+    return rows;
+  });
+  let rows=await profile(USER_A,'alex');assert.equal(rows.length,12);assert.ok(rows.every(row=>row.session_id!==old.id));
+  assert.equal(rows[0].content.memory_profile[0].value,'Busan');
+  assert.equal((await profile(USER_A,'mia'))[0].content.memory_profile[0].value,'Paris');
+  assert.equal((await profile(USER_B,'alex'))[0].content.memory_profile[0].value,'London');
+  await factSession(USER_A,'alex','location','',8,'Please forget where I live.');
+  rows=await profile(USER_A,'alex');assert.deepEqual(rows[0].content.memory_profile,[]);
+  // Both the wrapper and raw search stay unavailable to browser roles.
+  await asUser(db,USER_A,async()=>{
+    await assert.rejects(()=>db.query('select * from public.memory_search_hits($1,$2,12,$3)',[USER_A,'coffee','alex']),/permission denied/);
+  });
+});
+
+test('analysis continuations retain one parent budget while ordinary failures consume retries', async t=>{
+  const db=await database(t);
+  const reserve=async()=>asService(db,async()=>(await db.query("select public.reserve_run($1,'weekly','continuation-test',null,600) as result",[USER_A])).rows[0].result);
+  const fail=async(run,reason)=>asService(db,()=>db.query('select public.fail_run($1,$2,$3)',[run.job_id,run.lease_token,reason]));
+  let run=await reserve();
+  for(let i=0;i<4;i++){assert.equal(run.reserved,true);await fail(run,'ANALYSIS_CONTINUE');run=await reserve();}
+  let usage=await db.query("select reservations from public.api_daily_usage where user_id=$1 and kind='weekly'",[USER_A]);
+  assert.equal(usage.rows[0].reservations,1);
+  await fail(run,'UPSTREAM_UNAVAILABLE');run=await reserve();assert.equal(run.reserved,true);
+  usage=await db.query("select reservations from public.api_daily_usage where user_id=$1 and kind='weekly'",[USER_A]);assert.equal(usage.rows[0].reservations,2);
+});

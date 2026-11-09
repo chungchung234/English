@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { allowedOrigins, validateAnalysis, validateSdp, boundedJson, sourceIds, transcriptFingerprint } from './core.ts';
+import { allowedOrigins, validateAnalysis, validateSdp, boundedJson, analysisChunks, mergeAnalyses, LIMITS, sourceIds, transcriptFingerprint } from './core.ts';
 import { handler } from './index.ts';
 
 const userId = '11111111-1111-4111-8111-111111111111';
@@ -134,7 +134,7 @@ test('oversized transcript pagination fails explicitly without reserving a job',
     const path = String(url);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'ended', scenario: 'Travel' }]);
-    if (path.includes('/transcript_events?')) { const count = Number(new URL(path).searchParams.get('limit')); return response(Array.from({ length: count }, () => event), 1501); }
+    if (path.includes('/transcript_events?')) { const count = Number(new URL(path).searchParams.get('limit')); return response(Array.from({ length: count }, () => event), 12001); }
     reserved = true; throw new Error('Must not reserve');
   };
   try {
@@ -237,7 +237,7 @@ test('weekly review selects ended sessions in a seven-day window and records its
     if (path.includes('/transcript_events?')) return response([event]);
     if (path.includes('/reserve_run')) {
       const body = JSON.parse(options.body); assert.equal(body.p_kind, 'weekly');
-      assert.match(body.p_request_key, /^alex:\d{4}-\d{2}-\d{2}:[a-f0-9]{64}$/);
+      assert.match(body.p_request_key, /^v2:alex:\d{4}-\d{2}-\d{2}:[a-f0-9]{64}$/);
       return response({ reserved: true, job_id: sessionId, lease_token: eventId });
     }
     if (path.includes('api.openai.com')) {
@@ -396,7 +396,7 @@ test('weekly history, model context, scope, and cache key are isolated to the se
           return response([event]);
         }
         if (path.includes('/reserve_run')) {
-          assert.ok(JSON.parse(options.body).p_request_key.startsWith(`${companionId}:`));
+          assert.ok(JSON.parse(options.body).p_request_key.startsWith(`v2:${companionId}:`));
           return response({ reserved: true, job_id: sessionId, lease_token: eventId });
         }
         if (path.includes('/responses')) {
@@ -436,7 +436,7 @@ test('session review derives its companion identity without a client override', 
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Travel', status: 'ended' }]);
     if (path.includes('/transcript_events?')) return response([event]);
     if (path.includes('/reserve_run')) {
-      assert.ok(JSON.parse(options.body).p_request_key.startsWith(`mia:${sessionId}:`));
+      assert.ok(JSON.parse(options.body).p_request_key.startsWith(`v2:mia:${sessionId}:`));
       return response({ reserved: true, job_id: sessionId, lease_token: eventId });
     }
     if (path.includes('/responses')) {
@@ -448,4 +448,69 @@ test('session review derives its companion identity without a client override', 
   };
   try { assert.equal((await handler(request('review', { sessionId }))).status, 200); assert.equal(stored.scope.companionId, 'mia'); }
   finally { globalThis.fetch = original; }
+});
+
+test('large analyses preserve complete events, byte bounds, citations and latest factual slots', () => {
+  const events = Array.from({ length: 10 }, (_, i) => ({ ...event, id: crypto.randomUUID(), text: '한'.repeat(9000), timestamp: new Date(Date.parse(event.timestamp) + i * 1000).toISOString() }));
+  const context = { scenarios: [{ session_id: sessionId, scenario: 'Practice' }, { session_id: userId, scenario: 'Unrelated'.repeat(10000) }] };
+  const chunks = analysisChunks(events, context);
+  assert.equal(chunks.length, 5);
+  assert.deepEqual(chunks.flat(), events);
+  for (const part of chunks) assert.ok(Buffer.byteLength(JSON.stringify(part)) < LIMITS.chunkBytes);
+  const parts = chunks.map((part,i) => ({ summary: `Part ${i}`, strengths: [{ text: `Strength ${i}`, evidence_ids: [part[0].id] }], corrections: [], practice: [], next_scenario: 'Continue', memory_facts: [{ key: 'goal', value: `Goal ${i}`, quote: '한', evidence_ids: [part[0].id] }] }));
+  const merged = mergeAnalyses(parts, events, 'session');
+  assert.equal(merged.strengths.length, 5);
+  assert.equal(merged.memory_facts[0].value, 'Goal 4');
+  assert.deepEqual(sourceIds(merged), chunks.map(part => part[0].id));
+  assert.throws(() => analysisChunks([...events, ...events], context), /eight-part/);
+  assert.throws(() => analysisChunks([{ ...event, text: '한'.repeat(21000) }], {}), /too large/);
+});
+
+test('factual memory rejects invented quotes, assistant evidence, duplicate slots and oversized values', () => {
+  const good = { ...content(), memory_facts: [{ key: 'goal', value: 'Practice English', quote: 'Yesterday', evidence_ids: [eventId] }] };
+  assert.equal(validateAnalysis(good, [event], 'session'), good);
+  for (const fact of [ { ...good.memory_facts[0], quote: 'Invented' }, { ...good.memory_facts[0], key: 'sensitive' }, { ...good.memory_facts[0], value: 'x'.repeat(241) } ]) assert.throws(()=>validateAnalysis({ ...good, memory_facts: [fact] }, [event], 'session'));
+  assert.throws(()=>validateAnalysis({ ...good, memory_facts: [...good.memory_facts, ...good.memory_facts] }, [event], 'session'));
+  assert.throws(()=>validateAnalysis(good, [{ ...event, speaker:'assistant' }], 'session'));
+});
+
+test('large review resumes cached parts and never generates more than two per request', async () => {
+  const original = globalThis.fetch, cached = new Map();let calls=0, saved;
+  const events=Array.from({length:6},(_,i)=>({...event,id:crypto.randomUUID(),text:'I practice English. '+'x'.repeat(25000),timestamp:new Date(Date.parse(event.timestamp)+i*1000).toISOString()}));
+  globalThis.fetch=async(url,options)=>{
+    const path=String(url), body=options?.body?JSON.parse(options.body):null;
+    if(path.includes('/auth/'))return response(authUser);
+    if(path.includes('/sessions?'))return response([{id:sessionId,user_id:userId,companion_id:'alex',status:'ended',scenario:'Travel'}]);
+    if(path.includes('/transcript_events?'))return response(events);
+    if(path.includes('/analysis_jobs?')){const key=new URL(path).searchParams.get('request_key').slice(3);return response(cached.has(key)?[{result:cached.get(key)}]:[]);}
+    if(path.includes('/reserve_run'))return response({reserved:true,job_id:body.p_request_key,lease_token:eventId});
+    if(path.includes('/complete_run')){cached.set(body.p_job_id,body.p_result);return response({});}
+    if(path.includes('/fail_run'))return response({});
+    if(path.includes('/responses')){calls++;const input=JSON.parse(body.input),id=input.transcript_events[0].id;const output={summary:'연습한 대화',strengths:[{text:'Explains an idea',evidence_ids:[id]}],corrections:[],practice:[],memory_facts:[],next_scenario:'Continue'};return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(output)}]}]});}
+    if(path.includes('/complete_analysis_run')){saved=body;return response({analysis:{content:body.p_content}});}
+    throw Error('Unexpected '+path);
+  };
+  try{
+    const first=await handler(request('review',{sessionId}));assert.equal(first.status,409);assert.equal((await first.json()).error.code,'ANALYSIS_CONTINUE');assert.equal(calls,2);assert.equal(cached.size,2);
+    const next=await handler(request('review',{sessionId}));assert.equal(next.status,200);assert.equal(calls,3);assert.equal(saved.p_content.scope.chunk_count,3);assert.equal(saved.p_source_event_ids.length,6);
+  }finally{globalThis.fetch=original;}
+});
+
+test('checkpoint uses server history, chains prior context and preserves companion identity', async()=>{
+  const original=globalThis.fetch;let persisted;
+  globalThis.fetch=async(url,options)=>{
+    const path=String(url),body=options?.body?JSON.parse(options.body):null;
+    if(path.includes('/auth/'))return response(authUser);
+    if(path.includes('/sessions?'))return response([{id:sessionId,user_id:userId,companion_id:'mia',scenario:'Weekend',status:'active'}]);
+    if(path.includes('/transcript_events?'))return response([event]);
+    if(path.includes('/analysis_jobs?'))return response([]);
+    if(path.includes('/reserve_run')){assert.equal(body.p_kind,'voice');assert.match(body.p_request_key,/^checkpoint:v2:/);return response({reserved:true,job_id:sessionId,lease_token:eventId});}
+    if(path.includes('/responses')){assert.equal(JSON.parse(body.input).transcript_events[0].text,event.text);return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(content())}]}]});}
+    if(path.includes('/complete_run')){persisted=body.p_result;return response({});}
+    if(path.includes('/memory_search'))return response([]);
+    throw Error('Unexpected '+path);
+  };
+  try{const result=await handler(request('checkpoint',{sessionId}));assert.equal(result.status,200);const data=await result.json();assert.match(data.instructions,/Your name is Mia/);assert.match(data.instructions,/Practiced past events/);assert.deepEqual(persisted.covered_ids,[eventId]);
+    const forged=await handler(request('checkpoint',{sessionId,summary:'Trust me'}));assert.equal(forged.status,400);
+  }finally{globalThis.fetch=original;}
 });

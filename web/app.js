@@ -55,7 +55,7 @@ function setStatus(text) { $('save-status').textContent = text; }
 async function request(path, {method='GET', body, token, headers={}}={}) {
   const response = await fetch(config.url + path, {method,headers:{apikey:config.key,...(token?{Authorization:'Bearer '+token}:{}),...(body!==undefined?{'Content-Type':'application/json'}:{}),...headers},body:body!==undefined?JSON.stringify(body):undefined,signal:AbortSignal.timeout(90000)});
   const text = await response.text(); let data; try { data=JSON.parse(text); } catch { data={message:text.slice(0,200)}; }
-  if (!response.ok) throw Error(data.error?.message || data.msg || data.message || data.error_description || `요청 실패 (${response.status})`);
+  if (!response.ok) {const error=Error(data.error?.message || data.msg || data.message || data.error_description || `요청 실패 (${response.status})`);error.code=data.error?.code;throw error;}
   return {data,response};
 }
 function saveAuth(data) {
@@ -70,7 +70,10 @@ async function accessToken() {
 }
 async function api(path, options={}) { const result=await request(path,{...options,token:await accessToken()});if(path.startsWith('/rest/v1/'))cloudVerified=true;return result.data; }
 async function rpc(name, body) { return api('/rest/v1/rpc/'+name,{method:'POST',body}); }
-async function edge(name, body) { return api('/functions/v1/coach/'+name,{method:body===undefined?'GET':'POST',body}); }
+async function edge(name, body) {
+  for(let attempt=0;;attempt++)try{return await api('/functions/v1/coach/'+name,{method:body===undefined?'GET':'POST',body});}
+  catch(error){if(error.code!=='ANALYSIS_CONTINUE'||attempt>=3)throw error;}
+}
 async function allRows(table, query='') {
   const result=[];let expectedTotal;
   for(let offset=0;;){
@@ -120,6 +123,52 @@ async function capture(event) {
   renderTurn(item,true);await updatePending();
   sync().catch(e=>notice('클라우드 전송 대기: '+e.message));
 }
+// Compact only at a completed assistant turn. Pause input while taking the
+// durable checkpoint, then delete old items only after the server acknowledges
+// the replacement instructions. A failed checkpoint leaves the live context intact.
+async function compactCall(current) {
+  if(call!==current || current.ending || current.compacting || current.transcriptionError) return;
+  current.compacting=true;
+  const enabled=current.stream.getAudioTracks().map(track=>track.enabled);
+  const deleted=current.items.slice(0,-6);
+  if($('mute-call'))$('mute-call').disabled=true;
+  document.querySelectorAll('[data-cue]').forEach(button=>button.disabled=true);
+  try {
+    current.stream.getAudioTracks().forEach(track=>track.enabled=false);
+    await new Promise(resolve=>setTimeout(resolve,350));
+    if(call!==current || current.ending || current.speaking || current.responding || current.awaitingCommit || current.transcribing.size) return;
+    $('call-status').textContent='대화 기억을 정리하고 있어요…';
+    await saving;await sync();
+    const result=await edge('checkpoint',{sessionId:current.id});
+    if(call!==current || current.ending || current.dc.readyState!=='open')return;
+    await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{current.checkpointAck=null;reject(Error('기억 갱신 확인이 지연됐습니다.'));},8000);
+      current.checkpointInstructions=result.instructions;
+      current.checkpointAck=()=>{clearTimeout(timer);current.checkpointAck=null;resolve();};
+      current.dc.send(JSON.stringify({type:'session.update',session:{type:'realtime',instructions:result.instructions}}));
+    });
+    if(call!==current || current.ending)return;
+    for(const id of deleted)current.dc.send(JSON.stringify({type:'conversation.item.delete',item_id:id}));
+    current.items=current.items.filter(id=>!deleted.includes(id));
+    current.lastCompactAttempt=Date.now();current.lastCompact=Date.now();current.needsCompact=false;current.compactFailures=0;
+  } catch(e) {
+    current.compactFailures++;
+    current.lastCompactAttempt=Date.now();
+    notice('기억 정리를 완료하지 못했습니다. '+e.message);
+    // Keep a conservative stop before context pressure can silently discard
+    // conversation. The normal end path waits for transcription and saves it.
+    if(current.compactFailures>=2) {current.stopForContext=true;}
+  } finally {
+    current.stream.getAudioTracks().forEach((track,i)=>track.enabled=enabled[i]);
+    current.compacting=false;
+    if(call===current&&!current.ending){if($('mute-call'))$('mute-call').disabled=false;document.querySelectorAll('[data-cue]').forEach(button=>button.disabled=false);}
+    if(call===current&&!current.ending)$('call-status').textContent=companionName()+'와 통화 중 · 편하게 말씀하세요';
+    if(current.stopForContext && call===current && !current.ending) {
+      notice('대화를 안전하게 저장하기 위해 통화를 마칩니다. 새 통화로 이어가 주세요.');
+      endCall().catch(e=>notice(e.message));
+    }
+  }
+}
 async function startCall() {
   notice('');
   if(call || callStarting || callEnding)throw Error('진행 중인 통화를 먼저 종료하세요.');
@@ -133,7 +182,9 @@ async function startCall() {
     stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
     const [session]=await api('/rest/v1/sessions',{method:'POST',headers:{Prefer:'return=representation'},body:{id:crypto.randomUUID(),user_id:auth.user.id,scenario:$('scenario').value,companion_id:companionId}});
     const pc=new RTCPeerConnection();
-    call={id:session.id,pc,stream,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,speaking:false,awaitingCommit:false};
+    call={id:session.id,pc,stream,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,speaking:false,awaitingCommit:false,items:[],lastCompact:Date.now(),lastCompactAttempt:0,needsCompact:false,compacting:false,compactFailures:0};
+    const currentCall=call;
+    call.durationTimer=setTimeout(()=>{if(call===currentCall&&!currentCall.ending){notice('긴 통화를 저장합니다. 새 통화로 이어가 주세요.');endCall().catch(e=>notice(e.message));}},50*60*1000);
     $('transcript').replaceChildren();$('turn-count').textContent='0개 발화';$('empty-transcript').hidden=false;
     stream.getTracks().forEach(track=>pc.addTrack(track,stream));
     pc.ontrack=e=>{$('remote-audio').srcObject=e.streams[0];$('remote-audio').play().catch(()=>notice('음성 재생이 차단되었습니다. 화면을 누른 뒤 다시 시작해 주세요.'));};
@@ -141,6 +192,18 @@ async function startCall() {
     dc.onmessage=e=>{
       let event;try{event=JSON.parse(e.data);}catch{return;}
       if(!call)return;
+      const current=call;
+      if(event.type==='conversation.item.created' || event.type==='conversation.item.added') {
+        if(event.item?.id && !current.items.includes(event.item.id))current.items.push(event.item.id);
+      }
+      if(event.type==='session.updated' && current.checkpointAck && event.session?.instructions===current.checkpointInstructions)current.checkpointAck();
+      if(event.type==='response.created')current.responding=true;
+      if(event.type==='response.done') {
+        current.responding=false;
+        const tokens=event.response?.usage?.input_tokens||0;
+        current.needsCompact ||= tokens>=18000 || Date.now()-current.lastCompact>=10*60*1000;
+        if(current.needsCompact && Date.now()-current.lastCompactAttempt>=60000)setTimeout(()=>compactCall(current),250);
+      }
       if(event.type==='input_audio_buffer.speech_started')call.speaking=true;
       if(event.type==='input_audio_buffer.speech_stopped')call.speaking=false;
       if(event.type==='input_audio_buffer.committed'){call.awaitingCommit=false;call.transcribing.add(event.item_id);}
@@ -159,12 +222,14 @@ async function startCall() {
     await pc.setRemoteDescription({type:'answer',sdp:answer.sdp});
     setCallLayout(true);
     document.querySelectorAll('[data-cue]').forEach(b=>b.disabled=false);
-  } catch(e) {stream?.getTracks().forEach(t=>t.stop());call?.pc.close();call=null;setCallLayout(false);$('call-status').textContent='연결하지 못했어요. 다시 시도해 주세요.';throw e;}
+  } catch(e) {stream?.getTracks().forEach(t=>t.stop());clearTimeout(call?.durationTimer);call?.pc.close();call=null;setCallLayout(false);$('call-status').textContent='연결하지 못했어요. 다시 시도해 주세요.';throw e;}
   finally {callStarting=false;$('start-call').disabled=false;if(call){$('end-call').hidden=false;$('end-call').disabled=false;if($('mute-call'))$('mute-call').disabled=false;}}
 }
 async function endCall() {
   if(!call || call.ending)return;
-  const current=call;current.ending=true;callEnding=true;$('end-call').disabled=true;
+  const current=call;
+  clearTimeout(current.durationTimer);
+  // Checkpoint completion checks current.ending before changing live state.current.ending=true;callEnding=true;$('end-call').disabled=true;
   try {
     current.stream.getTracks().forEach(t=>t.stop());
     $('call-status').textContent='마지막 발화의 전사와 저장을 확인하는 중…';

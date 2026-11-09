@@ -8,12 +8,12 @@ async function assertVisibleImagesLoaded(page){
  const broken=await page.locator('img').evaluateAll(images=>images.filter(image=>{const box=image.getBoundingClientRect(),style=getComputedStyle(image);return box.width>0&&box.height>0&&style.visibility!=='hidden'&&style.display!=='none'&&(!image.complete||image.naturalWidth===0);}).map(image=>image.currentSrc||image.src));
  assert.deepEqual(broken,[],'visible image assets must load with nonzero naturalWidth');
 }
-const server=spawn(process.execPath,['scripts/serve.mjs'],{env:{...process.env,PORT:String(port)},stdio:'pipe'});
+const server=spawn(process.execPath,['scripts/serve.mjs'],{env:{...process.env,PORT:String(port),PUBLIC_SUPABASE_URL:'',PUBLIC_SUPABASE_KEY:''},stdio:'pipe'});
 await new Promise((resolve,reject)=>{server.stdout.once('data',resolve);server.once('error',reject);});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
 try{
  const context=await browser.newContext({permissions:['microphone']});
- const page=await context.newPage();let offline=true;const saved=new Map();const savedSession=new Map();let reviews=0;
+ const page=await context.newPage();let offline=true;const saved=new Map();const savedSession=new Map();let reviews=0,checkpoints=0,checkpointFail=false;
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const uid='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';const session='11111111-1111-4111-8111-111111111111';
  const sessions=[{id:session,user_id:uid,scenario:'Coffee',companion_id:'alex',status:'ended',created_at:new Date().toISOString(),ended_at:new Date().toISOString()}];
@@ -32,6 +32,7 @@ try{
   else if(url.pathname.endsWith('/coach/config'))data={models:{voice:'gpt-realtime-mini',coach:'gpt-4.1-mini',analysis:'gpt-4.1'}};
   else if(url.pathname.endsWith('/coach/memory')){memoryQueries.push(body);const memories=companionMemory[body?.companionId]||[];data={memories:body?.query?memories.filter(m=>m.summary.toLowerCase().includes(body.query.toLowerCase())):memories};}
   else if(url.pathname.endsWith('/coach/voice'))data={sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};
+  else if(url.pathname.endsWith('/coach/checkpoint')){checkpoints++;if(checkpointFail)return route.fulfill({status:503,json:{error:{code:'UPSTREAM_UNAVAILABLE',message:'Checkpoint fixture unavailable'}}});data={instructions:'Trusted rolling conversation summary'};}
   else if(url.pathname.endsWith('/coach/review')){reviews++;data={analysis:{content:{summary:'test fixture'}}};}
   else if(url.pathname==='/rest/v1/transcript_events'){const all=[...saved.values()].map(e=>({...e,session_id:savedSession.get(e.id)}));const offset=Number(url.searchParams.get('offset')||0);return route.fulfill({status:200,json:all.slice(offset,offset+1),headers:{'Content-Range':`${offset}-${offset}/${all.length}`,'Access-Control-Expose-Headers':'Content-Range'}});}
   else throw Error('Unexpected route '+url.pathname);
@@ -61,12 +62,25 @@ try{
  await page.reload();await page.locator('#workspace').waitFor({state:'visible'});
  await page.waitForFunction(()=>document.querySelector('#companion-name').textContent==='Mia');
  // Simulate upstream WebRTC events; this validates app wiring, not real OpenAI voice.
- await page.evaluate(()=>{window.RTCPeerConnection=class{constructor(){window.testPeer=this;this.connectionState='new';}addTrack(){}createDataChannel(){return this.dc={readyState:'open',send:(raw)=>{const message=JSON.parse(raw);if(message.type==='input_audio_buffer.commit'){this.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.committed',item_id:'last-item'})});setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'last-item',transcript:'One last thing before we end.'})}),30);}}};}async createOffer(){return{type:'offer',sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};}async setLocalDescription(){}async setRemoteDescription(){this.connectionState='connected';this.onconnectionstatechange?.();this.dc.onopen?.();}close(){this.connectionState='closed';}};});
+ await page.evaluate(()=>{window.RTCPeerConnection=class{constructor(){window.testPeer=this;this.connectionState='new';}addTrack(track){this.track=track;}createDataChannel(){return this.dc={readyState:'open',send:(raw)=>{const message=JSON.parse(raw);(window.testMessages ||= []).push(message);if(message.type==='session.update'&&message.session.instructions)setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'session.updated',session:{instructions:message.session.instructions}})}),10);if(message.type==='input_audio_buffer.commit'){this.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.committed',item_id:'last-item'})});setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'last-item',transcript:'One last thing before we end.'})}),30);}}};}async createOffer(){return{type:'offer',sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};}async setLocalDescription(){}async setRemoteDescription(){this.connectionState='connected';this.onconnectionstatechange?.();this.dc.onopen?.();}close(){this.connectionState='closed';}};});
  await page.locator('[data-view="call"]').click();await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});
  assert.equal(sessions[0].companion_id,'mia','new sessions must be assigned to the selected companion');
  await assertVisibleImagesLoaded(page);await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/mobile-call.png',fullPage:true});
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'item1',content_index:0,transcript:'I am thinking of visiting a friend.'})}));
  await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.waitForFunction(()=>document.querySelector('#save-status').textContent==='클라우드 저장 확인됨');assert.equal(saved.size,2);
+ // A completed long turn triggers a durable checkpoint before old items delete.
+ await page.evaluate(()=>{for(let i=0;i<10;i++)window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.created',item:{id:'context-'+i}})});window.testPeer.dc.onmessage({data:JSON.stringify({type:'response.done',response:{usage:{input_tokens:19000}}})});});
+ await page.waitForFunction(()=>window.testMessages?.filter(message=>message.type==='conversation.item.delete').length===4);
+ assert.equal(checkpoints,1);
+ const compactMessages=await page.evaluate(()=>window.testMessages);
+ assert(compactMessages.findIndex(message=>message.session?.instructions)>-1);
+ assert(compactMessages.findIndex(message=>message.session?.instructions)<compactMessages.findIndex(message=>message.type==='conversation.item.delete'));
+ assert.deepEqual(compactMessages.filter(message=>message.type==='conversation.item.delete').map(message=>message.item_id),['context-0','context-1','context-2','context-3']);
+ checkpointFail=true;
+ await page.evaluate(()=>{const now=Date.now;Date.now=()=>now()+61000;window.testPeer.dc.onmessage({data:JSON.stringify({type:'response.done',response:{usage:{input_tokens:19000}}})});Date.now=now;});
+ await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('Checkpoint fixture unavailable'));
+ await page.waitForFunction(()=>window.testPeer.track.enabled===true);
+ assert.equal(checkpoints,2);assert.equal((await page.evaluate(()=>window.testMessages.filter(message=>message.type==='conversation.item.delete'))).length,4,'failed checkpoint must preserve every remaining live item');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.speech_started',item_id:'last-item'})}));
  await page.locator('#end-call').click();await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='통화와 피드백 저장 완료');assert.equal(reviews,1);assert.equal(sessions[0].status,'ended');assert.equal(saved.size,3);
  await assertVisibleImagesLoaded(page);await page.screenshot({path:'test-results/mobile-review.png',fullPage:true});

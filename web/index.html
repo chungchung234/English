@@ -15,8 +15,9 @@
 <main>
 <section id="setup" class="setup-panel">
 <h1>이메일로 시작하기</h1><p id="service-state" class="secondary-copy" role="status">연결 확인 중</p>
-<form id="login-form" hidden><label for="email">이메일</label><input id="email" type="email" required autocomplete="email" placeholder="name@example.com"><button class="primary-button">코드 받기</button></form>
-<form id="verify-form" hidden><label for="otp">인증 코드</label><input id="otp" inputmode="numeric" autocomplete="one-time-code" required><button class="primary-button">로그인</button></form>
+<form id="login-form" hidden><label for="email">이메일</label><input id="email" type="email" required autocomplete="email" placeholder="name@example.com" aria-describedby="login-help"><button id="send-code" class="primary-button">코드 받기</button></form>
+<p id="login-help" class="dialog-note" hidden></p><button id="use-code" class="quiet-button" hidden>이미 받은 코드로 로그인</button>
+<form id="verify-form" hidden><label for="otp">인증 코드</label><input id="otp" inputmode="numeric" autocomplete="one-time-code" required><button id="verify-code" class="primary-button">로그인</button></form>
 <button class="quiet-button" data-open="privacy-dialog">저장·개인정보 안내</button>
 </section>
 <section id="workspace" hidden>

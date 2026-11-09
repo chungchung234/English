@@ -1,6 +1,7 @@
 import { createAIPresence } from './ai-presence.js';
 import { createOutbox, flushOutbox } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
+import { mountEmailLogin } from '../src/email-login.mjs';
 const $ = id => document.getElementById(id);
 const outbox = createOutbox();
 const presence = createAIPresence();
@@ -79,7 +80,7 @@ function setStatus(text) { $('save-status').textContent = text; }
 async function request(path, {method='GET', body, token, headers={}}={}) {
   const response = await fetch(config.url + path, {method,headers:{apikey:config.key,...(token?{Authorization:'Bearer '+token}:{}),...(body!==undefined?{'Content-Type':'application/json'}:{}),...headers},body:body!==undefined?JSON.stringify(body):undefined,signal:AbortSignal.timeout(90000)});
   const text = await response.text(); let data; try { data=JSON.parse(text); } catch { data={message:text.slice(0,200)}; }
-  if (!response.ok) {const error=Error(data.error?.message || data.msg || data.message || data.error_description || `요청 실패 (${response.status})`);error.code=data.error?.code;throw error;}
+  if (!response.ok) {const error=Error(data.error?.message || data.msg || data.message || data.error_description || `요청 실패 (${response.status})`);error.code=data.error?.code||data.code||data.error_code;error.status=response.status;error.retryAfter=response.headers.get('Retry-After');throw error;}
   return {data,response};
 }
 function saveAuth(data) {
@@ -374,6 +375,7 @@ async function ready(){
   if(!config){$('service-state').textContent='서비스 연결을 준비하고 있습니다. 설정이 완료되면 여기서 바로 시작할 수 있어요.';setStatus('서비스 준비 중');return;}
   $('service-state').textContent='기록을 이어갈 이메일을 입력해 주세요.';
   $('login-form').hidden=false;
+  $('login-help').hidden=false;$('use-code').hidden=false;
   if(!auth){setStatus('로그인하면 기록이 자동 저장됩니다');return;}
   const user=await api('/auth/v1/user');auth.user=user;localStorage.setItem(authStorageKey,JSON.stringify(auth));scope=config.url+'|'+user.id;
   const data=await edge('config');
@@ -383,8 +385,7 @@ async function ready(){
   await loadHistory();await loadMemory();await updatePending();
   $('models').textContent=`음성 ${data.models.voice} · 교정 ${data.models.coach} · 분석 ${data.models.analysis}`;
 }
-$('login-form').onsubmit=protect(async e=>{e.preventDefault();await request('/auth/v1/otp',{method:'POST',body:{email:$('email').value.trim(),create_user:true}});$('verify-form').hidden=false;notice('이메일로 받은 인증 코드를 입력하세요.');});
-$('verify-form').onsubmit=protect(async e=>{e.preventDefault();const {data}=await request('/auth/v1/verify',{method:'POST',body:{email:$('email').value.trim(),token:$('otp').value.trim(),type:'email'}});saveAuth(data);notice('');await ready();});
+mountEmailLogin({document,storage:localStorage,storageKey:'loop.email-login:'+(config?.url||'unconfigured'),request,notice,onAuthenticated:async data=>{saveAuth(data);notice('');await ready();}});
 $('logout').onclick=protect(async()=>{if(call || callStarting || callEnding)throw Error('먼저 통화를 종료하세요.');try{await api('/auth/v1/logout',{method:'POST'});}finally{localStorage.removeItem(authStorageKey);auth=null;scope=null;historyEpoch++;memoryEpoch++;selectedReviewSessionId=null;closeDialog('memory-dialog');$('memory-facts').replaceChildren();$('memory-exclusions').replaceChildren();closeDialog('account-dialog');$('setup').hidden=false;$('workspace').hidden=true;$('companion-open').hidden=true;notice('로그아웃했습니다. 전송 대기 기록이 있다면 같은 계정으로 다시 로그인해 주세요.');}});
 $('start-call').onclick=protect(startCall);$('end-call').onclick=protect(endCall);
 $('refresh-history').onclick=protect(async()=>{await sync();await loadHistory();await loadMemory();});

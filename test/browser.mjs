@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { testEmailLogin } from './email-login-browser.mjs';
 const port=4187, base=`http://127.0.0.1:${port}`;
 async function assertVisibleImagesLoaded(page){
  const broken=await page.locator('img').evaluateAll(images=>images.filter(image=>{const box=image.getBoundingClientRect(),style=getComputedStyle(image);return box.width>0&&box.height>0&&style.visibility!=='hidden'&&style.display!=='none'&&(!image.complete||image.naturalWidth===0);}).map(image=>image.currentSrc||image.src));
@@ -12,6 +13,7 @@ const server=spawn(process.execPath,['scripts/serve.mjs'],{env:{...process.env,P
 await new Promise((resolve,reject)=>{server.stdout.once('data',resolve);server.once('error',reject);});
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});
 try{
+ await testEmailLogin(browser,base);
  const context=await browser.newContext({permissions:['microphone']});
  const page=await context.newPage();let offline=true;const saved=new Map();const savedSession=new Map();let reviews=0,checkpoints=0,checkpointFail=false;
  const errors=[];page.on('pageerror',e=>errors.push(e.message));

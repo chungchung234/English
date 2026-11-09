@@ -82,6 +82,14 @@ def main():
         version=migration.name.split('_',1)[0]
         management_request(ref,token,'database/query','POST',{'query':migration_sql(migration.read_text(),version)})
         print('Database migration '+version+' committed or verified already applied.')
+    # One approval source: synchronize the Edge allowlist from the private DB list.
+    approvals=management_request(ref,token,'database/query','POST',{'query':'select email from loop_private.approved_emails order by email'})
+    emails=','.join(row['email'] for row in approvals)
+    if not emails:
+        raise SystemExit('At least one approved email is required before enabling invite access.')
+    management_request(ref,token,'secrets','POST',[
+        {'name':'ACCESS_MODE','value':'invite'}, {'name':'ALLOWED_EMAILS','value':emails}])
+    print('Invite-only Edge access synchronized with database approvals.')
     cli_env = {**os.environ, 'SUPABASE_HOME': str(ROOT.parent/'.supabase-cli')}
     # Provider secrets must already be configured in the dashboard. The proxy
     # OpenAI binding is deliberately NOT forwarded into another provider.

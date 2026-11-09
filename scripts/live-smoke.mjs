@@ -96,6 +96,29 @@ async function main() {
     }
     const [learner, other] = users;
     pass('Two temporary email-verified test accounts authenticated against live Supabase.');
+    // Private installations must never grant synthetic users access just to test voice.
+    const approval = await userRequest(learner, '/rest/v1/rpc/is_approved_user', {});
+    if (approval === false) {
+      stage = 'private access enforcement';
+      for (const user of users) {
+        for (const table of ['sessions','transcript_events','analyses']) {
+          ensure((await userRequest(user, '/rest/v1/' + table + '?select=*')).length === 0, 'Unapproved account can read data.');
+        }
+        for (const [endpoint, body] of [
+          ['/rest/v1/sessions', {scenario:'Must be denied'}],
+          ['/rest/v1/rpc/append_events', {p_session_id:randomUUID(),p_events:[]}],
+          ['/rest/v1/rpc/finish_session', {p_session_id:randomUUID()}],
+          ['/rest/v1/rpc/restore_history', {p_backup:{sessions:[],events:[]}}],
+          ['/functions/v1/coach/config', {}],
+          ['/functions/v1/coach/voice', {sessionId:randomUUID(),sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'}],
+        ]) {
+          const denied = await fetch(base + endpoint, {method:'POST',headers:{apikey:publicKey,Authorization:`Bearer ${user.access_token}`,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
+          ensure(denied.status === 403, 'Unapproved account bypassed an access gate.');
+        }
+      }
+      pass('Unapproved verified accounts cannot read, create, append, finish, restore, or access AI. Voice checks require an approved account and were not run.');
+      return;
+    }
     await mkdir('test-results', { recursive: true });
     for (const profile of companions) {
       stage = `${profile.name}: published mobile home`;

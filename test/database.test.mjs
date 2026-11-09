@@ -25,7 +25,7 @@ async function database(t) {
     create role service_role nologin bypassrls;
     create schema auth;
     create schema extensions;
-    create table auth.users (id uuid primary key);
+    create table auth.users (id uuid primary key, email text, email_confirmed_at timestamptz);
     create function auth.uid() returns uuid language sql stable as $$
       select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
     $$;
@@ -33,7 +33,8 @@ async function database(t) {
     grant execute on function auth.uid() to public;
   `);
   for (const migration of migrations) await db.exec(migration);
-  await db.query('insert into auth.users(id) values ($1), ($2)', [USER_A, USER_B]);
+  await db.query("insert into auth.users(id,email,email_confirmed_at) values ($1,'owner@example.com',now()), ($2,'other@example.com',now())", [USER_A, USER_B]);
+  await db.exec("insert into loop_private.approved_emails values ('owner@example.com'), ('other@example.com')");
   return db;
 }
 
@@ -388,4 +389,25 @@ test('companion memory stays scoped, legacy sessions default to Alex, and restor
     asUser(db, USER_A, () => db.query("insert into public.sessions(scenario, companion_id) values ('Invalid', 'unknown')")),
     /companion/i,
   );
+});
+
+test('approval revocation blocks own data and every security-definer write path', async (t) => {
+  const db = await database(t);
+  const session = await makeSession(db, USER_A);
+  await asUser(db, USER_A, () => append(db, session.id, [event('before-revocation', 'Hello there')]));
+  await db.exec("delete from loop_private.approved_emails where email = 'owner@example.com'");
+  await asUser(db, USER_A, async () => {
+    for (const table of ['sessions','transcript_events','analyses']) {
+      assert.equal((await db.query(`select * from public.${table}`)).rows.length, 0);
+    }
+    await assert.rejects(db.query("insert into public.sessions(scenario) values ('Blocked')"), /row-level security/);
+    await assert.rejects(append(db, session.id, [event('blocked','No access')]), /Account not approved/);
+    await assert.rejects(db.query('select public.finish_session($1)', [session.id]), /Account not approved/);
+    await assert.rejects(db.query("select public.restore_history('{\"sessions\":[],\"events\":[]}'::jsonb)"), /Account not approved/);
+    await assert.rejects(db.query('select * from loop_private.approved_emails'), /permission denied/);
+    await assert.rejects(db.query('select loop_private.finish_session($1)', [session.id]), /permission denied/);
+  });
+  // An unverified account is denied even if its email appears in the list.
+  await db.exec("insert into loop_private.approved_emails values ('owner@example.com'); update auth.users set email_confirmed_at = null where email = 'owner@example.com'");
+  assert.equal(await asUser(db, USER_A, async () => (await db.query('select public.is_approved_user() as ok')).rows[0].ok), false);
 });

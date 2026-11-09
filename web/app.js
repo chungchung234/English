@@ -273,11 +273,12 @@ async function ready(){
   $('login-form').hidden=false;
   if(!auth){setStatus('로그인하면 기록이 자동 저장됩니다');return;}
   const user=await api('/auth/v1/user');auth.user=user;localStorage.setItem(authStorageKey,JSON.stringify(auth));scope=config.url+'|'+user.id;
+  const data=await edge('config');
   const savedCompanion=localStorage.getItem(companionStorageKey());companionId=Object.hasOwn(companions,savedCompanion)?savedCompanion:'alex';updateCompanion();updateScenarioLabel();setView('call');
   $('setup').hidden=true;$('workspace').hidden=false;$('companion-open').hidden=false;
   await updatePending();try{await sync();}catch(e){notice('미전송 기록이 있습니다: '+e.message);}
   await loadHistory();await loadMemory();await updatePending();
-  const data=await edge('config');$('models').textContent=`음성 ${data.models.voice} · 교정 ${data.models.coach} · 분석 ${data.models.analysis}`;
+  $('models').textContent=`음성 ${data.models.voice} · 교정 ${data.models.coach} · 분석 ${data.models.analysis}`;
 }
 $('login-form').onsubmit=protect(async e=>{e.preventDefault();await request('/auth/v1/otp',{method:'POST',body:{email:$('email').value.trim(),create_user:true}});$('verify-form').hidden=false;notice('이메일로 받은 인증 코드를 입력하세요.');});
 $('verify-form').onsubmit=protect(async e=>{e.preventDefault();const {data}=await request('/auth/v1/verify',{method:'POST',body:{email:$('email').value.trim(),token:$('otp').value.trim(),type:'email'}});saveAuth(data);notice('');await ready();});

@@ -1,4 +1,4 @@
-import { AppError, COMPANIONS, LIMITS, allowKeys, allowedOrigins, analysisSchema, boundedJson, bytes, companionProfile, object, requireCompanionId, requireUuid, transcriptFingerprint, validateAnalysis, validateSdp, type CompanionId, type TranscriptEvent } from './core.ts';
+import { AppError, COMPANIONS, CONVERSATION_GUIDELINES, LIMITS, allowKeys, allowedOrigins, analysisSchema, boundedJson, bytes, companionProfile, object, requireCompanionId, requireUuid, transcriptFingerprint, validateAnalysis, validateSdp, type CompanionId, type TranscriptEvent } from './core.ts';
 
 type Env = { supabase: string; serviceKey: string; openai: string; allowedEmails: Set<string>; publicAccess: boolean; voice: string; coach: string; analysis: string };
 type Session = { id: string; user_id: string; companion_id: CompanionId; scenario: string; status: 'active' | 'ended'; ended_at: string | null };
@@ -38,7 +38,7 @@ async function authenticate(req: Request, env: Env): Promise<string> {
   if (!user.id || typeof user.id !== 'string') throw new AppError(401, 'UNAUTHENTICATED', 'Sign in to continue.');
   const email = typeof user.email === 'string' ? user.email.trim().toLowerCase() : '';
   // Public signup still requires a verified email; optional invite mode is an operator choice.
-  if (!email || (!env.publicAccess&&!env.allowedEmails.has(email)) || typeof user.email_confirmed_at !== 'string' || !user.email_confirmed_at.trim()) throw new AppError(403, 'ACCOUNT_NOT_ALLOWED', 'Sign in with a verified email account to continue.');
+  if (!email || (!env.publicAccess&&!env.allowedEmails.has(email)) || typeof user.email_confirmed_at !== 'string' || !user.email_confirmed_at.trim()) throw new AppError(403, 'ACCOUNT_NOT_ALLOWED', '승인된 이메일 계정만 이용할 수 있습니다. 관리자에게 접근 승인을 요청해 주세요.');
   return user.id;
 }
 async function readBody(req: Request): Promise<Record<string, unknown>> {
@@ -131,7 +131,7 @@ async function voice(env: Env, userId: string, body: Record<string, unknown>) {
   if (!run.reserved) throw new AppError(409, 'VOICE_ALREADY_STARTED', 'This voice connection has already been started. Create a new session to reconnect.');
   try {
     const form = new FormData(); form.set('sdp', sdp);
-    form.set('session', JSON.stringify({ type: 'realtime', model: env.voice, max_output_tokens: 512, instructions: `${SAFETY}\nYour name is ${companion.name}. ${companion.description} You are an AI companion; never claim to be a human or invent a real-world relationship. Only use the supplied history with your own companion identity. Have a natural English conversation with brief replies. Ask one question at a time, match the learner's pace, and offer gentle corrections only when useful. Begin by welcoming the learner into the scenario. Naturally invite the learner to reuse at most two expressions from the retrieved practice or improved corrections. Prior summaries are fallible context; never assume mastery or claim to remember unsupported details.\nUNTRUSTED_CONTEXT_JSON:\n${boundedJson({ companionId: companion.id, scenario: session.scenario, memory }, 20_000)}`, audio: { input: { transcription: { model: 'gpt-4o-mini-transcribe' }, turn_detection: { type: 'server_vad' } }, output: { voice: companion.voice } } }));
+    form.set('session', JSON.stringify({ type: 'realtime', model: env.voice, max_output_tokens: 512, instructions: `${SAFETY}\nYour name is ${companion.name}. ${companion.description} ${CONVERSATION_GUIDELINES} You are an AI companion; never claim to be a human or invent a real-world relationship. Only use the supplied history with your own companion identity. Have a natural English conversation with brief replies. Ask one question at a time, match the learner's pace, and offer gentle corrections only when useful. Begin by welcoming the learner into the scenario. Naturally invite the learner to reuse at most two expressions from the retrieved practice or improved corrections. Prior summaries are fallible context; never assume mastery or claim to remember unsupported details.\nUNTRUSTED_CONTEXT_JSON:\n${boundedJson({ companionId: companion.id, scenario: session.scenario, memory }, 20_000)}`, audio: { input: { transcription: { model: 'gpt-4o-mini-transcribe' }, turn_detection: { type: 'server_vad' } }, output: { voice: companion.voice } } }));
     const response = await request('https://api.openai.com/v1/realtime/calls', { method: 'POST', headers: { Authorization: `Bearer ${env.openai}` }, body: form }, 40_000);
     if (!response.ok) throw new AppError(502, 'VOICE_UNAVAILABLE', 'Voice could not connect. Please start a new session and retry.');
     const answer = validateSdp(await response.text());

@@ -8,6 +8,7 @@ try{
  const smtp=Boolean(auth.smtp_host&&auth.smtp_user&&auth.smtp_admin_email);
  const confirmed=auth.mailer_autoconfirm===true;
  console.log(`::notice title=Email login configuration::Custom SMTP configured: ${smtp}; email confirmation bypass enabled: ${confirmed}.`);
+ console.log(`::notice title=Email retry policy::Email sends per hour: ${Number(auth.rate_limit_email_sent)||'unknown'}; minimum resend interval seconds: ${Number(auth.smtp_max_frequency)||'unknown'}. Configuration does not verify delivery.`);
  if(!smtp&&!confirmed)console.log('::warning title=Public email delivery::Custom SMTP is not configured. Verify delivery to users outside the project team before claiming public email login works.');
  try{
   const backup=await get('database/backups');

@@ -165,7 +165,7 @@ npm run build -- --require-config
 
 현재 이 운영 완료 조건은 모두 통과했다고 보고하지 않습니다. [운영 설정 확인](https://github.com/chungchung234/English/actions/runs/42625210524)에서 아래 남은 항목을 확인했습니다.
 
-- 사용자 지정 SMTP가 없습니다. 임시 테스트 계정은 관리 API로 확인 처리했으므로 실제 가입 메일 전달을 검증한 것이 아닙니다. [Supabase SMTP 설정](https://supabase.com/dashboard/project/domkmxmwmihcfadophfg/auth/smtp)에서 발송 서비스를 연결하고 프로젝트 팀 외 계정으로 로그인 코드 전달을 확인해야 합니다.
+- 사용자 지정 SMTP는 연결돼 있지만, 2026-11-10 점검에서 잘못된 서버 주소를 수정한 뒤에도 Google의 `535: Username and Password not accepted` 거부를 확인했습니다. [Supabase SMTP 설정](https://supabase.com/dashboard/project/domkmxmwmihcfadophfg/auth/smtp)에서 발송 계정의 앱 비밀번호를 갱신하고 실제 코드 전달·로그인을 확인해야 합니다. [진단과 복구 절차](docs/email-login-recovery.md)를 참고하세요. 임시 테스트 계정의 관리 API 확인 처리는 실제 메일 전달 검증이 아닙니다.
 - 제공자 메타데이터 기준 보관된 DB 백업0개, PITR 비활성입니다. 자동 백업 정책 설정과 실제 복구 검증이 남았습니다. 요금제 변경이 필요하면 운영자가 선택해야 하며 자동으로 유료 전환하지 않습니다.
 
 `ENGLISH_API_KEY`는 초기 클라우드 연결용으로 선언한 과거 항목이며 현재 앱·배포 코드에서 사용하지 않습니다. 실제 AI 키는 Supabase 함수의 `OPENAI_API_KEY`, 배포 권한은 GitHub Repository secret의 `SUPABASE_ACCESS_TOKEN`입니다.

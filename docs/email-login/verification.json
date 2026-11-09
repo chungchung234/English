@@ -1,0 +1,11 @@
+{
+  "url": "https://chungchung234.github.io/English/?login-fix=2b8505a",
+  "release": "2b8505a16b30fdeb8f626a3a1efc87299400deb8",
+  "scope": "Published HTML fetched with verified HTTPS and rendered at the service origin. Auth responses intercepted; no actual email or private account accessed.",
+  "sendDisabled": true,
+  "codeVisible": true,
+  "noticeDoesNotCoverLogin": true,
+  "horizontalOverflow": false,
+  "interceptedRequests": 1,
+  "errors": []
+}

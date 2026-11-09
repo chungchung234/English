@@ -28,5 +28,9 @@ if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
     if(!process.env.GITHUB_ENV)throw Error('GITHUB_ENV output path is required.');
     await appendFile(process.env.GITHUB_ENV,`PUBLIC_SUPABASE_URL=${config.url}\nPUBLIC_SUPABASE_KEY=${config.key}\n`);
     console.log('Public site configuration resolved. No secret values printed.');
-  }catch(error){console.error(error.message);process.exitCode=1;}
+  }catch(error){
+    if(process.env.GITHUB_ACTIONS==='true'){const message=error.message.replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');console.error('::error title=Deployment configuration::'+message);}
+    else console.error(error.message);
+    process.exitCode=1;
+  }
 }

@@ -99,6 +99,22 @@ try{
  await page.locator('[data-view="call"]').click();await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  const navTargets=await page.locator('.glass-dock button').evaluateAll(buttons=>buttons.map(b=>({width:b.getBoundingClientRect().width,height:b.getBoundingClientRect().height})));assert(navTargets.every(box=>box.width>=44&&box.height>=44));
  assert.doesNotMatch(await page.locator('#call-home').innerText(),/lorem|todo|placeholder/i,'home must not show placeholder copy');
+ // Advance browser time: the call stays open at 19 minutes, then reaches the
+ // real duration deadline and follows the normal final-transcription/save path.
+ await page.clock.install();
+ await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});
+ const timedSession=sessions[0],sessionCount=sessions.length;
+ await page.clock.fastForward(19*60*1000);
+ assert.equal(timedSession.status,'active');assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'live');assert.equal(reviews,1);
+ await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.speech_started',item_id:'last-item'})}));
+ await page.clock.fastForward(60*1000);
+ assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'ended','microphone stops at the 20-minute deadline');
+ await page.clock.fastForward(2000);
+ await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='통화와 피드백 저장 완료');
+ assert.equal(timedSession.status,'ended');assert.equal(reviews,2);assert.equal(saved.size,4,'deadline preserves final spoken turn');
+ assert.match(await page.locator('#notice').textContent(),/20분/);
+ await page.clock.fastForward(60*1000);assert.equal(sessions.length,sessionCount,'deadline never starts another call automatically');
+ console.log('PASS: 20-minute deadline stops microphone, saves the final turn, and creates feedback without automatically restarting.');
  assert.deepEqual(errors,[]);
  console.log('PASS: browser reload retains offline records; retry syncs exact IDs; voice-event wiring saves and reviews; mobile layout fits. Full export handles a lower DB page cap. Voice upstream is simulated, not validated.');
  await page.route('**/functions/v1/coach/config', route=>route.fulfill({status:403,json:{error:{code:'ACCOUNT_NOT_ALLOWED',message:'승인된 이메일 계정만 이용할 수 있습니다.'}}}));

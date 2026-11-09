@@ -204,7 +204,7 @@ async function startCall() {
     const pc=new RTCPeerConnection();
     call={id:session.id,pc,stream,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,speaking:false,awaitingCommit:false,items:[],lastCompact:Date.now(),lastCompactAttempt:0,needsCompact:false,compacting:false,compactFailures:0};
     const currentCall=call;
-    call.durationTimer=setTimeout(()=>{if(call===currentCall&&!currentCall.ending){notice('긴 통화를 저장합니다. 새 통화로 이어가 주세요.');endCall().catch(e=>notice(e.message));}},50*60*1000);
+    call.durationTimer=setTimeout(()=>{if(call===currentCall&&!currentCall.ending){notice('20분이 되어 통화를 종료하고 저장합니다.');endCall().catch(e=>notice(e.message));}},20*60*1000);
     $('transcript').replaceChildren();$('turn-count').textContent='0개 발화';$('empty-transcript').hidden=false;
     stream.getTracks().forEach(track=>pc.addTrack(track,stream));
     pc.ontrack=e=>{$('remote-audio').srcObject=e.streams[0];$('remote-audio').play().catch(()=>notice('음성 재생이 차단되었습니다. 화면을 누른 뒤 다시 시작해 주세요.'));};
@@ -249,7 +249,8 @@ async function endCall() {
   if(!call || call.ending)return;
   const current=call;
   clearTimeout(current.durationTimer);
-  // Checkpoint completion checks current.ending before changing live state.current.ending=true;callEnding=true;$('end-call').disabled=true;
+  // Checkpoint completion checks current.ending before changing live state.
+  current.ending=true;callEnding=true;$('end-call').disabled=true;
   try {
     current.stream.getTracks().forEach(t=>t.stop());
     $('call-status').textContent='마지막 발화의 전사와 저장을 확인하는 중…';

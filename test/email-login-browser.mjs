@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 // Fixture-only: no messages, credentials, or real user sessions leave this test.
 export async function testEmailLogin(browser, base) {
-  const context=await browser.newContext();
+  const context=await browser.newContext({viewport:{width:390,height:844}});
   const page=await context.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   let sendCount=0,verifyCount=0,mode='hold',verifyMode='hold',lastVerify;
@@ -66,6 +66,7 @@ export async function testEmailLogin(browser, base) {
     await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('발송 한도'));
     assert.match(await page.locator('#send-code').textContent(),/2분/);
     assert.equal(await page.locator('#verify-code').isDisabled(),false);
+    assert(await page.evaluate(()=>document.querySelector('#notice').getBoundingClientRect().top>=document.querySelector('#verify-code').getBoundingClientRect().bottom),'login errors must not cover the code verification button');
     await page.locator('#email').fill('another@example.com');
     assert.equal(await page.locator('#send-code').isDisabled(),true,'project email limit also covers changed addresses');
     await page.reload();await page.locator('#login-form').waitFor({state:'visible'});

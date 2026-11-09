@@ -45,3 +45,7 @@ No design choice blocks this pass. Native iOS Safari microphone permissions and 
 ## Follow-up polish
 
 P3: native Apple material refraction differs from CSS backdrop blur. This is an expected browser rendering constraint and does not block the approved web design.
+
+## Published release acceptance
+
+[Release42639444223](https://github.com/chungchung234/English/actions/runs/42639444223) passed backend deployment, Pages publication, three real voice calls, actual provider voices cedar/marin/verse, transcript/feedback save, reload persistence, companion memory/evidence boundaries, account isolation and weekly analysis. Synthetic test accounts were cleaned. Opened the downloaded actual deployment [home](docs/design/deployed-home.png), [Mia call](docs/design/deployed-call.png), and [Juno review](docs/design/deployed-review.png): complete all-Korean logo, correct portraits, visible controls and readable feedback. These are isolated synthetic accounts, not real user screenshots. Native iOS-device and public OTP-delivery gaps remain as described above.

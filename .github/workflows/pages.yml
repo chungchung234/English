@@ -2,6 +2,17 @@ name: Publish Loop website
 on:
   push:
     branches: [main]
+    paths:
+      - web/**
+      - src/**
+      - supabase/**
+      - package.json
+      - package-lock.json
+      - scripts/build-web.mjs
+      - scripts/deploy.py
+      - scripts/prepare-hosting.mjs
+      - scripts/live-smoke.mjs
+      - scripts/synthetic-audio.py
   workflow_dispatch:
 permissions:
   contents: read

@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+!.env.example
+supabase/.temp/
+test-results/
+*.log
+__pycache__/
+dist/

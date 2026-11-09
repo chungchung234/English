@@ -1,0 +1,100 @@
+// Pure validation and evidence handling; also tested with Node's TypeScript support.
+export class AppError extends Error {
+  constructor(public status: number, public code: string, message: string) { super(message); }
+}
+// UTF-8 bytes conservatively bound input tokens too (at most one token per byte).
+export const LIMITS = { bodyBytes: 120_000, sdpBytes: 100_000, events: 1500, sessions: 80, inputBytes: 120_000, memoryBytes: 16_000 };
+export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export function requireUuid(value: unknown): string {
+  if (typeof value !== 'string' || !uuidPattern.test(value)) throw new AppError(400, 'INVALID_SESSION', 'A valid session ID is required.');
+  return value;
+}
+export function object(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new AppError(400, 'INVALID_BODY', 'Expected a JSON object.');
+  return value as Record<string, unknown>;
+}
+export function allowKeys(body: Record<string, unknown>, keys: string[]) {
+  if (Object.keys(body).some(key => !keys.includes(key))) throw new AppError(400, 'INVALID_BODY', 'Unexpected request fields.');
+}
+export function bytes(value: string) { return new TextEncoder().encode(value).byteLength; }
+export function boundedJson(value: unknown, maxBytes = LIMITS.inputBytes) {
+  const json = JSON.stringify(value);
+  if (bytes(json) > maxBytes) throw new AppError(413, 'ANALYSIS_TOO_LARGE', 'This transcript exceeds the analysis limit. Split future conversations into shorter sessions.');
+  return json;
+}
+export function validateSdp(value: unknown): string {
+  if (typeof value !== 'string' || bytes(value) > LIMITS.sdpBytes || !/^v=0\r?\n/.test(value) || !/^m=audio /m.test(value)) {
+    throw new AppError(400, 'INVALID_SDP', 'A valid audio SDP offer under 100 KB is required.');
+  }
+  return value;
+}
+export function allowedOrigins(raw: string | undefined): Set<string> {
+  const origins = (raw || '').split(',').map(x => x.trim()).filter(Boolean);
+  for (const origin of origins) {
+    let url: URL;
+    try { url = new URL(origin); } catch { throw new AppError(503, 'CONFIGURATION_REQUIRED', 'The service is not configured.'); }
+    if (url.origin !== origin || !['http:', 'https:'].includes(url.protocol) || (url.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) {
+      throw new AppError(503, 'CONFIGURATION_REQUIRED', 'The service is not configured.');
+    }
+  }
+  return new Set(origins);
+}
+export type TranscriptEvent = { id: string; session_id: string; speaker: 'user' | 'assistant'; text: string; timestamp: string };
+type Citation = { evidence_ids: string[]; [key: string]: unknown };
+function failEvidence(): never { throw new AppError(502, 'INVALID_MODEL_OUTPUT', 'The coach could not produce a supported analysis. Please retry.'); }
+function citation(item: unknown, sources: Map<string, TranscriptEvent>): Citation {
+  if (!item || typeof item !== 'object') return failEvidence();
+  const value = item as Citation;
+  if (!Array.isArray(value.evidence_ids) || value.evidence_ids.length < 1 || value.evidence_ids.length > 12 || value.evidence_ids.some(id => typeof id !== 'string' || !sources.has(id))) return failEvidence();
+  return value;
+}
+function text(value: unknown, max = 3000): value is string { return typeof value === 'string' && value.trim().length > 0 && value.length <= max; }
+export function validateAnalysis(value: unknown, events: TranscriptEvent[], kind: 'session' | 'weekly'): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return failEvidence();
+  const result = value as Record<string, unknown>, sources = new Map(events.filter(e => e.speaker === 'user').map(e => [e.id, e]));
+  if (!text(result.summary) || !Array.isArray(result.strengths) || !Array.isArray(result.corrections) || !Array.isArray(result.practice) || !text(result.next_scenario, 400)) return failEvidence();
+  for (const [key, max] of [['strengths', 6], ['corrections', 8], ['practice', 8]] as const) {
+    const entries = result[key] as unknown[];
+    if (entries.length > max) return failEvidence();
+    for (const entry of entries) {
+      const item = citation(entry, sources);
+      if (key === 'strengths' && !text(item.text)) return failEvidence();
+      if (key === 'practice' && !text(item.expression)) return failEvidence();
+      if (key === 'corrections') {
+        if (!text(item.original) || !text(item.improved) || !text(item.reason)) return failEvidence();
+        if (!item.evidence_ids.some(id => sources.get(id)!.text.includes(item.original as string))) return failEvidence();
+      }
+    }
+  }
+  if (kind === 'weekly') {
+    if (!Array.isArray(result.patterns) || result.patterns.length > 6) return failEvidence();
+    for (const pattern of result.patterns) { const item = citation(pattern, sources); if (!text(item.text)) return failEvidence(); }
+  }
+  return result;
+}
+export function sourceIds(content: Record<string, unknown>): string[] {
+  const ids = new Set<string>();
+  for (const key of ['strengths', 'corrections', 'practice', 'patterns']) {
+    for (const item of (content[key] || []) as Citation[]) for (const id of item.evidence_ids) ids.add(id);
+  }
+  return [...ids];
+}
+export async function transcriptFingerprint(events: TranscriptEvent[]): Promise<string> {
+  const canonical = [...events].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0).map(event => [event.id, event.session_id, event.speaker, event.text, event.timestamp]);
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(canonical)));
+  return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+const evidence = { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 12 };
+const string = { type: 'string' };
+const itemSchema = (properties: Record<string, unknown>) => ({ type: 'object', properties: { ...properties, evidence_ids: evidence }, required: [...Object.keys(properties), 'evidence_ids'], additionalProperties: false });
+export function analysisSchema(kind: 'session' | 'weekly') {
+  const properties: Record<string, unknown> = {
+    summary: string,
+    strengths: { type: 'array', maxItems: 6, items: itemSchema({ text: string }) },
+    corrections: { type: 'array', maxItems: 8, items: itemSchema({ original: string, improved: string, reason: string }) },
+    practice: { type: 'array', maxItems: 8, items: itemSchema({ expression: string }) },
+    next_scenario: string,
+  };
+  if (kind === 'weekly') properties.patterns = { type: 'array', maxItems: 6, items: itemSchema({ text: string }) };
+  return { type: 'object', properties, required: Object.keys(properties), additionalProperties: false };
+}

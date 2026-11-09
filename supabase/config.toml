@@ -1,0 +1,4 @@
+project_id = "loop-english"
+
+[functions.coach]
+verify_jwt = false

@@ -1,0 +1,21 @@
+{
+  "name": "loop-english",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "test": "node --experimental-transform-types --test test/*.test.mjs supabase/functions/coach/coach.test.mjs",
+    "test:browser": "node test/browser.mjs",
+    "check": "node --check web/app.js && node --check src/outbox.js && deno check supabase/functions/coach/index.ts",
+    "build": "node scripts/build-web.mjs",
+    "test:edge": "node --experimental-transform-types --test supabase/functions/coach/coach.test.mjs",
+    "deploy:check": "python3 scripts/deploy.py"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.15",
+    "deno": "2.9.6",
+    "playwright": "1.65.0",
+    "supabase": "3.0.0"
+  }
+}

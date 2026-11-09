@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; media-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'">
+<title>Loop · 영어 통화</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><a class="brand" href="#">Loop<span>영어로 이어지는 나의 기록</span></a><span id="save-status" role="status" aria-live="polite">연결 확인 중</span></header>
+<main>
+<section id="setup">
+<p class="eyebrow">나만의 영어 통화 공간</p><h1>대화는 편하게.<br>기록은 오래도록.</h1>
+<p class="intro">지난 대화에서 배운 표현을 다음 통화로 이어가세요. 대화와 교정은 나의 계정에 저장됩니다.</p>
+<p id="service-state" class="intro" role="status">서비스 연결을 확인하고 있어요.</p>
+<form id="login-form" hidden><h2>이메일로 시작하기</h2><label>이메일<input id="email" type="email" required autocomplete="email"></label><button>로그인 코드 받기</button></form>
+<form id="verify-form" hidden><label>이메일로 받은 코드<input id="otp" inputmode="numeric" autocomplete="one-time-code" required></label><button>로그인</button></form>
+</section>
+<section id="workspace" hidden>
+<div class="section-top"><p class="eyebrow">MY ENGLISH ROOM</p><button id="logout" class="text-button">로그아웃</button></div>
+<h1 id="greeting">오늘도 영어로<br>이야기해요.</h1>
+<p id="memory-summary" class="intro">지난 학습 기록을 확인하고 있습니다.</p>
+<div class="call-layout"><section class="call-surface" aria-label="영어 통화">
+<label>오늘의 상황<select id="scenario"><option value="Weekend plans with friend Alex: leisure, hobbies, travel">친구 Alex와 주말 계획 이야기하기</option><option value="Ordering coffee at a cafe and describing preferences">카페에서 주문하고 취향 설명하기</option><option value="Resolving a hotel reservation issue while traveling">호텔 예약 문제 해결하기</option><option value="Sharing work progress and discussing project plans">업무 진행 상황 공유하기</option></select></label>
+<div id="orb" aria-hidden="true"></div><p id="call-status" role="status">준비되면 전화를 시작하세요.</p>
+<div class="call-actions"><button id="start-call">영어 통화 시작</button><button id="end-call" class="danger" hidden>통화 종료 · 저장</button></div>
+<div class="support"><button data-cue="Please give me a short hint for how to respond, then continue our roleplay." disabled>힌트</button><button data-cue="Please use simpler English and shorter sentences." disabled>쉽게 말해줘</button></div>
+<p class="help">마이크를 허용해 주세요. 통화 중 수신한 대화문은 자동 저장하며, 전송 대기 중인 기록은 별도로 표시합니다.</p>
+</section><section class="transcript-surface"><div class="section-top"><h2>이번 대화</h2><span id="turn-count">0개 발화</span></div><ol id="transcript" aria-live="polite"></ol><p id="empty-transcript">대화를 시작하면 발화가 여기에 남습니다.</p></section></div>
+<section><div class="section-top"><h2>나의 학습 기록</h2><button id="refresh-history" class="text-button">새로고침</button></div><div class="tools"><button id="weekly">최근 7일 분석</button><button id="export" class="secondary">전체 기록 백업</button><label class="file-button">백업 복원<input id="restore" type="file" accept="application/json,.json"></label></div><p id="models" class="help"></p><form id="memory-search"><label>오래된 학습 기록 찾기<input id="memory-query" placeholder="예: coffee, travel, past tense" maxlength="2000" required></label><button class="secondary">기억 검색</button><p class="help">전체 학습 이력에서 키워드로 검색합니다.</p></form><div id="memory-results"></div><div id="history"></div></section>
+</section>
+<div id="notice" role="status" aria-live="polite"></div>
+<details><summary>저장·개인정보 안내</summary><p>로그인한 사용자의 기록은 연결한 Supabase DB에 보관됩니다. 음성과 대화문은 응답·교정을 위해 OpenAI로 전송됩니다. 이 앱은 원본 음성 파일을 보관하지 않고, 수신된 최종 전사문을 저장합니다. 브라우저 복구 대기열은 기기 저장소를 사용하므로 공용 기기에서 사용하지 마세요. 로컬 대기열까지 삭제하거나 DB를 삭제하면 해당 기록을 복구할 수 없습니다. 장기 복구 보장은 DB 백업·복구 정책 설정이 필요합니다.</p></details>
+</main><footer>Loop · 모든 기억은 확인할 수 있는 기록에서 시작합니다.</footer>
+<audio id="remote-audio" autoplay></audio><script src="public-config.js"></script><script type="module" src="app.js"></script>
+</body></html>

@@ -1,0 +1,318 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { test } from 'node:test';
+import { PGlite } from '@electric-sql/pglite';
+import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
+
+const migrationUrl = new URL('../supabase/migrations/202611090001_init.sql', import.meta.url);
+const migration = await readFile(migrationUrl, 'utf8');
+
+const USER_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const USER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const EVENT_ID = '11111111-1111-4111-8111-111111111111';
+const EVENT_TIME = '2026-11-08T12:00:00.000Z';
+
+async function database(t) {
+  const db = new PGlite({ extensions: { pgcrypto } });
+  t.after(() => db.close());
+
+  // Supabase supplies auth and these API roles. Recreate the small contract the
+  // migration needs so the tests exercise its SQL and policies in PostgreSQL.
+  await db.exec(`
+    create role anon nologin;
+    create role authenticated nologin;
+    create role service_role nologin bypassrls;
+    create schema auth;
+    create schema extensions;
+    create table auth.users (id uuid primary key);
+    create function auth.uid() returns uuid language sql stable as $$
+      select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
+    $$;
+    grant usage on schema auth, public to anon, authenticated, service_role;
+    grant execute on function auth.uid() to public;
+  `);
+  await db.exec(migration);
+  await db.query('insert into auth.users(id) values ($1), ($2)', [USER_A, USER_B]);
+  return db;
+}
+
+async function asUser(db, userId, work) {
+  await db.query('set role authenticated');
+  await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId]);
+  try {
+    return await work();
+  } finally {
+    await db.query('reset role');
+  }
+}
+
+async function asService(db, work) {
+  await db.query('set role service_role');
+  try {
+    return await work();
+  } finally {
+    await db.query('reset role');
+  }
+}
+
+async function makeSession(db, userId, scenario = 'Coffee shop') {
+  return asUser(db, userId, async () => {
+    const { rows } = await db.query(
+      'insert into public.sessions(scenario) values ($1) returning id, user_id',
+      [scenario],
+    );
+    return rows[0];
+  });
+}
+
+function event(key, text, extras = {}) {
+  return { event_key: key, speaker: 'user', text, ...extras };
+}
+
+async function append(db, sessionId, events) {
+  const { rows } = await db.query(
+    'select public.append_events($1, $2::jsonb) as result',
+    [sessionId, JSON.stringify(events)],
+  );
+  return rows[0].result;
+}
+
+test('migration applies to the Supabase auth and role contract', async (t) => {
+  const db = await database(t);
+  const { rows } = await db.query(`
+    select tablename from pg_tables
+    where schemaname = 'public'
+    order by tablename
+  `);
+  assert.deepEqual(rows.map((row) => row.tablename), [
+    'analyses', 'analysis_jobs', 'api_daily_usage', 'sessions', 'transcript_events',
+  ]);
+});
+
+test('events are idempotent by event key and conflicting batches roll back atomically', async (t) => {
+  const db = await database(t);
+  const session = await makeSession(db, USER_A);
+  const original = event('client-event-1', 'Hello', { id: EVENT_ID, timestamp: EVENT_TIME });
+
+  const first = await asUser(db, USER_A, () => append(db, session.id, [original]));
+  const duplicate = await asUser(db, USER_A, () => append(db, session.id, [original]));
+  assert.equal(first.inserted, 1);
+  assert.equal(duplicate.inserted, 0);
+  assert.deepEqual(duplicate.event_ids, first.event_ids);
+
+  await assert.rejects(
+    asUser(db, USER_A, () => append(db, session.id, [
+      event('new-event-before-conflict', 'This must roll back'),
+      event('client-event-1', 'Changed content', { id: EVENT_ID, timestamp: EVENT_TIME }),
+    ])),
+    /event key cannot be reused/i,
+  );
+  const { rows } = await db.query(
+    'select event_key from public.transcript_events where session_id = $1 order by event_key',
+    [session.id],
+  );
+  assert.deepEqual(rows.map((row) => row.event_key), ['client-event-1']);
+});
+
+test('users can read only their own sessions and events; delayed events remain accepted after ending', async (t) => {
+  const db = await database(t);
+  const sessionA = await makeSession(db, USER_A);
+  const sessionB = await makeSession(db, USER_B);
+
+  await asUser(db, USER_A, () => append(db, sessionA.id, [event('a1', 'Earlier event')]));
+  await asUser(db, USER_B, () => append(db, sessionB.id, [event('b1', 'Private event')]));
+
+  const visibleToB = await asUser(db, USER_B, async () => {
+    const sessions = await db.query('select id from public.sessions order by id');
+    const events = await db.query('select session_id from public.transcript_events');
+    return { sessions: sessions.rows, events: events.rows };
+  });
+  assert.deepEqual(visibleToB.sessions.map((row) => row.id), [sessionB.id]);
+  assert.deepEqual(visibleToB.events.map((row) => row.session_id), [sessionB.id]);
+
+  await assert.rejects(
+    asUser(db, USER_B, () => append(db, sessionA.id, [event('intrusion', 'No access')])),
+    /Session not found/i,
+  );
+
+  await asUser(db, USER_A, async () => {
+    await db.query('select public.finish_session($1)', [sessionA.id]);
+    const late = await append(db, sessionA.id, [event('delayed-upload', 'Recovered offline')]);
+    assert.equal(late.inserted, 1);
+  });
+  const { rows } = await db.query(
+    "select status, (select count(*) from public.transcript_events where session_id = $1) as event_count from public.sessions where id = $1",
+    [sessionA.id],
+  );
+  assert.equal(rows[0].status, 'ended');
+  assert.equal(Number(rows[0].event_count), 2);
+});
+
+test('job reservations are server-only, deduplicated, budgeted, and lease protected', async (t) => {
+  const db = await database(t);
+
+  await assert.rejects(
+    asUser(db, USER_A, () => db.query(
+      "select public.reserve_run($1, 'weekly', 'user-cannot-reserve', null, 180)",
+      [USER_A],
+    )),
+    /permission denied/i,
+  );
+
+  const run = (requestKey) => db.query(
+    "select public.reserve_run($1, 'weekly', $2, null, 180) as result",
+    [USER_A, requestKey],
+  );
+  const first = await asService(db, async () => (await run('weekly-1')).rows[0].result);
+  const retry = await asService(db, async () => (await run('weekly-1')).rows[0].result);
+  assert.equal(first.reserved, true);
+  assert.equal(first.attempts, 1);
+  assert.equal(retry.reserved, false);
+  assert.equal(retry.reason, 'in_progress');
+  assert.equal(retry.job_id, first.job_id);
+
+  await assert.rejects(
+    asService(db, () => db.query(
+      'select public.complete_run($1, $2, $3::jsonb)',
+      [first.job_id, '22222222-2222-4222-8222-222222222222', JSON.stringify({ ok: true })],
+    )),
+    /Stale or missing job lease/i,
+  );
+
+  const completed = await asService(db, () => db.query(
+    'select public.complete_run($1, $2, $3::jsonb) as result',
+    [first.job_id, first.lease_token, JSON.stringify({ summary: 'saved' })],
+  ));
+  assert.deepEqual(completed.rows[0].result, { summary: 'saved' });
+  const completedRetry = await asService(db, async () => (await run('weekly-1')).rows[0].result);
+  assert.equal(completedRetry.reserved, false);
+  assert.equal(completedRetry.reason, 'completed');
+  assert.deepEqual(completedRetry.result, { summary: 'saved' });
+
+  const budgetResults = await asService(db, async () => {
+    const results = [];
+    for (const key of ['weekly-2', 'weekly-3', 'weekly-4']) {
+      results.push((await run(key)).rows[0].result);
+    }
+    return results;
+  });
+  assert.deepEqual(budgetResults.map((result) => result.reserved), [true, true, false]);
+  assert.equal(budgetResults[2].reason, 'budget_exceeded');
+
+  const usage = await db.query(
+    "select reservations from public.api_daily_usage where user_id = $1 and kind = 'weekly'",
+    [USER_A],
+  );
+  assert.equal(usage.rows[0].reservations, 3);
+});
+
+test('history restore is idempotent, rejects foreign data, and rolls back a conflicting batch', async (t) => {
+  const db = await database(t);
+  const sessionId = '33333333-3333-4333-8333-333333333333';
+  const eventId = '44444444-4444-4444-8444-444444444444';
+  const createdAt = '2026-11-08T10:00:00.000Z';
+  const backup = {
+    sessions: [{ id: sessionId, user_id: USER_A, scenario: 'Restore me', status: 'ended', created_at: createdAt, ended_at: '2026-11-08T11:00:00.000Z' }],
+    events: [{ id: eventId, user_id: USER_A, session_id: sessionId, event_key: 'restore-1', speaker: 'user', text: 'Saved locally', timestamp: EVENT_TIME }],
+  };
+  const restore = (payload) => db.query('select public.restore_history($1::jsonb) as result', [JSON.stringify(payload)]);
+
+  const first = await asUser(db, USER_A, async () => (await restore(backup)).rows[0].result);
+  const repeated = await asUser(db, USER_A, async () => (await restore(backup)).rows[0].result);
+  assert.deepEqual(first, { sessions_inserted: 1, events_inserted: 1 });
+  assert.deepEqual(repeated, { sessions_inserted: 0, events_inserted: 0 });
+
+  await assert.rejects(
+    asUser(db, USER_B, () => restore({ sessions: [{ ...backup.sessions[0], id: '55555555-5555-4555-8555-555555555555', user_id: USER_A }] })),
+    /another user/i,
+  );
+  await assert.rejects(
+    asUser(db, USER_B, () => restore({ sessions: [backup.sessions[0]] })),
+    /Session id unavailable|another user/i,
+  );
+
+  const extraSessionId = '66666666-6666-4666-8666-666666666666';
+  await assert.rejects(
+    asUser(db, USER_A, () => restore({
+      sessions: [
+        { ...backup.sessions[0], id: extraSessionId, scenario: 'Must roll back too' },
+        { ...backup.sessions[0], scenario: 'Conflicting existing row' },
+      ],
+    })),
+    /conflicts with existing session/i,
+  );
+  const { rows } = await db.query('select count(*)::int as count from public.sessions where id = $1', [extraSessionId]);
+  assert.equal(rows[0].count, 0);
+});
+
+test('analysis completion accepts only same-user same-session sources and caches the committed result', async (t) => {
+  const db = await database(t);
+  const sessionA = await makeSession(db, USER_A);
+  const otherSessionA = await makeSession(db, USER_A, 'Different session');
+  const sessionB = await makeSession(db, USER_B);
+  const eventA = (await asUser(db, USER_A, () => append(db, sessionA.id, [event('analysis-a', 'A source')]))).event_ids[0];
+  const eventAOther = (await asUser(db, USER_A, () => append(db, otherSessionA.id, [event('analysis-other', 'Wrong session source')]))).event_ids[0];
+  const eventB = (await asUser(db, USER_B, () => append(db, sessionB.id, [event('analysis-b', 'Private source')]))).event_ids[0];
+  await asUser(db, USER_A, () => db.query('select public.finish_session($1)', [sessionA.id]));
+
+  const reserve = () => db.query(
+    "select public.reserve_run($1, 'session', 'analysis-request', $2, 180) as result",
+    [USER_A, sessionA.id],
+  );
+  const job = await asService(db, async () => (await reserve()).rows[0].result);
+  const complete = (sourceIds) => db.query(
+    'select public.complete_analysis_run($1, $2, $3::jsonb, $4, $5::uuid[]) as result',
+    [job.job_id, job.lease_token, JSON.stringify({ feedback: 'Good progress' }), 'test-model', sourceIds],
+  );
+  await assert.rejects(asService(db, () => complete([eventB])), /owned transcript events/i);
+  await assert.rejects(asService(db, () => complete([eventAOther])), /owned transcript events/i);
+
+  const saved = await asService(db, async () => (await complete([eventA])).rows[0].result);
+  assert.equal(saved.analysis.session_id, sessionA.id);
+  assert.equal(saved.analysis.content.feedback, 'Good progress');
+  const retry = await asService(db, async () => (await reserve()).rows[0].result);
+  assert.equal(retry.reserved, false);
+  assert.equal(retry.reason, 'completed');
+  assert.deepEqual(retry.result, saved);
+  const count = await db.query('select count(*)::int as count from public.analyses where session_id = $1', [sessionA.id]);
+  assert.equal(count.rows[0].count, 1);
+});
+
+test('memory search includes older matches, uses the latest analysis per session, and enforces service ownership', async (t) => {
+  const db = await database(t);
+  const userASessions = [];
+  for (let i = 0; i < 7; i += 1) userASessions.push(await makeSession(db, USER_A, `A session ${i}`));
+  const userBSession = await makeSession(db, USER_B, 'B private session');
+
+  const insertAnalysis = (userId, sessionId, content, createdAt) => db.query(
+    `insert into public.analyses(user_id, session_id, kind, content, model, created_at)
+     values ($1, $2, 'session', $3::jsonb, 'test-model', $4::timestamptz)`,
+    [userId, sessionId, JSON.stringify(content), createdAt],
+  );
+  // The matching historical row should still be considered after recent sessions.
+  await insertAnalysis(USER_A, userASessions[0].id, { note: 'laryngeal resonance improved' }, '2026-09-01T00:00:00Z');
+  // A newer version replaces the old searchable version for that same session.
+  await insertAnalysis(USER_A, userASessions[1].id, { note: 'laryngeal resonance old version' }, '2026-09-02T00:00:00Z');
+  await insertAnalysis(USER_A, userASessions[1].id, { note: 'new version about pacing' }, '2026-11-07T00:00:00Z');
+  for (let i = 2; i < 7; i += 1) {
+    await insertAnalysis(USER_A, userASessions[i].id, { note: `recent practice ${i}` }, `2026-11-0${i}T00:00:00Z`);
+  }
+  await insertAnalysis(USER_B, userBSession.id, { note: 'laryngeal resonance private' }, '2026-11-08T00:00:00Z');
+
+  const search = (userId) => db.query(
+    "select id, user_id, session_id, content from public.memory_search($1, 'laryngeal', 12)",
+    [userId],
+  );
+  await assert.rejects(asUser(db, USER_A, () => search(USER_A)), /permission denied/i);
+
+  const resultA = await asService(db, async () => (await search(USER_A)).rows);
+  assert.ok(resultA.some((row) => row.session_id === userASessions[0].id), 'older relevant session remains searchable');
+  const latestVersion = resultA.find((row) => row.session_id === userASessions[1].id);
+  assert.ok(latestVersion, 'recent session may be included as part of the recent context');
+  assert.equal(latestVersion.content.note, 'new version about pacing', 'superseded searchable content is excluded');
+  assert.equal(resultA[0].session_id, userASessions[0].id, 'keyword match ranks above recent irrelevant analyses');
+  assert.ok(resultA.every((row) => row.user_id === USER_A));
+
+  const resultB = await asService(db, async () => (await search(USER_B)).rows);
+  assert.deepEqual(resultB.map((row) => row.session_id), [userBSession.id]);
+});

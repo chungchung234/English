@@ -52,3 +52,23 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Prepare browser and synthetic speech
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install -y espeak-ng
+          espeak-ng -s 145 -w /tmp/loop-utterance.wav "Hello Alex. Yesterday I went to a cafe with my friend. Today I am thinking of visiting a park."
+          python3 scripts/synthetic-audio.py /tmp/loop-utterance.wav /tmp/loop-smoke.wav
+      - name: Verify live voice, memory and account isolation
+        run: node scripts/live-smoke.mjs
+        env:
+          SUPABASE_PROJECT_REF: domkmxmwmihcfadophfg
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+          SMOKE_AUDIO: /tmp/loop-smoke.wav

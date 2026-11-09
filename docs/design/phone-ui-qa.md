@@ -47,3 +47,11 @@
 ## 남은 실기기 확인
 
 실제 iPhone Safari의 마이크 권한·백그라운드/잠금·네트워크 변경·GPU/배터리, 승인 계정의 실제 AI 음성 통화는 별도 확인이 필요하다. Chromium 크기 조절과 글자 확대는 iOS Dynamic Type 또는 실제 안전 영역 기기 시험을 대체하지 않는다. 기존 승인 정책을 바꾸어 이 검증을 우회하지 않는다. SMTP 전달·관리형 DB 재해 복구는 이번 UI 구현 범위 밖의 기존 운영 과제다.
+
+## 공개 배포 확인
+
+- 앱 커밋 [`7bc1c66`](https://github.com/chungchung234/English/commit/7bc1c66ca29c94af65e874a69d01fbaa4bf85873), [배포 검사 성공](https://github.com/chungchung234/English/actions/runs/42668898340). 백엔드·Pages 게시 및 비승인 계정의 DB·기억·AI 접근 거부를 확인했다. 승인 계정의 실제 음성 통화 검사는 실행하지 않았다.
+- 2026-11-10 02:57 KST, 공개 HTML·세 WebP의 HTTPS 응답 200. HTML은 169,083바이트이며 세 이미지는 저장소의 배포 원본과 바이트 단위로 일치한다. [SHA-256·URL·검사 메타데이터](phone-ui/deployed/verification.json).
+- [게시 파일의 연락처](phone-ui/deployed/contacts.png), [Mia 상세](phone-ui/deployed/detail.png), [작은 화면](phone-ui/deployed/compact.png), [로그인](phone-ui/deployed/login.png).
+
+화면은 HTTPS로 받은 게시 파일을 변경 없이 같은 URL·CSP에서 렌더링하고, 이미지 디코딩 완료 후 촬영했다. 환경의 신뢰된 HTTPS 프록시로 가져온 파일을 브라우저에 전달했으며 보호된 API는 모두 합성 응답으로 대체했다. 실제 이용자의 계정·기록이나 제공자 음성에는 접근하지 않았다. 실행 오류 0건, 세 연락처 표시, 작은 화면의 가로 넘침 없음과 발신 버튼 위치를 확인했다.

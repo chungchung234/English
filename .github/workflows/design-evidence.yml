@@ -1,0 +1,34 @@
+name: Capture mobile design evidence
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/design-evidence.mjs
+      - .github/workflows/design-evidence.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/design-evidence.mjs
+        env:
+          SUPABASE_PROJECT_REF: domkmxmwmihcfadophfg
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Save public-only evidence on a unique branch
+        if: always()
+        run: |
+          git checkout -b design-evidence-${{ github.run_id }}
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+          git add docs/design-evidence
+          git commit -m "Capture public mobile design references"
+          git push origin HEAD:refs/heads/design-evidence-${{ github.run_id }}

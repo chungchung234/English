@@ -1,0 +1,20 @@
+{
+  "reviewed_date": "2026-11-10",
+  "timezone": "Asia/Seoul",
+  "code_references": [
+    {
+      "repository": "amunozdev/voiceorbs",
+      "commit": "8b2799917734f52c9293a489e08982ca5b0187e9",
+      "path": "src/registry/lib/orb-state.ts",
+      "url": "https://github.com/amunozdev/voiceorbs/blob/8b2799917734f52c9293a489e08982ca5b0187e9/src/registry/lib/orb-state.ts",
+      "type": "independent implementation; not OpenAI/Google official analysis"
+    },
+    {
+      "repository": "krispuckett/murmur",
+      "commit": "84642c44862856cfbd092d429e613cd889dde289",
+      "path": "Sources/Murmur/MurmurState.swift",
+      "url": "https://github.com/krispuckett/murmur/blob/84642c44862856cfbd092d429e613cd889dde289/Sources/Murmur/MurmurState.swift",
+      "type": "independent implementation; not OpenAI/Google official analysis"
+    }
+  ]
+}

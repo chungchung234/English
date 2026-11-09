@@ -59,3 +59,12 @@ final result: passed
 
 Applied the user-selected empty overlapping speech-bubble logo with the redesigned 콜콜 glyphs and tightened wordmark spacing. `docs/design/approved-logo.png` preserves the approved full-size source; the header uses a whitespace-trimmed WebP export. Replaced the prior negative-offset image crop with a centered, aspect-preserving 170 × 48 px container. The 390 px mobile capture shows the full symbol and wordmark without clipping. `npm run build` and `npm run test:browser` passed (voice responses simulated).
 
+
+## 최종 공개 배포 대조
+
+- [배포 및 접근 정책 검사](https://github.com/chungchung234/English/actions/runs/42664184362) success. 코드 `a57790d`.
+- 원격 최신 변경의 로고·기억 제어·승인 정책·20분 제한을 병합한 뒤 전체 검사를 다시 실행함.
+- P2: 20분 안내가 추가되면서 일반 모바일 화면의 지난 표현 행이 하단 탭에 겹쳤음. 홈 상단·버튼·안내·지난 표현 간격만 조정하고, 행 전체가 탭 위에 오는 회귀 검사를 추가함.
+- 수정 후 [Alex 홈](docs/design/approved-characters/deployed/home-alex.png), [상대 선택](docs/design/approved-characters/deployed/companions.png), [기억 관리](docs/design/approved-characters/deployed/memory.png), [compact](docs/design/approved-characters/deployed/compact.png)에서 최신 로고·캐릭터·추가 기능의 통합을 확인함. 캐릭터 원본 및 렌더러가 게시 파일과 일치함.
+- 게시 HTML을 HTTPS로 읽고 hashed CSP를 유지해 렌더링했으며 보호 API는 합성 응답으로 대체함. 실제 사용자 데이터 접근 없음. 실제 승인 계정의 음성 통화 재검증과 구분함. [세부 검증](docs/design/approved-characters/deployed/verification.json).
+- final result: passed

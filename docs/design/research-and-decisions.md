@@ -15,8 +15,8 @@
 | [Google Design — Illustrating the Gemini App](https://design.google/library/gemini-ai-visual-design) | 제작팀의 공식 해설. 밀도와 확산, 내부 활동, 방향성이 있는 모션, Google의 형태 언어를 설명한다. | 그라데이션을 에너지와 방향 전달에 사용. 내부 움직임에 의미를 부여하고, 한 동작의 시작과 끝을 연결. | Gemini의 공식 설명이며 시시콜콜의 효과를 검증한 연구가 아니다. 특정 오브나 상태별 수치를 그대로 복제하지 않았다. |
 | [Gemini Live 공식 소개·데모](https://gemini.google/overview/gemini-live/) | 공개 제품 영상의 실제 대화 표시를 확인했다. 단일 형태 안에서 푸른 빛의 분포가 바뀐다. | AI의 존재감과 대화 컨트롤을 함께 배치하고, 작고 연속적인 시각 피드백을 유지. | 홍보 영상만으로 정확한 오디오-모션 매핑이나 내부 알고리즘은 확인할 수 없다. |
 | [ChatGPT 공식 App Store 소개](https://apps.apple.com/us/app/chatgpt/id6448311069) | 공식 앱 소개 이미지의 음성 대화 표시를 확인했다. | 대화 경험 안에서 간결한 AI 존재감을 제공하는 제품 사례. | 정지 이미지 기준이다. ChatGPT의 정확한 단계별 모션·수치나 렌더러를 분석했다고 주장하지 않는다. 공식 문서·영상 접근 일부는 차단됐다. |
-| [VoiceOrbs 상태 코드](https://github.com/amunozdev/voiceorbs/blob/main/src/registry/lib/orb-state.ts) | 외부 오픈소스 구현. 상태 가중치, 활성 진입과 진정의 다른 보간 속도, 음성 신호 연결을 확인했다. | 상태와 음성 강약을 분리하고, 상태가 바뀔 때 연속적으로 보간. | ChatGPT나 Gemini의 공식 제작 자료 또는 역공학 검증이 아니다. 이 프로젝트의 기본값은 제품 보편 법칙이 아니다. |
-| [Murmur 상태 설계](https://github.com/krispuckett/murmur/blob/main/Sources/Murmur/MurmurState.swift) | 외부 SwiftUI/Metal 구현과 설계 주석. 같은 존재가 상태를 표현하고 위상이 뛰지 않도록 시간을 누적한다. | 성격·재질과 대화 상태를 분리. 듣기에 음성이 반응할 여유를 남기고, 응답은 생각의 연속으로 설계. | 독립 제작자의 설계·장치 평가이며 Google/OpenAI 공식 분석은 아니다. |
+| [VoiceOrbs 상태 코드](https://github.com/amunozdev/voiceorbs/blob/8b2799917734f52c9293a489e08982ca5b0187e9/src/registry/lib/orb-state.ts) | 외부 오픈소스 구현. 상태 가중치, 활성 진입과 진정의 다른 보간 속도, 음성 신호 연결을 확인했다. | 상태와 음성 강약을 분리하고, 상태가 바뀔 때 연속적으로 보간. | ChatGPT나 Gemini의 공식 제작 자료 또는 역공학 검증이 아니다. 이 프로젝트의 기본값은 제품 보편 법칙이 아니다. |
+| [Murmur 상태 설계](https://github.com/krispuckett/murmur/blob/84642c44862856cfbd092d429e613cd889dde289/Sources/Murmur/MurmurState.swift) | 외부 SwiftUI/Metal 구현과 설계 주석. 같은 존재가 상태를 표현하고 위상이 뛰지 않도록 시간을 누적한다. | 성격·재질과 대화 상태를 분리. 듣기에 음성이 반응할 여유를 남기고, 응답은 생각의 연속으로 설계. | 독립 제작자의 설계·장치 평가이며 Google/OpenAI 공식 분석은 아니다. |
 | [OpenAI Liquid Glass 스킬](../../.agents/skills/liquid-glass/SKILL.md) / [보존된 컬러 지침](../../.agents/skills/impeccable-colorize/SKILL.md) | 기존 프로젝트의 SwiftUI/macOS 스킬과 Impeccable colorize 지침을 읽었다. | 글래스는 플로팅 내비게이션·컨트롤에 제한. 색을 행동·선택·상태 등의 역할로 관리하고 대비를 확인. | 웹의 CSS 표현은 네이티브 Liquid Glass 렌더링과 같지 않다. 컬러 지침은 시시콜콜의 브랜드 연구가 아니라 설계 방법이다. |
 
 초기 ElevenLabs Orb·LiveKit Aura는 구현 가능성을 살펴본 자료다. 제품의 동작 의도를 충분히 설명하지 못해 최종 시각 근거의 중심에서는 제외했다. 셰이더 갤러리·메시 그라데이션·연기 링 역시 대화 패턴과의 거리가 커서 최종 캐릭터로 채택하지 않았다.
@@ -88,3 +88,18 @@
 ## 다음 변경 시 지킬 기준
 
 새 시안은 캐릭터·상태·음성 강약 중 무엇을 바꾸는지 구분해 검토한다. 모션 수치는 이 구현의 조정값이며 ChatGPT/Gemini에서 측정한 수치로 인용하지 않는다. 새 자산이나 동작을 적용하기 전에 같은 캐릭터의 대기/듣기/생각/말하기를 동시 비교하고, 작은 화면·동작 줄이기·GPU 대체 표시를 함께 확인한다. SMTP 전달, 승인 계정의 실제 기기 음성 통화, DB 재해 복구 등 운영 과제는 별도 검증으로 남긴다.
+
+## 배포와 검증 기록
+
+- 서비스: https://chungchung234.github.io/English/
+- 배포된 앱 커밋: [`a57790d`](https://github.com/chungchung234/English/commit/a57790d1b75e2197f8213ca056e9ee729fe84203)
+- [배포 워크플로 성공](https://github.com/chungchung234/English/actions/runs/42664184362): 타입 검사, 서버/DB 테스트 70개, 합성 기억 평가 10개, 실제 이미지 GPU·음성 반응 검사, 모바일·기억 관리·20분 자동 종료 검사, 백엔드·Pages 게시, 비승인 계정 차단 검증.
+- 게시된 HTML의 HTTPS 응답 200과 세 캐릭터 이미지 원본 일치를 확인했다. 실제 게시 파일 크기는 4,168,483바이트이며, SHA-256은 `0fdcc780185b9d06ac03ee9d1827c97d30db8ac3ca8569a955b6fd74e5248997`이다. [검증 메타데이터](approved-characters/deployed/verification.json).
+- 공개 파일 확인 시각: 2026-11-10 02:26:15 KST.
+- [최종 Alex 홈](approved-characters/deployed/home-alex.png), [Mia 홈](approved-characters/deployed/home-mia.png), [Juno 홈](approved-characters/deployed/home-juno.png), [상대 선택](approved-characters/deployed/companions.png), [기억 관리](approved-characters/deployed/memory.png), [작은 화면](approved-characters/deployed/compact.png).
+
+최종 화면은 게시된 HTML을 그대로 읽어 같은 CSP 하에서 렌더링했다. 보호된 화면의 데이터는 브라우저에서 차단·대체한 합성 응답을 사용했으며, 실제 이용자의 계정·기록에는 접근하지 않았다. 390×844에서 지난 표현 행이 하단 탭 위에 완전히 보이고, 320×568에서 통화 시작 버튼이 하단 탭 위에 있으며 화면 너비가 넘치지 않는 것을 확인했다. 페이지 실행 오류는 없었다.
+
+배포 후 실제 Supabase 검증은 기존 승인 정책을 유지한 채 비승인 계정의 데이터·AI·기억 관리 접근 거부를 확인했다. 테스트를 위해 승인 목록을 확장하지 않았으므로 이 릴리스의 승인 계정 실기기 음성 통화가 통과했다고 주장하지 않는다. SMTP·재해 복구도 이번 디자인 배포 검증 범위가 아니다.
+
+외부 코드 참고는 확인한 커밋으로 고정했으며 [출처 버전 목록](research-sources.json)에 보존했다.

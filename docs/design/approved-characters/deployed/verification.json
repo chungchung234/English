@@ -1,0 +1,26 @@
+{
+  "source_url": "https://chungchung234.github.io/English/",
+  "public_fetch": "HTTPS verified by inherited CA/proxy, HTTP 200",
+  "bytes": 4168483,
+  "sha256": "0fdcc780185b9d06ac03ee9d1827c97d30db8ac3ca8569a955b6fd74e5248997",
+  "renderer_matches": true,
+  "practice_row_above_dock": true,
+  "artwork_matches": [
+    "alex",
+    "mia",
+    "juno"
+  ],
+  "rendering": "exact published HTML rendered under its hashed CSP; private API responses intercepted as synthetic fixtures",
+  "real_user_data_accessed": false,
+  "intercepted_requests": 15,
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "compact": {
+    "fits": true,
+    "ctaAboveDock": true
+  },
+  "page_errors": [],
+  "verified_at_kst": "2026-11-10 02:26:15 KST"
+}

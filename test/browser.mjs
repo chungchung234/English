@@ -53,6 +53,7 @@ try{
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.locator('img[src*="companion-"]').count(),0,'AI companions must have no portrait assets');
  assert.equal(await page.locator('#orb').getAttribute('data-ai-profile'),'current');
+ assert(await page.evaluate(()=>document.querySelector('#practice-preview').getBoundingClientRect().bottom<=document.querySelector('.glass-dock').getBoundingClientRect().top-4),'20-minute note and practice row must fit above the dock at 390×844');
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await assertVisibleImagesLoaded(page);
  await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/mobile.png',fullPage:true});

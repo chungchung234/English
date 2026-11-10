@@ -1,0 +1,31 @@
+{
+  "site": "https://chungchung234.github.io/English/",
+  "release_commit": "e353757c5d95c37941ea6d39db088def2bc6f427",
+  "https_status": 200,
+  "html_bytes": 281393,
+  "html_sha256": "52e7e68f2b3473ba93608bb4027aa13457412e5a5936dba0db2e5e6a901f3368",
+  "assets": [
+    {
+      "path": "assets/ai-alex.cc68fe3acd91.webp",
+      "bytes": 515878,
+      "sha256": "cc68fe3acd919db19a6a8f2f5a54bd093e2b49af0807bfb4299c9c4ee56af37d",
+      "matches_source": true
+    },
+    {
+      "path": "assets/ai-juno.9af4cc7fb746.webp",
+      "bytes": 458512,
+      "sha256": "9af4cc7fb746af15fd7d599b6e4f54f21c6ebc8593cd8ca52f84f295f15e52da",
+      "matches_source": true
+    },
+    {
+      "path": "assets/ai-mia.c2811706559f.webp",
+      "bytes": 491026,
+      "sha256": "c2811706559f2d38ba5c0801531f8bdb3c338a587b37e1e36aecb980444e80b3",
+      "matches_source": true
+    }
+  ],
+  "tls": "standard verified HTTPS, inherited proxy and CA trust",
+  "protected_screen": "browser-only synthetic fixtures; no real user access",
+  "matches_local_release_build": true,
+  "verified_at_utc": "2026-11-10T05:24:38.149342+00:00"
+}

@@ -23,7 +23,9 @@ final result: passed
 
 검증은 실제 Chromium·배포 구조 CSP 검사와 합성 API 데이터로 수행했다. 실행 오류 0건. 전체 브라우저 회귀 검사, 추가 탭 검사, 타입/문법, 서버/DB/빌드 테스트 82/82 통과. 느린 대화문의 다른 통화 유입 방지, 선택 상대 보존, 주간 결과 표시·중복 방지·빈 상태·30개 밖의 대상도 확인했다. 목록 재조회 응답을 일부러 늦춰 상세를 먼저 연 뒤 목록 항목을 교체하는 조건에서도 피드백 전환이 유지되는 것을 재현 검사했다. [상세 기록](docs/design/tabs-refinement/README.md), [메타데이터](docs/design/tabs-refinement/verification.json).
 
-이하 통화 홈의 기존 검수와 게시 파일 기록을 보존한다. 최신 추가 게시 검증은 위 상세 기록에 이어서 관리한다.
+게시 검증: 앱 릴리스 `e353757c5d95c37941ea6d39db088def2bc6f427`의 [배포 검사](https://github.com/chungchung234/English/actions/runs/42761308461)가 성공했다. 공개 HTML은 동일 설정의 릴리스 빌드와, 세 AI 이미지는 승인 원본과 바이트 단위로 일치한다. 게시 파일을 변경 없이 렌더링한 [최근 통화](docs/design/tabs-refinement/deployed-01-history.png), [320px 복습](docs/design/tabs-refinement/deployed-04-review-compact.png) 및 상세·빈 상태를 확인했다. 보호 API만 합성 응답으로 대체했다. 가로 넘침 없음, 실행 오류 0건, 원문 대비 5.93:1이다. [전체 게시 증거](docs/design/tabs-refinement/README.md#게시-확인).
+
+이하 통화 홈의 기존 검수와 게시 파일 기록을 보존한다.
 
 ## 비교 대상과 상태
 

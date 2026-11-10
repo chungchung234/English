@@ -35,3 +35,13 @@
 - 배포 HTML은 생성 코드의 달러 문자가 변형되지 않도록 치환 함수를 사용한다. 실제 인라인 스크립트와 CSP 해시 일치 검사를 통과했으며 정책을 완화하지 않았다.
 
 웹 글래스 표현이며 애플 네이티브 Liquid Glass API는 사용하지 않는다. 실제 iPhone Safari·스크린리더 전체 적합성은 별도 확인 범위다.
+
+## 게시 확인
+
+- 서비스: https://chungchung234.github.io/English/
+- 앱 릴리스: `e353757c5d95c37941ea6d39db088def2bc6f427`. [배포 검사](https://github.com/chungchung234/English/actions/runs/42761308461) 성공.
+- 검증된 HTTPS로 받은 HTML 281,393바이트가 동일 공개 설정으로 만든 해당 릴리스 빌드와 바이트 단위로 일치한다. 세 AI WebP도 승인 원본과 일치한다. [파일 검증](deployed-verification.json).
+- 게시 HTML·자산을 변경 없이 게시 URL과 CSP에서 Chromium으로 렌더링했다. 보호 API와 인증만 격리된 합성 응답으로 대체했으며 실제 사용자 데이터에는 접근하지 않았다.
+- [390px 최근 통화](deployed-01-history.png), [320px 최근 통화](deployed-02-history-compact.png), [통화 상세](deployed-call-detail.png), [대화문](deployed-call-transcript.png).
+- [390px 복습](deployed-03-review.png), [320px 복습](deployed-04-review-compact.png), [복습 하단](deployed-05-review-bottom.png), [펼친 부가 정보](deployed-review-expanded.png).
+- [빈 최근 통화](deployed-06-history-empty.png), [빈 복습](deployed-07-review-empty.png). 가로 넘침 없음, 실행 오류 0건, 원문 대비 5.93:1, 기록 없는 주간 분석 비활성화를 확인했다. [게시 브라우저 검증](deployed-browser-verification.json).

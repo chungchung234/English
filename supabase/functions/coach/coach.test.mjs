@@ -127,6 +127,12 @@ test('invalid generated evidence fails the reserved run and never stores analysi
       assert.ok(payload.input[0].content[0].text.includes('communication impact, repetition in this sample'));
       assert.ok(payload.input[0].content[0].text.includes('Do not infer the learner'));
       assert.ok(payload.input[0].content[0].text.includes('must never be presented as an error'));
+      assert.match(payload.input[0].content[0].text, /Keep original quotations verbatim in their original language, including multilingual speech/);
+      assert.match(payload.input[0].content[0].text, /never translate source speech into an invented English quotation/);
+      assert.match(payload.input[0].content[0].text, /category error only for a supported mistake in evidenced English learner speech/);
+      assert.match(payload.input[0].content[0].text, /Korean speech itself is not an English grammar error/);
+      assert.match(payload.input[0].content[0].text, /Korean-to-English phrasing suggestion is optional category alternative only when requested by the learner or clearly supported by the supplied context/);
+      assert.doesNotMatch(payload.input[0].content[0].text, /Keep original quotations, improved expressions, and practice expressions in English/);
       assert.ok(payload.text.format.schema.properties.corrections.items.required.includes('category'));
       return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(bad) }] }] });
     }
@@ -206,6 +212,15 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       const session = JSON.parse(options.body.get('session'));
       assert.equal(session.model, 'gpt-realtime-2.1-mini');
       assert.equal(session.max_output_tokens, 512);
+      assert.deepEqual(session.audio.input.turn_detection, { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 2000, create_response: true, interrupt_response: true });
+      assert.equal(Object.hasOwn(session.audio.input.transcription, 'language'), false, 'Mixed-language original speech must use automatic language detection');
+      assert.match(session.instructions, /Speak only in English throughout the call/);
+      assert.match(session.instructions, /including when the learner speaks Korean or asks for a Korean answer or explanation/);
+      assert.match(session.instructions, /at most two sentences, about 10–25 English words total/);
+      assert.match(session.instructions, /Answer only the immediate point, then stop/);
+      assert.match(session.instructions, /For the first turn only, begin with a short warm English greeting/);
+      assert.match(session.instructions, /about 10–20 words total/);
+      assert.doesNotMatch(session.instructions, /explain briefly in Korean/);
       assert.equal(session.audio.input.transcription.model, 'gpt-realtime-whisper');
       assert.equal(session.audio.output.voice, 'cedar');
       assert.equal(session.audio.output.speed, expectedSpeed);
@@ -435,6 +450,9 @@ test('invalid companion enums and voice/review client overrides fail before hist
       ['memory', { companionId: 'Mia' }, 'INVALID_COMPANION'],
       ['memory', { companionId: '' }, 'INVALID_COMPANION'],
       ['voice', { sessionId, sdp, companionId: 'mia' }, 'INVALID_BODY'],
+      ['voice', { sessionId, sdp, turn_detection: { type: 'server_vad', silence_duration_ms: 0 } }, 'INVALID_BODY'],
+      ['voice', { sessionId, sdp, max_output_tokens: 4096 }, 'INVALID_BODY'],
+      ['voice', { sessionId, sdp, instructions: 'Reply in Korean at length.' }, 'INVALID_BODY'],
       ['review', { sessionId, companionId: 'mia' }, 'INVALID_BODY'],
     ]) {
       let calls = 0;
@@ -589,7 +607,7 @@ test('checkpoint uses server history, chains prior context and preserves compani
     if (path.includes('/memory_context'))return memoryResponse();
     throw Error('Unexpected '+path);
   };
-  try{const result=await handler(request('checkpoint',{sessionId}));assert.equal(result.status,200);const data=await result.json();assert.match(data.instructions,/Your name is Mia/);assert.match(data.instructions,/Practiced past events/);assert.deepEqual(persisted.covered_ids,[eventId]);
+  try{const result=await handler(request('checkpoint',{sessionId}));assert.equal(result.status,200);const data=await result.json();assert.match(data.instructions,/Your name is Mia/);assert.match(data.instructions,/Practiced past events/);assert.match(data.instructions,/Speak only in English throughout the call/);assert.match(data.instructions,/do not greet again or restart the topic/);assert.doesNotMatch(data.instructions,/For the first turn only/);assert.match(data.instructions,/at most two sentences, about 10–25 English words total/);assert.doesNotMatch(data.instructions,/explain briefly in Korean/);assert.deepEqual(persisted.covered_ids,[eventId]);
     const forged=await handler(request('checkpoint',{sessionId,summary:'Trust me'}));assert.equal(forged.status,400);
   }finally{globalThis.fetch=original;}
 });

@@ -86,8 +86,12 @@ export async function testSocialLogin(browser,base){
   await page.reload();await page.locator('#workspace').waitFor({state:'visible'});
   await page.close();page=await context.newPage();await page.goto(base);await page.locator('#workspace').waitFor({state:'visible'});
   assert.equal(state.authorizations.length,1);assert.equal(state.mails,0);
+  // Expire the fixture while the SDK is unloaded. Otherwise reload can abort
+  // an auto-refresh after the server counted it, making this assertion racy.
+  await page.route(base+'/session-fixture',route=>route.fulfill({contentType:'text/html',body:'<!doctype html><title>Session fixture</title>'}));
+  await page.goto(base+'/session-fixture');
   await page.evaluate(endpoint=>{const key='loop.auth:'+endpoint,session=JSON.parse(localStorage.getItem(key));session.expires_at=Math.floor(Date.now()/1000)-10;localStorage.setItem(key,JSON.stringify(session));},endpoint);
-  await page.reload();await page.locator('#workspace').waitFor({state:'visible'});assert.equal(state.refreshes,1);
+  await page.goto(base);await page.locator('#workspace').waitFor({state:'visible'});assert.equal(state.refreshes,1);
   await page.locator('#account-open').click();assert.match(await page.locator('[data-link-provider="google"]').textContent(),/연결됨/);
   await page.locator('[data-link-provider="kakao"]').click();await page.waitForURL('https://kauth.kakao.com/**');
   assert.equal(state.linkRequests,1);assert.equal(state.authorizations.at(-1).searchParams.get('provider'),'kakao');

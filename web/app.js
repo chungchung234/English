@@ -10,7 +10,7 @@ const presence = createAIPresence();
 const config = globalThis.LOOP_PUBLIC_CONFIG ? validatePublicConfig(globalThis.LOOP_PUBLIC_CONFIG.url,globalThis.LOOP_PUBLIC_CONFIG.key) : null;
 const authSession=config?createAuthSession(config):null;
 let readyEpoch=0,providersLoaded=false;
-let companionSlideAnimations=[];
+let companionSlideAnimations=[],companionDrag=null;
 const companionMotion=matchMedia('(prefers-reduced-motion: reduce)');
 let auth=null,loginReady=false,socialBusy=false,providers={google:false,kakao:false};
 let flushing, call, scope, saving = Promise.resolve(), historyEpoch = 0, memoryEpoch = 0, cloudVerified = false;
@@ -51,15 +51,73 @@ function navigationControls() {
   memoryControlsDisabled(false);
 }
 function stopCompanionSlide(){
+  const stage=$('companion-stage'),pointer=companionDrag?.id;companionDrag=null;
+  if(pointer!==undefined&&stage.hasPointerCapture(pointer))stage.releasePointerCapture(pointer);
+  $('companion-art').style.transform='';
+  const lens=$('companion-selector').querySelector('.selection-lens');lens.style.transform='';lens.style.transition='';
   for(const animation of companionSlideAnimations)animation.cancel();
-  companionSlideAnimations=[];$('companion-stage').querySelectorAll('.companion-slide-out').forEach(node=>node.remove());
+  companionSlideAnimations=[];$('companion-stage').querySelectorAll('.companion-slide-out,.companion-swipe-peek').forEach(node=>node.remove());
 }
 companionMotion.addEventListener('change',()=>{if(companionMotion.matches)stopCompanionSlide();});
+const companionStage=$('companion-stage');
+companionStage.addEventListener('dragstart',event=>event.preventDefault());
+companionStage.addEventListener('pointerdown',event=>{
+  if(!event.isPrimary||event.button!==0||memoryBusy()||currentView!=='contacts')return;
+  stopCompanionSlide();
+  companionDrag={id:event.pointerId,x:event.clientX,y:event.clientY,delta:0,horizontal:false};
+});
+companionStage.addEventListener('pointermove',event=>{
+  const drag=companionDrag;if(!drag||drag.id!==event.pointerId)return;
+  const x=event.clientX-drag.x,y=event.clientY-drag.y;
+  if(!drag.horizontal){
+    if(Math.abs(y)>8&&Math.abs(y)>Math.abs(x)){companionDrag=null;return;}
+    if(Math.abs(x)<8||Math.abs(x)<Math.abs(y)*1.2)return;
+    drag.horizontal=true;companionStage.setPointerCapture(event.pointerId);
+  }
+  if(event.cancelable)event.preventDefault();
+  const order=companionButtons.map(button=>button.dataset.companion),index=order.indexOf(companionId);
+  drag.delta=x;
+  const atEdge=x>0&&index===0||x<0&&index===order.length-1;
+  if(!companionMotion.matches){
+    $('companion-art').style.transform=`translateX(${atEdge?x*.2:x}px)`;
+    const next=index+(x<0?1:-1);let peek=companionStage.querySelector('.companion-swipe-peek');
+    if(atEdge){peek?.remove();}else{
+      if(!peek){peek=new Image();peek.className='companion-swipe-peek';peek.alt='';peek.setAttribute('aria-hidden','true');companionStage.append(peek);}
+      if(peek.dataset.profile!==order[next]){const source=$('ai-art-'+order[next]);peek.src=source.dataset.src||source.src;peek.dataset.profile=order[next];}
+      peek.style.transform=`translateX(${x+(x<0?1:-1)*companionStage.clientWidth}px)`;
+    }
+    const lens=$('companion-selector').querySelector('.selection-lens');lens.style.transition='none';
+    lens.style.transform=`translateX(${Math.max(0,Math.min(order.length-1,index-x/companionStage.clientWidth))*100}%)`;
+  }
+});
+function finishCompanionDrag(event,cancelled=false){
+  const drag=companionDrag;if(!drag||drag.id!==event.pointerId)return;
+  companionDrag=null;
+  if(companionStage.hasPointerCapture(drag.id))companionStage.releasePointerCapture(drag.id);
+  const order=companionButtons.map(button=>button.dataset.companion),index=order.indexOf(companionId);
+  const target=index+(drag.delta<0?1:-1),threshold=Math.max(36,companionStage.clientWidth*.2);
+  if(!cancelled&&drag.horizontal&&Math.abs(drag.delta)>=threshold&&target>=0&&target<order.length&&!memoryBusy()){
+    selectCompanion(order[target]);return;
+  }
+  const art=$('companion-art'),from=getComputedStyle(art).transform,peek=companionStage.querySelector('.companion-swipe-peek');
+  const peekFrom=peek?getComputedStyle(peek).transform:null;stopCompanionSlide();
+  if(!drag.horizontal||companionMotion.matches)return;
+  const options={duration:280,easing:'cubic-bezier(.22,.68,.16,1)'};
+  companionSlideAnimations=[art.animate([{transform:from},{transform:'translateX(0)'}],options)];
+  if(peek){companionStage.append(peek);companionSlideAnimations.push(peek.animate([{transform:peekFrom},{transform:`translateX(${drag.delta<0?100:-100}%)`}],options));}
+  const active=companionSlideAnimations;Promise.allSettled(active.map(animation=>animation.finished)).then(()=>{if(companionSlideAnimations===active)stopCompanionSlide();});
+}
+companionStage.addEventListener('pointerup',event=>finishCompanionDrag(event));
+companionStage.addEventListener('pointercancel',event=>finishCompanionDrag(event,true));
+// Touch starts with implicit capture on the canvas; ignore its transfer to the stage.
+companionStage.addEventListener('lostpointercapture',event=>{if(event.target===companionStage)finishCompanionDrag(event,true);});
+
 function prepareCompanionSlide(next){
   const stage=$('companion-stage'),art=$('companion-art');
   const canSlide=currentView==='contacts'&&!$('workspace').hidden&&!companionMotion.matches&&typeof art.animate==='function';
   const position=canSlide?getComputedStyle(art).transform:'none';
   const outgoing=canSlide?presence.snapshot($('orb')):null;
+  const peek=stage.querySelector('.companion-swipe-peek'),entry=peek?.dataset.profile===next?getComputedStyle(peek).transform:null;
   const order=[...document.querySelectorAll('[data-companion]')].map(button=>button.dataset.companion);
   const direction=order.indexOf(next)>order.indexOf(companionId)?1:-1;
   stopCompanionSlide();
@@ -70,7 +128,7 @@ function prepareCompanionSlide(next){
       outgoing.className='companion-slide-out';outgoing.setAttribute('aria-hidden','true');stage.append(outgoing);
       companionSlideAnimations.push(outgoing.animate([{transform:position},{transform:`translateX(${-direction*100}%)`}],options));
     }
-    companionSlideAnimations.push(art.animate([{transform:`translateX(${direction*100}%)`},{transform:'translateX(0)'}],options));
+    companionSlideAnimations.push(art.animate([{transform:entry||`translateX(${direction*100}%)`},{transform:'translateX(0)'}],options));
     const active=companionSlideAnimations;
     Promise.allSettled(active.map(animation=>animation.finished)).then(()=>{if(companionSlideAnimations===active)stopCompanionSlide();});
   };

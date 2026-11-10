@@ -82,6 +82,15 @@ main{position:relative;min-height:calc(100svh - 146px)}
 .companion-selector button[aria-pressed=true]{color:var(--brand-strong);font-weight:650}
 .home-identity{display:flex;align-items:center;flex-direction:column;margin-top:61px}
 .ai-presence{display:block;aspect-ratio:1;flex:0 0 auto;background:transparent}
+@media(prefers-reduced-motion:no-preference){
+  .ai-presence-poster{animation:presence-drift 14s ease-in-out infinite;transform-origin:50% 55%}
+  .ai-presence-poster[data-profile=mia]{animation-duration:16s}
+  .ai-presence-poster[data-profile=juno]{animation-duration:12s}
+}
+@keyframes presence-drift{
+  0%,100%{transform:translate3d(0,0,0) rotate(-.6deg) scale(.985,1.005)}
+  50%{transform:translate3d(1%,-1.5%,0) rotate(.6deg) scale(1.015,.99)}
+}
 .ai-presence-home{width:240px;height:240px;max-width:68vw;max-height:68vw}
 .companion-trait{margin:7px 0 0;color:var(--secondary);font-size:14px;line-height:1.5;text-align:center}
 .home-actions{margin:49px auto 0}

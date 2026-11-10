@@ -18,29 +18,35 @@ export function createAIPresence(root = document) {
   const stateNames=['idle','connecting','listening','thinking','speaking','error'];
   const weights=Object.fromEntries(stateNames.map(key=>[key,key==='idle'?1:0]));
   const motion=matchMedia('(prefers-reduced-motion: reduce)');
-  let profile='alex',state='idle',inputLevel=0,outputLevel=0,clock=0,idleClock=0;
+  let profile='alex',state='idle',inputLevel=0,outputLevel=0,clock=0,idleClock=0,ambientClock=0;
   let context,raf=0,last=0,destroyed=false;
   const sources=new Map(),analysers=new Map(),revisions={input:0,output:0};
   const artwork=new Map();
   const vertex='attribute vec2 position;varying vec2 uv;void main(){uv=position*.5+.5;gl_Position=vec4(position,0.,1.);}';
   const fragment=`precision mediump float;
     varying vec2 uv;uniform sampler2D art;
-    uniform float time,personality,activity,rest;
+    uniform float time,ambientTime,personality,activity,rest;
     uniform vec4 attention;
     void main(){
       bool mia=personality>.5&&personality<1.5;bool juno=personality>1.5;
       float tempo=mia?.72:(juno?1.12:.86);float t=time*tempo;
-      vec2 p=uv-.5;
+      // Slow breathing and a gentle current stay independent of voice energy.
+      // A zero ambient clock preserves the exact still pose for reduced motion.
+      float ambient=ambientTime*(mia?.44:(juno?.60:.52));
+      float calm=1.-rest*.65;
+      vec2 p=uv-.5-vec2(sin(ambient*.73)*.008,sin(ambient)*.012)*calm;
+      vec2 breath=vec2(1.)+sin(ambient)*vec2(.018,.028)*calm;
       // Whole-body motion is conditional: incoming voice opens the form vertically,
       // outgoing voice lends it volume; silent speech states do not fake a pulse.
       float character=mia?.78:(juno?1.12:.92);
-      vec2 scale=vec2(1.)+activity*character*(attention.x*vec2(-.018,.040)+attention.z*vec2(.055,.095));
+      vec2 scale=breath+activity*character*(attention.x*vec2(-.018,.040)+attention.z*vec2(.055,.095));
       p/=scale;
-      float tilt=activity*attention.z*character*.040*sin(t*1.15);
+      float tilt=sin(ambient*.61)*.018*calm+activity*attention.z*character*.040*sin(t*1.15);
       p=mat2(cos(tilt),-sin(tilt),sin(tilt),cos(tilt))*p;
       float angle=atan(p.y,p.x);float radius=length(p);
       float bend=activity*character*(attention.x*.012+attention.z*.042);
-      float contour=sin(angle*(juno?3.:2.)+t)*bend;
+      float contour=sin(angle*(juno?3.:2.)+t)*bend
+        +sin(angle*(juno?3.:2.)+ambient*.5)*sin(ambient*.8)*.010*calm;
       vec2 maskUV=.5+p*(1.+contour*smoothstep(.12,.42,radius));
       maskUV+=p*attention.y*.025;
       vec4 original=texture2D(art,clamp(maskUV,0.,1.));
@@ -79,6 +85,7 @@ export function createAIPresence(root = document) {
     }
     const name=nameFor(s.canvas);
     if(s.poster.dataset.profile!==name){s.poster.src=AI_ART_SOURCES[name];s.poster.dataset.profile=name;}
+    s.poster.style.animationPlayState=document.hidden?'paused':'running';
     s.poster.hidden=false;s.canvas.hidden=true;
     if(failed)s.canvas.classList.add('ai-presence-fallback');
   }
@@ -98,10 +105,10 @@ export function createAIPresence(root = document) {
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
       gl.uniform1i(gl.getUniformLocation(program,'art'),0);
-      Object.assign(s,{gl,program,buffer,texture,uniforms:Object.fromEntries(['time','personality','activity','rest','attention'].map(n=>[n,gl.getUniformLocation(program,n)]))});
+      Object.assign(s,{gl,program,buffer,texture,uniforms:Object.fromEntries(['time','ambientTime','personality','activity','rest','attention'].map(n=>[n,gl.getUniformLocation(program,n)]))});
       s.lostHandler=e=>{e.preventDefault();s.lost=true;showPoster(s,true);};
       canvas.addEventListener('webglcontextlost',s.lostHandler);
-      // A lost GPU context retains the same approved artwork as a static image.
+      // A lost GPU context keeps the approved artwork with a gentle CSS fallback.
     }catch{showPoster(s,true);}
     return s;
   });
@@ -123,7 +130,7 @@ export function createAIPresence(root = document) {
     for(const key of stateNames)weights[key]=approach(weights[key],key===state?1:0,state==='idle'||state==='error'?5:14,dt);
     // Integrate tempo. Multiplying an elapsed clock by a new speed would jump the flow.
     clock+=dt*(.22*weights.idle+.42*weights.connecting+.48*weights.listening+.86*weights.thinking+.73*weights.speaking+.12*weights.error);
-    idleClock+=dt*.22;
+    idleClock+=dt*.22;ambientClock+=dt;
     const energy=outputLevel*weights.speaking+inputLevel*weights.listening;
     let drewSurface=false;
     for(const s of surfaces){
@@ -146,6 +153,7 @@ export function createAIPresence(root = document) {
         gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);s.textureName=name;
       }
       gl.uniform1f(s.uniforms.time,motion.matches?0:current?clock:idleClock);
+      gl.uniform1f(s.uniforms.ambientTime,motion.matches?0:ambientClock);
       gl.uniform1f(s.uniforms.personality,profiles[name]??0);
       gl.uniform1f(s.uniforms.activity,motion.matches?0:current?energy:0);
       gl.uniform1f(s.uniforms.rest,current?weights.error:0);
@@ -184,7 +192,7 @@ export function createAIPresence(root = document) {
     sources.clear();analysers.clear();inputLevel=outputLevel=0;
     const old=context;context=null;old?.close().catch(()=>{});setState('idle');
   }
-  const visibility=()=>{if(document.hidden){cancelAnimationFrame(raf);raf=0;last=0;}else refresh();};
+  const visibility=()=>{for(const s of surfaces)if(s.poster)s.poster.style.animationPlayState=document.hidden?'paused':'running';if(document.hidden){cancelAnimationFrame(raf);raf=0;last=0;}else refresh();};
   const changed=()=>{cancelAnimationFrame(raf);raf=0;last=0;refresh();};
   document.addEventListener('visibilitychange',visibility);motion.addEventListener('change',changed);refresh();
   return {get ready(){return ensureArtwork(profile);},setProfile,setState,attachAudio,detachAudio,refresh,destroy(){

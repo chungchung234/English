@@ -30,6 +30,25 @@ try{
  });
  assert.deepEqual(result,{fallback:false,distinct:3,reducedStatic:true,resumed:true,closed:true,allClosed:true,tracksRetained:true});
  console.log('PASS: three shaders render distinctly; reduced motion stays still; real audio analysers resume, reconnect, and release contexts without stopping call tracks.');
+ const idlePage=await browser.newPage({viewport:{width:390,height:844}});
+ await idlePage.goto('http://127.0.0.1:4193');
+ const idle=await idlePage.evaluate(async()=>{
+  const {createAIPresence}=await import('/ai-presence.js');document.body.replaceChildren();
+  const root=document.createElement('section'),canvas=document.createElement('canvas');canvas.dataset.aiProfile='current';canvas.width=canvas.height=240;
+  const original=canvas.getContext.bind(canvas);canvas.getContext=(kind,options)=>original(kind,{...options,preserveDrawingBuffer:true});root.append(canvas);document.body.append(root);
+  const presence=createAIPresence(root),results=[];
+  const pixels=()=>{const gl=canvas.getContext('webgl'),data=new Uint8Array(canvas.width*canvas.height*4);gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,data);return data;};
+  for(const name of ['alex','mia','juno']){
+   presence.setProfile(name);await presence.ready;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   const before=pixels();await new Promise(resolve=>setTimeout(resolve,1300));const after=pixels();
+   let alpha=0;for(let i=3;i<before.length;i+=4)alpha+=Math.abs(before[i]-after[i]);
+   results.push({name,alphaMean:alpha/(before.length/4)});
+  }
+  presence.destroy();return results;
+ });
+ assert(idle.every(result=>result.alphaMean>.05),'every idle character must gently move its contour without an audio stream');
+ console.log('PASS: all three idle characters gently breathe and drift without audio.');
+ await idlePage.close();
  const audioPage=await browser.newPage({viewport:{width:640,height:600}});
  await audioPage.goto('http://127.0.0.1:4193');
  const reactive=await audioPage.evaluate(async()=>{
@@ -46,5 +65,5 @@ try{
  console.log('PASS: a real generated audio track visibly modulates the approved artwork; speech state alone does not fake an audio signal.');
  const fallback=await browser.newPage();await fallback.goto('http://127.0.0.1:4193');
  assert(await fallback.evaluate(async()=>{const {createAIPresence}=await import('/ai-presence.js');const root=document.createElement('div'),c=document.createElement('canvas');c.dataset.aiProfile='mia';c.getContext=()=>null;root.append(c);const v=createAIPresence(root);const works=c.classList.contains('ai-presence-fallback');v.destroy();return works;}));
- console.log('PASS: missing WebGL has a static fallback.');
+ console.log('PASS: missing WebGL keeps the same-artwork fallback.');
 }finally{await browser.close();server.kill('SIGTERM');}

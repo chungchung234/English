@@ -34,6 +34,19 @@ button:active:not(:disabled){transform:scale(.975)}
 [hidden]{display:none!important}
 .app-shell{width:100%;max-width:460px;min-height:100svh;margin:0 auto;padding:env(safe-area-inset-top) 22px 0;background:var(--canvas)}
 .setup-panel{padding:54px 0 30px}
+.auth-transition{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;width:min(100%,460px);min-height:100svh;margin:auto;padding:32px 22px 112px;background:var(--canvas);text-align:center;pointer-events:none}
+.auth-transition-content{display:flex;flex-direction:column;align-items:center;width:100%}
+.auth-transition-brand{position:relative;isolation:isolate;display:grid;place-items:center;width:240px;height:100px}
+.auth-transition-brand:before{content:"";position:absolute;z-index:-1;inset:0;border-radius:50%;background:radial-gradient(ellipse at 30% 55%,rgba(104,131,255,.22),transparent 65%),radial-gradient(ellipse at 70% 45%,rgba(151,222,255,.26),transparent 65%);filter:blur(20px)}
+.auth-transition-logo{mix-blend-mode:multiply;display:block;width:144px;height:auto;max-height:52px;object-fit:contain}
+.auth-transition h1{margin:23px 0 24px;color:var(--ink);font-size:22px;font-weight:620;line-height:1.45;letter-spacing:-.7px}
+.auth-transition-status{display:inline-flex;min-height:44px;align-items:center;justify-content:center;gap:12px;margin:0;padding:11px 20px;border-radius:25px;color:var(--secondary);font-size:13px;line-height:1.5}
+.auth-transition-dots{display:flex;height:14px;align-items:center;gap:4px;color:var(--brand)}
+.auth-transition-dots i{width:4px;height:10px;border-radius:4px;background:currentColor;animation:auth-breathe 1.6s ease-in-out infinite}
+.auth-transition-dots i:nth-child(2){animation-delay:.16s}.auth-transition-dots i:nth-child(3){animation-delay:.32s}
+.auth-transition-caption{position:absolute;right:22px;bottom:max(36px,env(safe-area-inset-bottom));left:22px;margin:0;color:var(--secondary);font-size:12px;line-height:1.6;letter-spacing:.1px}
+@keyframes auth-breathe{0%,100%{transform:scaleY(.45);opacity:.45}50%{transform:scaleY(1);opacity:1}}
+
 .setup-brand-logo{display:block;width:136px;height:auto;max-height:42px;margin:0 0 46px;object-fit:contain;object-position:left center}
 .setup-panel h1{margin:0 0 18px;font-size:34px;line-height:1.3;letter-spacing:-1.2px;font-weight:680}
 .login-intro{margin:0 0 35px;color:var(--secondary);font-size:15px;line-height:1.8}

@@ -10,7 +10,9 @@ const outbox = createOutbox();
 const presence = createAIPresence();
 const config = globalThis.LOOP_PUBLIC_CONFIG ? validatePublicConfig(globalThis.LOOP_PUBLIC_CONFIG.url,globalThis.LOOP_PUBLIC_CONFIG.key) : null;
 const authSession=config?createAuthSession(config):null;
-let readyEpoch=0,providersLoaded=false;
+const authTransitionLogo=$('setup').querySelector('.setup-brand-logo').cloneNode();
+authTransitionLogo.className='auth-transition-logo';$('auth-transition-brand').append(authTransitionLogo);
+let readyEpoch=0,providersLoaded=false,authVisualEpoch=0,authTransitionLeaving=false,authVisualAnimations=[];
 let companionSlideAnimations=[],companionDrag=null;
 const companionMotion=matchMedia('(prefers-reduced-motion: reduce)');
 let auth=null,loginReady=false,socialBusy=false,providers={google:false,kakao:false};
@@ -692,9 +694,30 @@ async function startSocialLogin(provider,link=false){
   try{const url=await authSession.begin(provider,{link});window.location.assign(url);}
   catch{socialBusy=false;renderAuthControls();notice('로그인 연결을 시작하지 못했어요. 잠시 뒤 다시 선택해 주세요.');}
 }
+function clearAuthAnimations(){
+  authVisualEpoch++;for(const animation of authVisualAnimations)animation.cancel();authVisualAnimations=[];
+}
+function hideAuthTransition(){
+  clearAuthAnimations();authTransitionLeaving=false;$('auth-transition').hidden=true;
+}
+function showAuthTransition(){
+  const panel=$('auth-transition');if(!panel.hidden&&!authTransitionLeaving)return;
+  clearAuthAnimations();authTransitionLeaving=false;$('setup').hidden=true;panel.hidden=false;
+  if(!companionMotion.matches)authVisualAnimations=[panel.querySelector('.auth-transition-content').animate([{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'translateY(0)'}],{duration:180,easing:'cubic-bezier(.22,.68,.16,1)'})];
+}
+function revealWorkspace(){
+  const panel=$('auth-transition'),workspace=$('workspace');
+  clearAuthAnimations();$('setup').hidden=true;workspace.hidden=false;
+  if(panel.hidden||companionMotion.matches){hideAuthTransition();return;}
+  authTransitionLeaving=true;const epoch=authVisualEpoch;
+  const options={duration:180,easing:'cubic-bezier(.22,.68,.16,1)',fill:'forwards'};
+  authVisualAnimations=[panel.animate([{opacity:1},{opacity:0}],options),workspace.animate([{opacity:0},{opacity:1}],options)];
+  Promise.allSettled(authVisualAnimations.map(animation=>animation.finished)).then(()=>{if(epoch===authVisualEpoch)hideAuthTransition();});
+}
+companionMotion.addEventListener('change',()=>{if(companionMotion.matches){if(authTransitionLeaving)hideAuthTransition();else clearAuthAnimations();}});
 function resetSignedOutUI(){
   stopCompanionSlide();
-  readyEpoch++;$('auth-transition').hidden=true;
+  readyEpoch++;hideAuthTransition();
   learning.reset();auth=null;scope=null;historyEpoch++;memoryEpoch++;selectedReviewSessionId=null;
   weeklyCompanions.clear();weeklyRequest=null;renderWeeklyAction();
   closeDialog('memory-dialog');closeDialog('account-dialog');closeDialog('call-detail-dialog');
@@ -712,14 +735,14 @@ async function ready(){
   $('login-help').hidden=false;$('use-code').hidden=false;
   if((providersLoaded&&!providers.google&&!providers.kakao)||!$('verify-form').hidden)$('email-login').open=true;
   renderAuthControls();
-  if(!auth){$('auth-transition').hidden=true;$('setup').hidden=false;setStatus('로그인하면 기록이 자동 저장됩니다');return;}
+  if(!auth){hideAuthTransition();$('setup').hidden=false;setStatus('로그인하면 기록이 자동 저장됩니다');return;}
   scope=null;weeklyCompanions.clear();weeklyRequest=null;renderWeeklyAction();closeDialog('call-detail-dialog');
-  if($('workspace').hidden){$('setup').hidden=true;$('auth-transition').hidden=false;}
+  if($('workspace').hidden)showAuthTransition();
   let user,data;
   try{[user,data]=await Promise.all([api('/auth/v1/user'),edge('config')]);}
   catch(error){
     if(epoch!==readyEpoch)return;
-    $('auth-transition').hidden=true;$('setup').hidden=false;$('auth-reset').hidden=false;
+    hideAuthTransition();$('setup').hidden=false;$('auth-reset').hidden=false;
     if(error.code==='ACCOUNT_NOT_ALLOWED'){$('auth-reset').hidden=false;throw Error('승인된 이메일 계정만 이용할 수 있습니다. 이메일이 다른 계정은 기존 계정으로 로그인한 뒤 내 계정에서 연결하세요.');}
     throw error;
   }
@@ -728,7 +751,7 @@ async function ready(){
   scope=config.url+'|'+user.id;
   renderAuthControls();$('auth-reset').hidden=true;
   const savedCompanion=localStorage.getItem(companionStorageKey());companionId=Object.hasOwn(companions,savedCompanion)?savedCompanion:'alex';updateCompanion();setView('contacts');
-  $('auth-transition').hidden=true;$('setup').hidden=true;$('workspace').hidden=false;
+  revealWorkspace();
   $('models').textContent=`음성 ${data.models.voice} · 교정 ${data.models.coach} · 분석 ${data.models.analysis}`;
   await updatePending();try{await sync();}catch(e){notice('미전송 기록이 있습니다: '+e.message);}
   await loadHistory();await loadMemory();await learning.load();await loadPlan();await updatePending();
@@ -803,7 +826,7 @@ updateCompanion();setView('contacts');
 async function initializeLogin(){
   if(!config){await ready();return;}
   const providersLoading=loadAuthProviders();let callbackMessage='';
-  if(new URL(location.href).searchParams.has('code')){$('setup').hidden=true;$('auth-transition').hidden=false;}
+  if(new URL(location.href).searchParams.has('code'))showAuthTransition();
   try{const result=await authSession.completeRedirect();auth=result.session;if(result.linked)callbackMessage='계정을 연결했어요. 다음에는 연결한 계정으로 로그인할 수 있어요.';}
   catch(error){auth=await authSession.getSession().catch(()=>null);callbackMessage=error instanceof LoginFlowError?error.message:'로그인을 완료하지 못했어요. 다시 선택해 주세요.';}
   authSession.onChange((event,session)=>{
@@ -815,6 +838,6 @@ async function initializeLogin(){
   });
   loginReady=true;await ready();if(callbackMessage)notice(callbackMessage);await providersLoading;
 }
-initializeLogin().catch(error=>{loginReady=true;$('auth-transition').hidden=true;if($('workspace').hidden)$('setup').hidden=false;renderAuthControls();notice('연결 확인 필요: '+error.message);});
+initializeLogin().catch(error=>{loginReady=true;hideAuthTransition();if($('workspace').hidden)$('setup').hidden=false;renderAuthControls();notice('연결 확인 필요: '+error.message);});
 
 document.querySelector('.brand').addEventListener('click',e=>{e.preventDefault();if(auth)setView('contacts');});

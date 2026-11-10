@@ -26,8 +26,13 @@
 <p class="login-retention">한 번 로그인하면 이 브라우저에서 유지돼요.</p>
 <button class="quiet-button" data-open="privacy-dialog">저장·개인정보 안내</button>
 </section>
-<section id="auth-transition" class="setup-panel auth-transition" aria-busy="true" hidden>
-<h1>로그인 확인 중</h1><p class="secondary-copy" role="status">확인이 끝나면 바로 이동해요.</p>
+<section id="auth-transition" class="auth-transition" aria-labelledby="auth-transition-title" aria-busy="true" hidden>
+<div class="auth-transition-content">
+<div id="auth-transition-brand" class="auth-transition-brand"></div>
+<h1 id="auth-transition-title">대화를 준비하고 있어요</h1>
+<p class="auth-transition-status glass-surface" role="status"><span class="auth-transition-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>로그인 확인 중</span></p>
+</div>
+<p class="auth-transition-caption">영어로 나누는 가벼운 일상.</p>
 </section>
 <section id="workspace" hidden>
 <header class="app-header">

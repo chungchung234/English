@@ -64,11 +64,17 @@ export async function testSocialLogin(browser,base){
   assert.equal(await page.locator('#setup').isVisible(),false,'a recovered session leaves login immediately');
   assert.equal(await page.locator('#workspace').isVisible(),false,'approval is still required before showing the app');
   assert.equal(delayed.state.history,0,'no private reads while approval is pending');
+  await page.evaluate(()=>{const workspace=document.querySelector('#workspace'),panel=document.querySelector('#auth-transition');new MutationObserver(()=>{if(!workspace.hidden)window.authRevealProbe={fading:panel.getAnimations().some(animation=>animation.playState==='running'),blocksInput:getComputedStyle(panel).pointerEvents!=='none'};}).observe(workspace,{attributes:true,attributeFilter:['hidden']});});
   config.resolve();user.resolve();
   await page.locator('#workspace').waitFor({state:'visible'});
+  assert.equal(await page.locator('#auth-transition').evaluate(node=>getComputedStyle(node).pointerEvents),'none','the outgoing transition must not block home input');
+  await page.locator('#auth-transition').waitFor({state:'hidden'});
   assert.equal(await page.locator('#auth-transition').isVisible(),false);
   assert.equal(await page.locator('#setup').isVisible(),false,'slow provider settings must not block the authenticated screen');
-  settings.resolve();assert.deepEqual(delayed.state.errors,[]);
+  assert.deepEqual(await page.evaluate(()=>window.authRevealProbe),{fading:true,blocksInput:false},'home becomes active while the old screen crossfades without an input-blocking delay');
+  settings.resolve();await page.emulateMedia({reducedMotion:'reduce'});await page.reload();await page.locator('#workspace').waitFor({state:'visible'});
+  assert.equal(await page.locator('#auth-transition').isVisible(),false);assert.equal(await page.locator('#workspace').evaluate(node=>node.getAnimations().length),0,'reduced motion enters without a crossfade');
+  assert.deepEqual(delayed.state.errors,[]);
   console.log('PASS: slow provider settings do not block entry; user/approval checks run concurrently with a visible transition and no private reads before approval.');
  }finally{settings.resolve();user.resolve();config.resolve();await delayed.context.close();}
 

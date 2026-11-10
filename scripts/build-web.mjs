@@ -11,14 +11,17 @@ const json=JSON.stringify(config).replaceAll('<','\\u003c');
 const script=`globalThis.LOOP_PUBLIC_CONFIG=${json};\n${await bundleWeb({minify:true})}`;
 const style=await read('web/style.css');
 const hash=text=>createHash('sha256').update(text).digest('base64');
+const scriptAsset=`assets/app.${createHash('sha256').update(script).digest('hex').slice(0,12)}.js`;
 const policy=`default-src 'self'; script-src 'sha256-${hash(script)}'; style-src 'sha256-${hash(style)}'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; media-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'`;
 // Callback replacements preserve dollar sequences in minified code and its CSP hash.
 let html=(await read('web/index.html')).replace(/<meta http-equiv="Content-Security-Policy"[^>]+>/,`<meta http-equiv="Content-Security-Policy" content="${policy}">`)
 .replace('<link rel="stylesheet" href="style.css">',()=>`<style>${style}</style>`)
-.replace('<script src="public-config.js"></script><script type="module" src="app.js"></script>',()=>`<script type="module">${script}</script>`);
+.replace('<script src="public-config.js"></script><script type="module" src="app.js"></script>',()=>`<script type="module" src="${scriptAsset}" integrity="sha256-${hash(script)}" crossorigin="anonymous"></script>`);
 await mkdir(new URL('dist/assets/',root),{recursive:true});
+await writeFile(new URL('dist/'+scriptAsset,root),script);
 const assetPaths=[...new Set([...html.matchAll(/src="(assets\/[^"]+)"/g)].map(match=>match[1]))];
 for(const asset of assetPaths){
+ if(asset===scriptAsset)continue;
  const ext=asset.split('.').pop();const type=({svg:'image/svg+xml',png:'image/png',webp:'image/webp'})[ext];
  if(!type)throw Error('Unsupported image type');
  const data=await readFile(new URL('web/'+asset,root));

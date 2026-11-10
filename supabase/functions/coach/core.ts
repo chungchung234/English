@@ -1,6 +1,6 @@
 // Pure validation and evidence handling; also tested with Node's TypeScript support.
 export class AppError extends Error {
-  constructor(public status: number, public code: string, message: string) { super(message); }
+  constructor(public status: number, public code: string, message: string, public metadata: { retry_at?: string } = {}) { super(message); }
 }
 // Behavioral criteria and source limitations: docs/persona-research.md.
 export const CONVERSATION_GUIDELINES = `Maintain your stated conversational style consistently without stereotyping the learner.
@@ -83,6 +83,9 @@ export function validateAnalysis(value: unknown, events: TranscriptEvent[], kind
       if (key === 'practice' && !text(item.expression)) return failEvidence();
       if (key === 'corrections') {
         if (!text(item.original) || !text(item.improved) || !text(item.reason)) return failEvidence();
+        // Older saved reviews had no category; never promote those to mistakes.
+        if (item.category !== undefined && item.category !== 'error' && item.category !== 'alternative') return failEvidence();
+        if (item.category === undefined) item.category = 'alternative';
         if (!item.evidence_ids.some(id => sources.get(id)!.text.includes(item.original as string))) return failEvidence();
       }
     }
@@ -122,7 +125,7 @@ export function analysisSchema(kind: 'session' | 'weekly') {
   const properties: Record<string, unknown> = {
     summary: string,
     strengths: { type: 'array', maxItems: 6, items: itemSchema({ text: string }) },
-    corrections: { type: 'array', maxItems: 8, items: itemSchema({ original: string, improved: string, reason: string }) },
+    corrections: { type: 'array', maxItems: 8, items: itemSchema({ original: string, improved: string, reason: string, category: { type: 'string', enum: ['error', 'alternative'] } }) },
     practice: { type: 'array', maxItems: 8, items: itemSchema({ expression: string }) },
     next_scenario: string,
     memory_facts: { type: 'array', maxItems: 6, items: itemSchema({ key: { type: 'string', enum: ['name', 'occupation', 'location', 'goal', 'interest', 'preference'] }, value: { type: 'string', maxLength: 240 }, quote: { type: 'string', maxLength: 500 } }) },

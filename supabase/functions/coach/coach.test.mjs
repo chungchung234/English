@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { embeddingVector, memoryManagement, allowedOrigins, validateAnalysis, validateSdp, boundedJson, analysisChunks, mergeAnalyses, LIMITS, sourceIds, transcriptFingerprint } from './core.ts';
+import { embeddingVector, memoryManagement, allowedOrigins, validateAnalysis, validateSdp, boundedJson, analysisChunks, mergeAnalyses, LIMITS, sourceIds, transcriptFingerprint, analysisSchema } from './core.ts';
 import { handler } from './index.ts';
 
 const userId = '11111111-1111-4111-8111-111111111111';
 const sessionId = '22222222-2222-4222-8222-222222222222';
 const eventId = '33333333-3333-4333-8333-333333333333';
 const event = { id: eventId, session_id: sessionId, speaker: 'user', text: 'Yesterday I go to the market.', timestamp: '2026-11-08T12:00:00Z' };
-const content = () => ({ summary: 'Practiced past events.', strengths: [{ text: 'Explains an everyday activity.', evidence_ids: [eventId] }], corrections: [{ original: 'I go', improved: 'I went', reason: 'Use the past tense for yesterday.', evidence_ids: [eventId] }], practice: [{ expression: 'Yesterday I went to the market.', evidence_ids: [eventId] }], next_scenario: 'Describe your weekend.' });
+const content = () => ({ summary: 'Practiced past events.', strengths: [{ text: 'Explains an everyday activity.', evidence_ids: [eventId] }], corrections: [{ original: 'I go', improved: 'I went', reason: 'Use the past tense for yesterday.', category: 'error', evidence_ids: [eventId] }], practice: [{ expression: 'Yesterday I went to the market.', evidence_ids: [eventId] }], next_scenario: 'Describe your weekend.' });
 const sdp = 'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n';
 const authUser = { id: userId, email: 'Owner@Example.com', email_confirmed_at: '2026-01-01T00:00:00Z' };
 const config = { ACCESS_MODE: 'invite', ALLOWED_EMAILS: ' owner@example.com ', ALLOWED_ORIGINS: 'https://example.com,http://localhost:3000', SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'test-service', OPENAI_API_KEY: 'test-openai' };
@@ -100,6 +100,7 @@ test('unreserved voice job never reaches OpenAI', async () => {
     if (path.includes('api.openai.com')) { openai++; throw new Error('Must not call'); }
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse();
     return response({ reserved: false, state: 'running', reason: 'in_progress' });
@@ -122,6 +123,10 @@ test('invalid generated evidence fails the reserved run and never stores analysi
       const payload = JSON.parse(options.body); assert.equal(payload.text.format.type, 'json_schema'); assert.equal(payload.store, false);
       assert.ok(payload.input[0].content[0].text.includes('in Korean'));
       assert.ok(payload.input[0].content[0].text.includes('in English'));
+      assert.ok(payload.input[0].content[0].text.includes('communication impact, repetition in this sample'));
+      assert.ok(payload.input[0].content[0].text.includes('Do not infer the learner'));
+      assert.ok(payload.input[0].content[0].text.includes('must never be presented as an error'));
+      assert.ok(payload.text.format.schema.properties.corrections.items.required.includes('category'));
       return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(bad) }] }] });
     }
     if (path.includes('/fail_run')) { failed = true; return response(true); }
@@ -189,6 +194,7 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse();
     if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
@@ -220,6 +226,7 @@ test('memory retrieves old relevant corrections and practice through all-history
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) {
       search = JSON.parse(options.body);
@@ -284,6 +291,7 @@ test('upstream failures never expose provider response text or credentials', asy
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse();
     if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
@@ -342,7 +350,8 @@ test('each stored companion controls its voice, persona, and isolated retrieved 
           assert.ok(new URL(path).searchParams.get('select').includes('companion_id'));
           return response([{ id: sessionId, user_id: userId, companion_id: id, status: 'active', scenario: 'Travel' }]);
         }
-        if(path.includes('/learning_context')){assert.equal(JSON.parse(options.body).p_companion_id,id);return response([{expression:name+' self-reported phrase',self_reported:true}]);}
+        if(path.includes('/learning_voice_context')){assert.equal(JSON.parse(options.body).p_companion_id,id);return response({focus:[{expression:name+' approved focus',evidence_ids:[eventId],source_session_id:eventId}],suppress_memory:false});}
+    if(path.includes('/learning_context')){assert.equal(JSON.parse(options.body).p_companion_id,id);return response([{expression:name+' self-reported phrase',self_reported:true}]);}
     if (path.includes('/memory_context')) {
           assert.equal(JSON.parse(options.body).p_companion_id, id); searched = true;
           return memoryResponse([{ id: eventId, session_id: eventId, content: { ...content(), summary: `${name} remembers practicing travel.`, practice: [{ expression: `${name} practice phrase`, evidence_ids: [eventId] }] }, source_event_ids: [eventId], created_at: '2026-01-01T00:00:00Z' }]);
@@ -355,8 +364,9 @@ test('each stored companion controls its voice, persona, and isolated retrieved 
           assert.ok(session.instructions.includes('no chosen topic or roleplay setup is required'));
           assert.equal(session.instructions.includes('welcoming the learner into the scenario'), false);
           assert.ok(session.instructions.includes(`${name} practice phrase`));
-          assert.ok(session.instructions.includes(`${name} self-reported phrase`));
-          assert.ok(session.instructions.includes('never mastery'));
+          assert.ok(session.instructions.includes(`${name} approved focus`));
+          assert.equal(session.instructions.includes(`${name} self-reported phrase`), false);
+          assert.ok(session.instructions.includes('evidence of reuse or mastery'));
           for(const [,other] of profiles)if(other!==name)assert.equal(session.instructions.includes(other+' self-reported phrase'),false);
           for (const [, other] of profiles) if (other !== name) assert.equal(session.instructions.includes(`${other} practice phrase`), false);
           return new Response(sdp);
@@ -381,7 +391,8 @@ test('memory derives the stored companion and rejects an explicit mismatch befor
     if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'juno', scenario: 'Travel', status: 'active' }]);
-        if(path.includes('/learning_context'))return response([]);
+        if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) { searched = true; assert.equal(JSON.parse(options.body).p_companion_id, 'juno'); return memoryResponse(); }
         throw new Error('Unexpected request');
       };
@@ -550,6 +561,7 @@ test('checkpoint uses server history, chains prior context and preserves compani
     if(path.includes('/reserve_run')){assert.equal(body.p_kind,'checkpoint');assert.match(body.p_request_key,/^checkpoint:2026-11-10-v2:/);return response({reserved:true,job_id:sessionId,lease_token:eventId});}
     if(path.includes('/responses')){assert.equal(JSON.parse(body.input[1].content[0].text).transcript_events[0].text,event.text);return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(content())}]}]});}
     if(path.includes('/complete_run')){persisted=body.p_result;return response({});}
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context'))return memoryResponse();
     throw Error('Unexpected '+path);
@@ -574,6 +586,7 @@ test('nonempty retrieval caches query embeddings by companion, revision, and mod
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) {
       assert.equal(body.p_user_id, userId);
@@ -616,7 +629,8 @@ test('empty retrieval spends nothing; provider errors, malformed vectors and quo
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
-        if(path.includes('/learning_context'))return response([]);
+        if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse(mode === 'no-history' ? [] : [memoryRow], [{ key: 'name', value: 'A' }], 1);
         if (path.includes('/reserve_run')) { assert.ok(!['empty', 'no-history'].includes(mode)); return response(mode === 'quota' ? { reserved: false, reason: 'budget_exceeded' } : { reserved: true, job_id: sessionId, lease_token: eventId }); }
         if (path.includes('/embeddings')) { calls++; return mode === 'provider' ? new Response('private provider secret', { status: 500 }) : mode === 'json' ? new Response('not json') : response({ data: mode === 'null-row' ? [null] : [{ index: 0, embedding: vector(0) }] }); }
@@ -634,6 +648,7 @@ test('memory database failures fail closed and never disclose raw database text'
   const original = globalThis.fetch; let calls = 0;
   globalThis.fetch = async url => {
     if (String(url).includes('/auth/')) return response(authUser);
+    if (String(url).includes('/learning_voice_context')) return response({ focus: [], suppress_memory: false });
     if (String(url).includes('/memory_context')) return new Response('private database text', { status: 500 });
     calls++; throw Error('Unexpected model call');
   };
@@ -736,6 +751,7 @@ test('checkpoint ignores previous revisions, routes independently, and voice fac
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
     if (path.includes('/transcript_events?')) return response([event]);
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse([], [{ key: 'name', value: '', forgotten: true, quote: 'OLD PRIVATE NAME', evidence_ids: [eventId] }], 8);
     if (path.includes('/analysis_jobs?')) {
@@ -773,7 +789,8 @@ test('checkpoint revision races fail closed for newly generated, cached and no-n
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
         if (path.includes('/transcript_events?')) return response([event]);
-        if(path.includes('/learning_context'))return response([]);
+        if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse([], [], ++reads === 1 ? 1 : 2);
         if (path.includes('/analysis_jobs?')) return response(mode === 'covered' ? [{ result: cached }] : []);
         if (path.includes('/reserve_run')) return response(mode === 'cached' ? { reserved: false, state: 'completed', result: cached } : { reserved: true, job_id: sessionId, lease_token: eventId });
@@ -799,7 +816,8 @@ test('voice revision races never return stale SDP or persist a successful connec
     if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
-        if(path.includes('/learning_context'))return response([]);
+        if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse([], [], ++reads >= changedAt ? 2 : 1);
         if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
         if (path.includes('/realtime/calls')) { provider++; return new Response(sdp); }
@@ -822,6 +840,7 @@ test('model configuration exposes separate roles and long model IDs keep cache k
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse([memoryRow]);
     if (path.includes('/reserve_run')) { assert.ok(body.p_request_key.length <= 200); requested.push(body.p_kind); return response({ reserved: true, job_id: sessionId, lease_token: eventId }); }
@@ -879,4 +898,222 @@ test('review cache varies by policy, spends only on misses, and records incomple
     assert.equal((await handler(request('review',{sessionId}))).status,429);
     assert.notEqual(keys[2],keys[3]);
   } finally { globalThis.fetch=original;delete config.COACH_REASONING;delete config.COACH_MODEL; }
+});
+
+test('new correction schemas require categories and legacy reviews default to alternatives', () => {
+  const schema = analysisSchema('session').properties.corrections.items;
+  assert.ok(schema.required.includes('category'));
+  assert.deepEqual(schema.properties.category.enum, ['error', 'alternative']);
+  assert.equal(schema.additionalProperties, false);
+  const legacy = content(); delete legacy.corrections[0].category;
+  assert.equal(validateAnalysis(legacy, [event], 'session').corrections[0].category, 'alternative');
+  for (const category of [null, 'mistake', true, 1, {}]) {
+    const invalid = content(); invalid.corrections[0].category = category;
+    assert.throws(() => validateAnalysis(invalid, [event], 'session'));
+  }
+});
+
+test('voice and checkpoint omission accept only booleans and reject client context overrides', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const endpoint of ['voice', 'checkpoint']) for (const extra of [{ omitLearningContext: 'true' }, { omitLearningContext: null }, { omitLearningContext: 1 }, { focus: [] }, { memory: [] }]) {
+      let calls = 0;
+      globalThis.fetch = async url => { calls++; assert.ok(String(url).includes('/auth/')); return response(authUser); };
+      assert.equal((await handler(request(endpoint, { sessionId, ...(endpoint === 'voice' ? { sdp } : {}), ...extra }))).status, 400);
+      assert.equal(calls, 1);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('local exclusions omit every history and fact lookup in voice and continued checkpoints', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const endpoint of ['voice', 'checkpoint']) {
+      let instructions, completed, generated = 0;
+      globalThis.fetch = async (url, options) => {
+        const path = String(url), body = typeof options?.body === 'string' ? JSON.parse(options.body) : null;
+        if (path.includes('/auth/')) return response(authUser);
+        if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', status: 'active', scenario: 'Travel' }]);
+        if (path.includes('/transcript_events?')) return response([event]);
+        if (path.includes('/analysis_jobs?')) {
+          assert.ok(new URL(path).searchParams.get('request_key').includes(':omitted:'));
+          return response([{ result: { revision: 0, model: 'gpt-6-luna', prompt_version: '2026-11-10-v2', covered_ids: [eventId], checkpoint: { summary: 'OLD PRIVATE HISTORY' } } }]);
+        }
+        if (path.includes('/reserve_run')) {
+          assert.equal(body.p_kind, endpoint === 'voice' ? 'voice' : 'checkpoint');
+          if (endpoint === 'checkpoint') assert.ok(body.p_request_key.includes(':omitted:'));
+          return response({ reserved: true, job_id: sessionId, lease_token: eventId });
+        }
+        if (path.includes('/reserve_model_spend')) return response(true);
+        if (path.includes('/record_model_spend')) return response(null);
+        if (path.includes('/responses')) {
+          generated++;
+          const input = JSON.parse(body.input[1].content[0].text);
+          assert.equal(input.context.previous_checkpoint, null);
+          assert.equal(options.body.includes('OLD PRIVATE HISTORY'), false);
+          return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(content()) }] }] });
+        }
+        if (path.includes('/realtime/calls')) {
+          const session = JSON.parse(options.body.get('session'));
+          instructions = session.instructions;
+          assert.equal(session.model, 'gpt-realtime-2.1-mini');
+          assert.equal(session.audio.input.transcription.model, 'gpt-realtime-whisper');
+          return new Response(sdp);
+        }
+        if (path.includes('/complete_run')) { completed = body.p_result; return response(true); }
+        throw new Error('Omitted calls must not read memory, facts, or either learning context RPC');
+      };
+      const result = await handler(request(endpoint, { sessionId, ...(endpoint === 'voice' ? { sdp } : {}), omitLearningContext: true }));
+      assert.equal(result.status, 200);
+      if (endpoint === 'checkpoint') {
+        instructions = (await result.json()).instructions;
+        assert.equal(generated, 1); assert.equal(completed.learning_omitted, true);
+        assert.ok(instructions.includes('Continue the same natural conversation'));
+      } else assert.equal(completed.connected, true);
+      const context = JSON.parse(instructions.split('UNTRUSTED_CONTEXT_JSON:\n')[1]);
+      assert.equal(context.companionId, 'mia');
+      assert.deepEqual(context.memory.memories, []);
+      assert.deepEqual(context.memory.facts, []);
+      assert.deepEqual(context.memory.focus, []);
+      assert.deepEqual(context.memory.practiced, []);
+      assert.equal(instructions.includes('OLD PRIVATE HISTORY'), false);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('server suppression removes historical learning and embedding spend while retaining authoritative fact controls', async () => {
+  const original = globalThis.fetch;
+  const focus = { expression: 'Could you tell me more?', evidence_ids: [eventId], source_session_id: eventId };
+  try {
+    for (const endpoint of ['voice', 'memory']) {
+      let published;
+      globalThis.fetch = async (url, options) => {
+        const path = String(url);
+        if (path.includes('/auth/')) return response(authUser);
+        if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'juno', status: 'active', scenario: 'Travel' }]);
+        if (path.includes('/learning_voice_context')) {
+          assert.deepEqual(JSON.parse(options.body), { p_user_id: userId, p_companion_id: 'juno' });
+          assert.equal(options.headers.Authorization, 'Bearer test-service');
+          return response({ focus: [focus, { ...focus, expression: 'Do not invite this second expression.' }], suppress_memory: true });
+        }
+        if (path.includes('/memory_context')) return memoryResponse([{ ...memoryRow, session_id: eventId, content: { ...content(), summary: 'PRIVATE EXCLUDED HISTORY' } }], [{ key: 'name', value: '', forgotten: true, quote: 'PRIVATE FORGOTTEN NAME' }], 4);
+        if (path.includes('/reserve_run')) { assert.equal(JSON.parse(options.body).p_kind, 'voice'); return response({ reserved: true, job_id: sessionId, lease_token: eventId }); }
+        if (path.includes('/realtime/calls')) {
+          const instructions = JSON.parse(options.body.get('session')).instructions;
+          published = JSON.parse(instructions.split('UNTRUSTED_CONTEXT_JSON:\n')[1]).memory;
+          assert.ok(instructions.includes('one expression once'));
+          assert.ok(instructions.includes('Do not force repetition'));
+          assert.equal(instructions.includes('PRIVATE EXCLUDED HISTORY'), false);
+          assert.equal(instructions.includes('PRIVATE FORGOTTEN NAME'), false);
+          return new Response(sdp);
+        }
+        if (path.includes('/complete_run')) return response(true);
+        throw new Error('Suppressed learning must not retrieve legacy practice or spend on embeddings');
+      };
+      const result = await handler(request(endpoint, endpoint === 'voice' ? { sessionId, sdp, omitLearningContext: false } : { companionId: 'juno', query: 'Travel' }));
+      assert.equal(result.status, 200);
+      if (endpoint === 'memory') published = await result.json();
+      assert.deepEqual(published.memories, []);
+      assert.deepEqual(published.practiced, []);
+      assert.deepEqual(published.focus, [focus]);
+      assert.equal(published.facts[0].forgotten, true);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('failed or malformed service eligibility never falls back to unfiltered history or voice spending', async () => {
+  const original = globalThis.fetch;
+  const focus = { expression: 'Can I try?', evidence_ids: [eventId], source_session_id: sessionId };
+  const invalid = [null, {}, { focus: [], suppress_memory: 'false' }, { focus: [null], suppress_memory: false }, { focus: [{ ...focus, evidence_ids: ['invented'] }], suppress_memory: false }, { focus: [{ ...focus, expression: 'a'.repeat(501) }], suppress_memory: false }, { focus: [{ ...focus, source_session_id: 'other-user' }], suppress_memory: false }, { focus: Array(9).fill(focus), suppress_memory: false }, 'failure'];
+  try {
+    for (const endpoint of ['voice', 'memory', 'checkpoint']) for (const eligibility of invalid) {
+      globalThis.fetch = async url => {
+        const path = String(url);
+        if (path.includes('/auth/')) return response(authUser);
+        if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+        if (path.includes('/learning_voice_context')) return eligibility === 'failure' ? new Response('private database detail', { status: 500 }) : response(eligibility);
+        throw new Error('Unverified eligibility must stop before history or spending');
+      };
+      const result = await handler(request(endpoint, endpoint === 'voice' ? { sessionId, sdp } : endpoint === 'checkpoint' ? { sessionId } : {}));
+      assert.equal(result.status, 503);
+      assert.equal((await result.text()).includes('private database detail'), false);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('canonical exclusion races fail closed even when the separate memory profile revision does not change', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const [endpoint, changedAt, expectedProvider] of [['memory', 2, 0], ['voice', 3, 0], ['voice', 4, 1], ['checkpoint', 3, 1]]) {
+      let reads = 0, provider = 0, completed = false;
+      globalThis.fetch = async (url, options) => {
+        const path = String(url);
+        if (path.includes('/auth/')) return response(authUser);
+        if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', status: 'active', scenario: 'Travel' }]);
+        if (path.includes('/learning_voice_context')) return response({ focus: [], suppress_memory: ++reads >= changedAt });
+        if (path.includes('/memory_context')) return memoryResponse([], [], 1);
+        if (path.includes('/transcript_events?')) return response([event]);
+        if (path.includes('/analysis_jobs?')) return response([]);
+        if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
+        if (path.includes('/reserve_model_spend')) return response(true);
+        if (path.includes('/record_model_spend')) return response(null);
+        if (path.includes('/realtime/calls')) { provider++; return new Response(sdp); }
+        if (path.includes('/responses')) { provider++; return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(content()) }] }] }); }
+        if (path.includes('/complete_run')) { completed = true; return response(true); }
+        if (path.includes('/fail_run')) return response(true);
+        throw new Error('Unexpected request');
+      };
+      const result = await handler(request(endpoint, endpoint === 'voice' ? { sessionId, sdp } : endpoint === 'checkpoint' ? { sessionId } : { companionId: 'mia' }));
+      assert.equal(result.status, 409); assert.equal((await result.json()).error.code, 'MEMORY_CHANGED');
+      assert.equal(provider, expectedProvider); assert.equal(completed, false);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('daily call and model cost budgets expose the safe UTC reset time corresponding to 09:00 KST', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const code of ['BUDGET_EXCEEDED', 'COST_BUDGET_EXCEEDED']) {
+      const before = Date.now();
+      globalThis.fetch = async url => {
+        const path = String(url);
+        if (path.includes('/auth/')) return response(authUser);
+        if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: code === 'BUDGET_EXCEEDED' ? 'active' : 'ended', scenario: 'Travel' }]);
+        if (path.includes('/transcript_events?')) return response([event]);
+        if (path.includes('/reserve_run')) return response(code === 'BUDGET_EXCEEDED' ? { reserved: false, reason: 'budget_exceeded', private: 'test-service' } : { reserved: true, job_id: sessionId, lease_token: eventId });
+        if (path.includes('/reserve_model_spend')) return response(false);
+        if (path.includes('/fail_run')) return response(true);
+        throw new Error('Budget exhausted: no provider spending');
+      };
+      const result = await handler(request(code === 'BUDGET_EXCEEDED' ? 'voice' : 'review', code === 'BUDGET_EXCEEDED' ? { sessionId, sdp, omitLearningContext: true } : { sessionId }));
+      assert.equal(result.status, 429);
+      const body = await result.json(), reset = new Date(body.error.retry_at);
+      assert.equal(body.error.code, code);
+      assert.equal(reset.getUTCHours(), 0); assert.equal(reset.getUTCMinutes(), 0);
+      assert.ok(reset.getTime() > before && reset.getTime() <= Date.now() + 86_400_000);
+      assert.equal(JSON.stringify(body).includes('test-service'), false);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+test('memory uses service-approved focus aliases and conservatively classifies uncategorized history', async () => {
+  const original = globalThis.fetch;
+  const correction = content().corrections[0];
+  globalThis.fetch = async url => {
+    const path = String(url);
+    if (path.includes('/auth/')) return response(authUser);
+    if (path.includes('/learning_voice_context')) return response({ focus: [{ expression: 'One approved expression.', evidence_ids: [eventId], session_id: sessionId }], suppress_memory: false });
+    if (path.includes('/memory_context')) {
+      const legacy = { ...correction }; delete legacy.category;
+      return memoryResponse([{ ...memoryRow, content: { ...content(), corrections: [legacy, { ...correction, category: 'alternative' }, { ...correction, category: 'invalid' }] } }]);
+    }
+    throw new Error('Unexpected request');
+  };
+  try {
+    const result = await handler(request('memory', {}));
+    assert.equal(result.status, 200);
+    const body = await result.json();
+    assert.deepEqual(body.memories[0].corrections.map(item => item.category), ['alternative', 'alternative']);
+    assert.deepEqual(body.focus, [{ expression: 'One approved expression.', evidence_ids: [eventId], source_session_id: sessionId }]);
+  } finally { globalThis.fetch = original; }
 });

@@ -102,7 +102,11 @@ async function main() {
     if (approval === false) {
       stage = 'private access enforcement';
       for (const user of users) {
-        for (const table of ['sessions','transcript_events','analyses','memory_state','memory_fact_overrides','memory_session_exclusions']) {
+        for (const table of [
+          'sessions','transcript_events','analyses','memory_state','memory_fact_overrides','memory_session_exclusions',
+          'learning_state_items','learning_feedback','learning_sources','learning_source_holds','learning_actions',
+          'learning_practice_days','learning_daily','learning_visits','learning_next_plans','learning_events',
+        ]) {
           ensure((await userRequest(user, '/rest/v1/' + table + '?select=*')).length === 0, 'Unapproved account can read data.');
         }
         for (const [endpoint, body] of [
@@ -110,6 +114,14 @@ async function main() {
           ['/rest/v1/rpc/append_events', {p_session_id:randomUUID(),p_events:[]}],
           ['/rest/v1/rpc/finish_session', {p_session_id:randomUUID()}],
           ['/rest/v1/rpc/restore_history', {p_backup:{sessions:[],events:[]}}],
+          ['/rest/v1/rpc/learning_snapshot', {p_companion_id:'alex'}],
+          ['/rest/v1/rpc/learning_recommend_more', {p_companion_id:'alex'}],
+          ['/rest/v1/rpc/learning_action', {p_item_id:randomUUID(),p_expected_revision:1,p_action_id:randomUUID(),p_action:'exclude',p_payload:{}}],
+          ['/rest/v1/rpc/learning_record_event', {p_event_id:randomUUID(),p_name:'call_connected',p_companion_id:'alex',p_session_id:randomUUID(),p_analysis_id:null,p_item_id:null,p_attempt_id:null,p_payload:{}}],
+          ['/rest/v1/rpc/learning_restore', {p_items:[]}],
+          ['/rest/v1/rpc/learning_finish_partial', {p_session_id:randomUUID()}],
+          // This RPC is service-only even when the caller is authenticated.
+          ['/rest/v1/rpc/learning_voice_context', {p_user_id:user.user.id,p_companion_id:'alex'}],
           ['/functions/v1/coach/config', {}],
           ['/functions/v1/coach/memory', {companionId:'alex',query:'Previous conversation'}],
           ['/functions/v1/coach/memory-manage', {companionId:'alex',action:'list'}],
@@ -123,7 +135,7 @@ async function main() {
           ensure(denied.status === 403, 'Unapproved account bypassed an access gate.');
         }
       }
-      pass('Unapproved verified accounts cannot read records or memory controls, create, append, finish, restore, manage/index memories, checkpoint, or access AI. Voice checks require an approved account and were not run.');
+      pass('Unapproved verified accounts cannot read records, canonical learning state or memory controls, invoke learning RPCs or service-only learning voice context, create, append, finish, restore, manage/index memories, checkpoint, or access AI. Voice checks require an approved account and were not run.');
       return;
     }
     await mkdir('test-results', { recursive: true });

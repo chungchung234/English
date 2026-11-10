@@ -11,7 +11,7 @@ export async function testTabUI(browser,base){
  const content={next_scenario:'가벼운 주말 계획 이야기',summary:'친구와 다녀온 카페에 관해 이야기했어요.',scope:{companionId:'alex',session_count:1,user_event_count:1},corrections:[{original:'Yesterday I go to a cafe with my friend.',improved:'Yesterday I went to a cafe with my friend.',reason:'과거의 일이므로 went로 말해요.',evidence_ids:[eid]}],practice:[{expression:'I have been meaning to try that place.',evidence_ids:[eid]}],strengths:[{text:'경험을 구체적으로 이야기했어요.',evidence_ids:[eid]}]};
  const analysis={id:'55555555-5555-4555-8555-555555555555',session_id:sid,kind:'session',content};
  const transcriptText=Array(80).fill(content.corrections[0].original).join('\n');
- const learningItem={id:'66666666-6666-4666-8666-666666666666',analysis_id:analysis.id,session_id:sid,expression:content.corrections[0].improved,original:content.corrections[0].original,reason:'과거형으로 말해요.',state:'unpracticed'};let learningSeeded=false,learningFailure=false;const plans={};
+ const learningItem={id:'66666666-6666-4666-8666-666666666666',analysis_id:analysis.id,session_id:sid,expression:content.corrections[0].improved,original:content.corrections[0].original,reason:'과거형으로 말해요.',state:'unpracticed',status:'active',revision:1,enrolled:true,practice_count:0,companion_id:'alex',category:'error',has_valid_source:true,source_session_id:sid,source_analysis_id:analysis.id,evidence_ids:[eid],sources:[{session_id:sid,analysis_id:analysis.id,valid:true}]};let learningSeeded=false,learningFailure=false;const plans={};
  let mode='populated',weeklyCalls=0,reviewCalls=0,holdWeekly=false,releaseWeekly,weeklyArrived,slowTranscript=false,transcriptStarted,releaseTranscript;
  let holdHistory=false,historyArrived,releaseHistory;
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -39,6 +39,16 @@ export async function testTabUI(browser,base){
    data={analysis:{id:'weekly',kind:'weekly',content:{...content,summary:'최근 7일의 영어 표현을 정리했어요.',scope:{...content.scope,companionId:body.companionId}}}};
   }
   else if(url.pathname.endsWith('/coach/review')){reviewCalls++;data={analysis};}
+  else if(url.pathname.endsWith('/rpc/learning_snapshot')||url.pathname.endsWith('/rpc/learning_recommend_more'))data={items:mode==='populated'&&body.p_companion_id==='alex'?[learningItem]:[],recommended_item_ids:mode==='populated'&&learningItem.status==='active'?[learningItem.id]:[],feedback:mode==='populated'&&body.p_companion_id==='alex'?[{session_id:sid,analysis_id:analysis.id,current:true,job_state:'completed',has_user_speech:true,exposed_at:null}]:[],next_plan:plans[body.p_companion_id]?{id:'77777777-7777-4777-8777-777777777777',item_id:learningItem.id,source_session_id:sid,source_analysis_id:analysis.id,scenario:plans[body.p_companion_id]}:null};
+  else if(url.pathname.endsWith('/rpc/learning_record_event'))data={saved:true};
+  else if(url.pathname.endsWith('/rpc/learning_action')){
+   if(learningFailure)return route.fulfill({status:503,json:{message:'Practice save unavailable'}});
+   learningItem.revision++;
+   if(body.p_action==='practice'){learningItem.status='practiced';learningItem.state='practiced';learningItem.practice_count=1;}
+   if(body.p_action==='defer'){learningItem.status='deferred';learningItem.state='deferred';}
+   if(body.p_action==='prepare_next')plans.alex=content.next_scenario;
+   data={outcome:'applied',item:{...learningItem},...(body.p_action==='prepare_next'?{next_plan:{id:body.p_action_id,item_id:learningItem.id,source_session_id:sid,source_analysis_id:analysis.id,scenario:plans.alex}}:{})};
+  }
   else if(url.pathname.endsWith('/rpc/learning_plan')){if(body.p_scenario)plans[body.p_companion_id]=body.p_scenario;data={scenario:plans[body.p_companion_id]||null};}
   else if(url.pathname.endsWith('/rpc/learning_review')){if(body.p_analysis_id)learningSeeded=true;if(body.p_item_id){if(learningFailure)return route.fulfill({status:503,json:{message:'Practice save unavailable'}});learningItem.state=body.p_state;}data=mode==='populated'&&body.p_companion_id==='alex'&&learningSeeded?[learningItem]:[];}
   else throw Error('Unexpected tab fixture route '+url.pathname);
@@ -75,16 +85,15 @@ export async function testTabUI(browser,base){
   assert.equal(reviewCalls,0,'opening saved feedback never regenerates analysis');
   await page.locator('[data-view="history"]').click();await page.locator('#history .history-open').first().click();await page.locator('.call-feedback').click();
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:'test-results/post-call-feedback.png'});
-  await page.locator('#learning-session summary').click();
-  await page.locator('#learning-session .learning-actions').scrollIntoViewIfNeeded();await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));await page.screenshot({path:'test-results/post-call-practice.png'});await page.setViewportSize({width:320,height:568});
-  await page.getByRole('button',{name:'가리고 말하기',exact:true}).click();assert(!(await page.locator('#learning-session .improved').textContent()).includes('Yesterday'));
-  await page.getByRole('button',{name:'표현 보기',exact:true}).click();
-  learningFailure=true;await page.getByRole('button',{name:'직접 연습함',exact:true}).click();await page.getByText('저장하지 못했어요. 표현을 유지하고 다시 시도해 주세요.').waitFor();assert.equal(learningItem.state,'unpracticed');
-  learningFailure=false;await page.getByRole('button',{name:'나중에 하기',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('나중에 이어서'));
-  await page.reload();await page.locator('#workspace').waitFor({state:'visible'});await page.locator('[data-view="review"]').click();await page.locator('#learning-queue .learning-practice').waitFor();
-  await page.locator('#learning-queue').getByRole('button',{name:'직접 연습함',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('직접 연습한 기록'));
+  await page.locator('#learning-session > details > summary').first().click();
+  await page.locator('#learning-session .learning-actions').first().scrollIntoViewIfNeeded();await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));await page.screenshot({path:'test-results/post-call-practice.png'});await page.setViewportSize({width:320,height:568});
+  await page.locator('#learning-session [data-action="practice"]').click();
+  await page.locator('#learning-session [data-action="toggle-expression"]').click();assert(await page.locator('#learning-session [data-practice-expression]').isHidden());
+  await page.locator('#learning-session [data-action="toggle-expression"]').click();
+  learningFailure=true;await page.locator('#learning-session [data-action="save-practice"]').click();await page.locator('[data-practice-status]').filter({hasText:'기기 보관 확인'}).waitFor();assert.equal(learningItem.status,'active');
+  learningFailure=false;await page.locator('#learning-queue').getByRole('button',{name:'같은 요청 다시 전송',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-practice-status]')?.textContent.includes('서버에 저장'));
   assert.equal(learningItem.state,'practiced');
-  await page.getByRole('button',{name:'다음 통화 준비',exact:true}).click();await page.locator('#contacts-panel').waitFor({state:'visible'});assert.equal(await page.locator('#start-call').isVisible(),true);assert.equal(await page.locator('#live-call').isVisible(),false);assert.equal(plans.alex,content.next_scenario);
+  await page.locator('#learning-session [data-action="prepare-next"]').click();await page.locator('#contacts-panel').waitFor({state:'visible'});assert.equal(await page.locator('#start-call').isVisible(),true);assert.equal(await page.locator('#live-call').isVisible(),false);assert.equal(plans.alex,content.next_scenario);
   await page.reload();await page.locator('#workspace').waitFor({state:'visible'});await page.getByText('준비한 이야기 · '+content.next_scenario,{exact:true}).waitFor();await page.locator('[data-view="review"]').click();
   await page.screenshot({path:'test-results/post-call-practiced.png'});
 

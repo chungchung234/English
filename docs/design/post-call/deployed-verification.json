@@ -17,5 +17,8 @@
     "learning_plan": 401
   },
   "workflow_build": "success",
-  "post_deploy_acceptance": "pending: CI browser and synthetic speech environment preparation"
+  "post_deploy_acceptance": "success: live private-access isolation checks passed; approved-user voice was not run",
+  "workflow_status": "completed",
+  "workflow_conclusion": "success",
+  "public_rechecked_at_utc": "2026-11-10T06:48:42.856928+00:00"
 }

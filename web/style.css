@@ -260,3 +260,16 @@ dialog::backdrop{background:rgba(8,23,68,.24)}
   body[data-call-state=live] .transcript-details summary{background:#10213e}
 }
 @supports not (backdrop-filter:blur(1px)){.glass-surface,.icon-button,.glass-dock,.glass-button,.file-button,.glass-control,dialog{background:#f3f5fc}}
+
+.learning-home{max-width:100%;font-size:13px;overflow-wrap:anywhere;text-align:center;margin:0 0 12px}
+.learning-practice{padding:18px 0;border-bottom:1px solid var(--line);margin-bottom:24px}
+.learning-practice h4{font-size:16px;margin:0 0 16px}
+.learning-practice .improved{color:var(--brand-strong);font-weight:600}
+.learning-practice .original{color:var(--secondary)}
+.learning-actions{display:flex;flex-wrap:wrap;gap:8px}
+.learning-actions button{min-height:44px;padding:8px 10px}
+#learning-queue .text-button{display:block;text-align:left;min-height:44px;overflow-wrap:anywhere}
+.learning-practice blockquote{margin:12px 0;padding-left:12px;border-left:2px solid var(--line-strong);overflow-wrap:anywhere}
+
+.review-summary{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+#next-plan{font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}

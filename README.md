@@ -51,6 +51,10 @@ Google·카카오 로그인과 기존 계정 연결 코드를 [배포](https://g
 
 [최신 통화 홈 검증](docs/design/call-glass/README.md), [이전 연락처형 구현 계획](docs/design/phone-ui-implementation-plan.md)과 [이전 모바일 검증 기록](docs/design/phone-ui-qa.md)을 참고하세요. 실제 iPhone Safari의 음성·네트워크 복구 검증과 모의 업스트림 브라우저 검사는 구분합니다.
 
+## 통화 이후 복습
+
+저장 확인 후에는 분석을 기다리는 동안 다른 탭을 사용할 수 있습니다. 표현 하나를 보고 말하거나 가려 말한 뒤 나중에 하기·직접 연습함을 계정에 저장합니다. 다음 통화 주제는 준비만 하며 실제 연결은 통화 버튼으로 시작합니다. [통화 이후 흐름과 구현 범위](docs/post-call-flow.md)를 참고하세요.
+
 ## 모델 티어링
 
 | 기능 | 기본 모델 | 호출 시점 |

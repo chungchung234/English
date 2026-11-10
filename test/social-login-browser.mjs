@@ -42,6 +42,8 @@ async function fixture(browser,{approved=true}={}){
   if(path.endsWith('/coach/config'))return route.fulfill({status:approved?200:403,json:approved?{models:{voice:'fixture',coach:'fixture',analysis:'fixture'}}:{error:{code:'ACCOUNT_NOT_ALLOWED',message:'승인된 이메일 계정만 이용할 수 있습니다.'}}});
   if(path.startsWith('/rest/v1/')){state.history++;return route.fulfill({json:[],headers:{'Content-Range':'0-0/0','Access-Control-Expose-Headers':'Content-Range'}});}
   if(path.endsWith('/coach/memory'))return route.fulfill({json:{memories:[]}});
+  if(path.endsWith('/rpc/learning_plan'))return route.fulfill({json:{scenario:null}});
+  if(path.endsWith('/rpc/learning_review'))return route.fulfill({json:[]});
   throw Error('Unexpected social fixture path: '+path);
  });
  context.on('page',page=>page.on('pageerror',error=>state.errors.push(error.message)));

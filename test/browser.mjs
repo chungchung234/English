@@ -20,7 +20,7 @@ try{
  await testEmailLogin(browser,base);
  await testTabUI(browser,base);
  const context=await browser.newContext({permissions:['microphone']});
- const page=await context.newPage();let offline=true;const saved=new Map();const savedSession=new Map();let reviews=0,checkpoints=0,checkpointFail=false,historyFailure=false,voiceFailure=false;const finishes=new Map();
+ const page=await context.newPage();let offline=true;const saved=new Map();const savedSession=new Map();let holdReview=false,releaseReview;let reviews=0,checkpoints=0,checkpointFail=false,historyFailure=false,voiceFailure=false;const finishes=new Map();
  const openContact=async id=>{await page.locator('[data-view="contacts"]').click();await page.locator(`[data-companion="${id}"]`).click();await page.locator(`[data-companion="${id}"][aria-pressed="true"]`).waitFor({state:'visible'});await page.waitForFunction(id=>document.querySelector('#orb').dataset.profile===id&&document.querySelector('#orb').dataset.ready==='true',id);await page.locator('#companion-selector').evaluate(node=>Promise.all(node.getAnimations({subtree:true}).map(animation=>animation.finished)));};
  const memoryAction=action=>page.waitForResponse(response=>response.url().endsWith('/coach/memory-manage')&&response.request().postDataJSON()?.action===action);
  const artRequests=[];page.on('request',request=>{if(/assets\/ai-.*\.webp/.test(request.url()))artRequests.push(request.url());});
@@ -48,8 +48,10 @@ try{
   else if(url.pathname.endsWith('/coach/memory')){memoryQueries.push(body);if(body?.query==='slow'){slowMemorySearchStarted();await new Promise(resolve=>releaseSlowMemorySearch=resolve);slowMemorySearchDone();}const memories=companionMemory[body?.companionId]||[];data={memories:body?.query?memories.filter(m=>m.summary.toLowerCase().includes(body.query.toLowerCase())):memories};}
   else if(url.pathname.endsWith('/coach/voice')){if(voiceFailure){voiceFailure=false;return route.fulfill({status:503,json:{message:'Voice fixture unavailable'}});}data={sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};}
   else if(url.pathname.endsWith('/coach/checkpoint')){checkpoints++;if(checkpointFail)return route.fulfill({status:503,json:{error:{code:'UPSTREAM_UNAVAILABLE',message:'Checkpoint fixture unavailable'}}});data={instructions:'Trusted rolling conversation summary'};}
-  else if(url.pathname.endsWith('/coach/review')){reviews++;const session=sessions.find(item=>item.id===body.sessionId);const analysis={id:crypto.randomUUID(),session_id:body.sessionId,kind:'session',created_at:new Date().toISOString(),content:{summary:session.companion_id+'의 통화 피드백',strengths:[],corrections:[],practice:[],scope:{companionId:session.companion_id,session_count:1,user_event_count:1}}};analyses.unshift(analysis);data={analysis};}
+  else if(url.pathname.endsWith('/coach/review')){reviews++;if(holdReview){holdReview=false;await new Promise(resolve=>releaseReview=resolve);}const session=sessions.find(item=>item.id===body.sessionId);const analysis={id:crypto.randomUUID(),session_id:body.sessionId,kind:'session',created_at:new Date().toISOString(),content:{summary:session.companion_id+'의 통화 피드백',strengths:[],corrections:[],practice:[],scope:{companionId:session.companion_id,session_count:1,user_event_count:1}}};analyses.unshift(analysis);data={analysis};}
   else if(url.pathname==='/rest/v1/transcript_events'){let all=[...saved.values()].map(e=>({...e,timestamp:e.occurred_at,session_id:savedSession.get(e.id)}));const sid=url.searchParams.get('session_id'),ids=url.searchParams.get('id');if(sid?.startsWith('eq.'))all=all.filter(e=>e.session_id===sid.slice(3));if(ids?.startsWith('in.('))all=all.filter(e=>ids.slice(4,-1).split(',').includes(e.id));const offset=Number(url.searchParams.get('offset')||0);return route.fulfill({status:200,json:all.slice(offset,offset+1),headers:{'Content-Range':`${offset}-${offset}/${all.length}`,'Access-Control-Expose-Headers':'Content-Range'}});}
+  else if(url.pathname.endsWith('/rpc/learning_plan'))data={scenario:null};
+  else if(url.pathname.endsWith('/rpc/learning_review'))data=[];
   else throw Error('Unexpected route '+url.pathname);
   await route.fulfill({status:200,json:data,headers:Array.isArray(data)?{'Content-Range':`0-${Math.max(data.length-1,0)}/${data.length}`,'Access-Control-Expose-Headers':'Content-Range'}:{}});
  });
@@ -150,7 +152,7 @@ try{
  await page.waitForFunction(()=>window.testPeer.track.enabled===true);
  assert.equal(checkpoints,2);assert.equal((await page.evaluate(()=>window.testMessages.filter(message=>message.type==='conversation.item.delete'))).length,4,'failed checkpoint must preserve every remaining live item');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.speech_started',item_id:'last-item'})}));
- await page.locator('#end-call').click();await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='통화와 피드백 저장 완료');assert.equal(reviews,1);assert.equal(sessions[0].status,'ended');assert.equal(saved.size,3);
+ holdReview=true;await page.locator('#end-call').click();await page.locator('#review-panel').waitFor({state:'visible'});await page.locator('[data-view="history"]').click();releaseReview();await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='통화와 피드백 저장 완료');assert.equal(await page.locator('#history-panel').isVisible(),true,'late feedback cannot pull the user back into review');await page.locator('[data-view="review"]').click();assert.equal(reviews,1);assert.equal(sessions[0].status,'ended');assert.equal(saved.size,3);
  await assertVisibleImagesLoaded(page);await page.screenshot({path:'test-results/mobile-review.png',fullPage:true});
  await page.locator('[data-view="history"]').click();await page.locator('#memory-query').fill('coffee');await page.locator('#memory-search button').click();await page.waitForFunction(()=>document.querySelector('#memory-results').textContent.includes('관련 학습 기록이 없습니다.'));await assertVisibleImagesLoaded(page);await page.screenshot({path:'test-results/mobile-history.png',fullPage:true});
  const memoryCompanions=new Set(memoryQueries.map(q=>q?.companionId));assert.deepEqual([...memoryCompanions].sort(),['alex','juno','mia']);
@@ -207,7 +209,9 @@ try{
  assert.deepEqual(errors,[]);
  console.log('PASS: browser reload retains offline records; retry syncs exact IDs; voice-event wiring saves and reviews; mobile layout fits. Full export handles a lower DB page cap. Voice upstream is simulated, not validated.');
  await page.route('**/functions/v1/coach/config', route=>route.fulfill({status:403,json:{error:{code:'ACCOUNT_NOT_ALLOWED',message:'승인된 이메일 계정만 이용할 수 있습니다.'}}}));
+ await page.waitForLoadState('networkidle');
  const deniedRequests=[];page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/rest/v1/'))deniedRequests.push(request.url());});
+ page.once('framenavigated',()=>{deniedRequests.length=0;});
  await page.reload();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('승인된 이메일'));
  assert.equal(await page.locator('#workspace').isVisible(),false);assert.deepEqual(deniedRequests,[]);
  console.log('PASS: unapproved accounts stay on login and never attempt history reads or queued uploads.');

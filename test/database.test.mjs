@@ -87,7 +87,7 @@ test('migration applies to the Supabase auth and role contract', async (t) => {
     order by tablename
   `);
   assert.deepEqual(rows.map((row) => row.tablename), [
-    'analyses', 'analysis_jobs', 'api_daily_usage', 'memory_embeddings', 'memory_fact_overrides',
+    'analyses', 'analysis_jobs', 'api_daily_usage', 'learning_items', 'learning_plans', 'memory_embeddings', 'memory_fact_overrides',
     'memory_session_exclusions', 'memory_state', 'sessions', 'transcript_events',
   ]);
 });
@@ -636,4 +636,36 @@ test('fact mutations never decrease a later cutoff restored from backup',async t
   assert.equal(new Date(state.history_cutoff).toISOString(),cutoff);
   assert.equal(Number(state.revision),3);
   assert.equal((await context(db)).facts[0].forgotten,true);
+});
+
+test('practice is cloud-confirmed, scoped, idempotent and separate from later user reuse', async t=>{
+ const db=await database(t),session=await makeSession(db,USER_A);
+ await asUser(db,USER_A,()=>append(db,session.id,[event('learning-source','Yesterday I go to the cafe.',{id:EVENT_ID})]));
+ await asUser(db,USER_A,()=>db.query('select public.finish_session($1)',[session.id]));
+ const content={corrections:[{original:'I go',improved:'I went',reason:'Past tense',evidence_ids:[EVENT_ID]}],practice:[{expression:'I went',evidence_ids:[EVENT_ID]},{expression:'That sounds nice.',evidence_ids:[EVENT_ID]},{expression:'I would like to try.',evidence_ids:[EVENT_ID]},{expression:'Fourth expression',evidence_ids:[EVENT_ID]}]};
+ const {rows:[analysis]}=await db.query("insert into public.analyses(user_id,session_id,kind,model,content,source_event_ids) values($1,$2,'session','fixture',$3,$4) returning id",[USER_A,session.id,JSON.stringify(content),[EVENT_ID]]);
+ const review=(user,params=[])=>asUser(db,user,async()=>{const {rows}=await db.query('select public.learning_review($1,$2,$3,$4) as result',['alex',params[0]||null,params[1]||null,params[2]||null]);return rows[0].result;});
+ const plan=await asUser(db,USER_A,()=>db.query("select public.learning_plan('alex','Talk about a weekend walk.') as result"));assert.equal(plan.rows[0].result.scenario,'Talk about a weekend walk.');
+ assert.equal((await asUser(db,USER_A,()=>db.query("select public.learning_plan('alex') as result"))).rows[0].result.scenario,plan.rows[0].result.scenario);
+ assert.equal((await asUser(db,USER_B,()=>db.query("select public.learning_plan('alex') as result"))).rows[0].result.scenario,null);
+ const initial=await review(USER_A,[analysis.id]);assert.equal(initial.length,3);assert(initial.every(row=>row.state==='unpracticed'&&row.reuse===null));
+ assert.deepEqual((await review(USER_A,[analysis.id])).map(row=>row.id).sort(),initial.map(row=>row.id).sort());
+ const item=initial.find(row=>row.expression==='I went');
+ await assert.rejects(review(USER_B,[null,item.id,'practiced']));
+ const practiced=await review(USER_A,[null,item.id,'practiced']);const when=practiced.find(row=>row.id===item.id).practiced_at;
+ assert.equal((await review(USER_A,[null,item.id,'practiced'])).find(row=>row.id===item.id).practiced_at,when);
+ await assert.rejects(review(USER_A,[null,item.id,'mastered']));
+ const later=await makeSession(db,USER_A);
+ await asUser(db,USER_A,()=>append(db,later.id,[event('assistant-reuse','I went',{speaker:'assistant'})]));
+ await asUser(db,USER_A,()=>db.query('select public.finish_session($1)',[later.id]));
+ assert.equal((await review(USER_A)).find(row=>row.id===item.id).reuse,null);
+ await asUser(db,USER_A,()=>append(db,later.id,[event('user-reuse','I went to the park.')]));
+ assert.equal((await review(USER_A)).find(row=>row.id===item.id).reuse.text,'I went to the park.');
+ assert.equal((await asService(db,()=>db.query('select public.learning_context($1,$2) as result',[USER_A,'alex']))).rows[0].result.length,1);
+ await db.query('insert into public.memory_session_exclusions(user_id,companion_id,session_id) values($1,$2,$3)',[USER_A,'alex',session.id]);
+ assert.equal((await asService(db,()=>db.query('select public.learning_context($1,$2) as result',[USER_A,'alex']))).rows[0].result.length,0);
+ await asUser(db,USER_A,()=>append(db,session.id,[event('late-learning-source','One more detail.')]));
+ await assert.rejects(review(USER_A,[analysis.id]));assert.equal((await review(USER_A)).length,0,'stale source feedback cannot remain in the practice queue');
+ await assert.rejects(review(USER_A,[null,item.id,'practiced']));
+ await db.query("delete from loop_private.approved_emails where email='owner@example.com'");await assert.rejects(review(USER_A));
 });

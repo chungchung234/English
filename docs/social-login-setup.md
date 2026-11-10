@@ -8,6 +8,13 @@
 
 2026-11-10 KST 설정 확인: 두 제공자가 공개 인증 설정에서 활성화됐고 게시된 앱의 두 버튼도 활성화됐다. 서비스 정책에 맞춰 이메일 필수 설정을 적용했다. Google의 `redirect_uri_mismatch`는 승인된 리디렉션 URI 수정 후 해소됐다. [최신 연결 검사](auth/provider-verification.json)에서 Google·카카오의 callback 주소가 기대값과 일치하고 두 로그인 페이지가 HTTP 200으로 열리며 알려진 오류 코드가 없음을 확인했다. 외부 콘솔의 실제 사용자 동의와 인증 코드 교환 성공은 확인하지 않았다.
 
+이후 실제 로그인 시도에서 확인한 추가 문제:
+
+- Google OAuth 인증과 검증된 계정 생성은 성공했지만 해당 Gmail이 앱 승인 목록에 없었다. 현재 사용자가 시도한 유일한 신규 Google 계정의 검증된 identity·기존 소유자 식별자 일치를 확인한 뒤 해당 이메일 하나를 추가 승인했다. 기존 승인 항목을 유지하고 `ACCESS_MODE=invite`와 Edge Function의 `ALLOWED_EMAILS`를 동기화했다. DB 승인과 두 서버 설정의 digest 일치를 확인했다. 승인은 해당 Google 사용자 ID에 적용되며 기존 네이버 사용자 ID와 데이터도 유지된다.
+- 카카오의 현재 등록값으로 의도적으로 무효인 진단용 인가 코드를 토큰 엔드포인트에 보냈을 때 HTTP 401 `invalid_client`, `KOE010`을 반환했다. 공식 설명은 Client Secret 누락 또는 불일치다. 키의 공백·따옴표 보정 필요와 두 입력란 뒤바뀜 가능성을 확인했고 자동으로 보정할 조건은 없었다. 사용하는 **동일 REST API 키 화면의 Kakao Login Client Secret**을 Supabase Kakao의 Client Secret 필드에 정확히 입력해야 한다. 진단에서는 사용자 인가 코드·액세스 토큰을 사용하거나 발급하지 않았다.
+
+Client Secret 수정 후 Google로 접속한 상태에서 **내 계정 → 카카오 연결**을 사용하면 같은 사용자 ID로 두 소셜 계정을 연결할 수 있다. 카카오 제공자 자체 오류는 Supabase의 승인 목록 변경만으로 해결되지 않는다. `KOE010`의 [공식 원인과 조치](https://developers.kakao.com/docs/ko/kakaologin/trouble-shooting)를 참고한다.
+
 Supabase 공식 `@supabase/auth-js` SDK를 앱에 묶어 외부 JavaScript CDN 없이 실행한다. 기존 `loop.auth:<프로젝트 URL>` 세션을 이어 쓰며 자동 갱신·탭 간 상태 공유를 적용한다. 명시적 로그아웃, 서버 세션 해제, 브라우저 저장 데이터 삭제 후에는 다시 로그인해야 한다.
 
 같은 탭에서 시작한 10분 이내 PKCE 요청만 처리하고 인증 코드·오류 파라미터를 주소에서 지운다. Google·카카오 API용 토큰은 앱의 영구 세션 저장에서 제외한다. 로그인된 기존 사용자에게 다른 이메일의 소셜 계정을 연결할 수 있으며, 연결 전후 사용자 ID가 같아야 한다. 기존 이메일 인증·승인 목록·사용자별 데이터 정책을 유지하며 승인 확인 뒤에만 기록·전송 대기열을 읽는다.

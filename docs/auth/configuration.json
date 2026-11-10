@@ -5,14 +5,14 @@
   "accountLinkingEnabled": true,
   "providers": {
     "google": {
-      "enabled": false,
-      "credentialsConfigured": false
+      "enabled": true,
+      "credentialsConfigured": true
     },
     "kakao": {
-      "enabled": false,
-      "credentialsConfigured": false
+      "enabled": true,
+      "credentialsConfigured": true
     }
   },
   "actualProviderConsentAndLoginTested": false,
-  "recordedAt": "2026-11-09T18:41:58.539191+00:00"
+  "recordedAt": "2026-11-10T10:30:00.576241+09:00"
 }

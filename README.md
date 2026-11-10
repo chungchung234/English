@@ -6,7 +6,7 @@
 
 [이전 공개 모드 검증](https://github.com/chungchung234/English/actions/runs/42639444223)에서는 세 캐릭터의 실제 WebRTC·전사·응답·기억 분리가 통과했습니다. 이는 현재 승인 계정의 실제 기기 재검증과는 별도 기록입니다. 현재의 비승인 테스트 계정은 접근 차단을 확인하며, 검증 목적으로 승인 목록을 바꾸지 않습니다. 이메일 전달과 DB 재해 복구는 아래 운영 과제로 남습니다.
 
-Google·카카오 로그인과 기존 계정 연결 코드를 [배포](https://github.com/chungchung234/English/actions/runs/42676645925)했습니다. 현재 개발자 키가 등록되지 않아 제공자 버튼은 준비 상태입니다. [등록할 값·남은 작업·검증 범위](docs/social-login-setup.md)를 참고하세요. 실제 제공자 동의·로그인 성공은 아직 검증하지 않았습니다.
+Google·카카오 로그인과 기존 계정 연결 코드를 [배포](https://github.com/chungchung234/English/actions/runs/42676645925)했습니다. 두 제공자의 키 등록·활성화와 앱 버튼 활성화를 확인했습니다. 카카오는 로그인 페이지까지 연결되며, Google은 `redirect_uri_mismatch`가 확인되어 Google 콘솔의 승인된 리디렉션 URI 수정이 남았습니다. [설정값·검증 범위](docs/social-login-setup.md)를 참고하세요. 실제 사용자 동의·최종 로그인 성공은 별도 검증이 필요합니다.
 
 ## 구성
 

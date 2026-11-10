@@ -30,6 +30,38 @@ try{
  });
  assert.deepEqual(result,{fallback:false,distinct:3,reducedStatic:true,resumed:true,closed:true,allClosed:true,tracksRetained:true});
  console.log('PASS: three shaders render distinctly; reduced motion stays still; real audio analysers resume, reconnect, and release contexts without stopping call tracks.');
+ const alphaPage=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:3,reducedMotion:'reduce'});
+ await alphaPage.goto('http://127.0.0.1:4193');
+ const compositing=await alphaPage.evaluate(async()=>{
+  const {createAIPresence}=await import('/ai-presence.js');document.body.replaceChildren();
+  const root=document.createElement('section'),canvas=document.createElement('canvas');canvas.dataset.aiProfile='current';canvas.className='ai-presence ai-presence-home';root.append(canvas);document.body.append(root);
+  const get=canvas.getContext.bind(canvas);canvas.getContext=(kind,options)=>get(kind,{...options,preserveDrawingBuffer:true});
+  const presence=createAIPresence(root),results=[];
+  for(const name of ['alex','mia','juno']){
+   presence.setProfile(name);await presence.ready;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   const gl=canvas.getContext('webgl'),n=canvas.width,pixels=new Uint8Array(n*n*4);gl.readPixels(0,0,n,n,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+   let unassociated=0,debris=0;
+   for(let y=0;y<n;y++)for(let x=0;x<n;x++){
+    const i=(y*n+x)*4,a=pixels[i+3];
+    if(Math.max(pixels[i],pixels[i+1],pixels[i+2])>a+1)unassociated++;
+    if(!a||a>=128)continue;let nearBody=false;
+    for(let dy=-3;dy<=3&&!nearBody;dy++)for(let dx=-3;dx<=3;dx++){
+     const xx=x+dx,yy=y+dy;if(xx>=0&&xx<n&&yy>=0&&yy<n&&pixels[(yy*n+xx)*4+3]>=128){nearBody=true;break;}
+    }
+    if(!nearBody)debris++;
+   }
+   const poster=new Image();poster.src=await presence.posterSource(name);await poster.decode();
+   const sample=document.createElement('canvas');sample.width=poster.naturalWidth;sample.height=poster.naturalHeight;
+   const context=sample.getContext('2d');context.drawImage(poster,0,0);const data=context.getImageData(0,0,sample.width,sample.height).data;
+   // Corners and the distant top/bottom bands must stay transparent on any background.
+   let borderPixels=0;for(let y=0;y<sample.height;y++)for(let x=0;x<sample.width;x++)if(x<24||y<24||x>=sample.width-24||y>=sample.height-24)borderPixels+=data[(y*sample.width+x)*4+3]>0;
+   results.push({name,premultiplied:gl.getContextAttributes().premultipliedAlpha,unassociated,debris,borderPixels,posterIsCleaned:poster.src.startsWith('data:image/png')});
+  }
+  presence.destroy();return results;
+ });
+ assert(compositing.every(item=>item.premultiplied&&item.unassociated===0&&item.debris===0&&item.borderPixels===0&&item.posterIsCleaned),'GPU and fallback must share a clean silhouette with premultiplied output and no detached translucent fragments');
+ await alphaPage.close();
+ console.log('PASS: mobile-scale GPU pixels use premultiplied alpha; all three characters and shared fallback/swipe posters have no detached export debris.');
  const idlePage=await browser.newPage({viewport:{width:390,height:844}});
  await idlePage.goto('http://127.0.0.1:4193');
  const idle=await idlePage.evaluate(async()=>{
@@ -64,6 +96,6 @@ try{
  assert(reactive.alphaMean>.5,'voice must visibly change the outer contour as well as the internal material');
  console.log('PASS: a real generated audio track visibly modulates the approved artwork; speech state alone does not fake an audio signal.');
  const fallback=await browser.newPage();await fallback.goto('http://127.0.0.1:4193');
- assert(await fallback.evaluate(async()=>{const {createAIPresence}=await import('/ai-presence.js');const root=document.createElement('div'),c=document.createElement('canvas');c.dataset.aiProfile='mia';c.getContext=()=>null;root.append(c);const v=createAIPresence(root);const works=c.classList.contains('ai-presence-fallback');v.destroy();return works;}));
+ assert(await fallback.evaluate(async()=>{const {createAIPresence}=await import('/ai-presence.js');const root=document.createElement('div'),c=document.createElement('canvas');c.dataset.aiProfile='mia';c.getContext=()=>null;root.append(c);document.body.replaceChildren(root);const v=createAIPresence(root);await v.ready;const poster=root.querySelector('img');await poster.decode();const works=c.classList.contains('ai-presence-fallback')&&poster.src.startsWith('data:image/png')&&poster.dataset.profile==='mia';v.destroy();return works;}));
  console.log('PASS: missing WebGL keeps the same-artwork fallback.');
 }finally{await browser.close();server.kill('SIGTERM');}

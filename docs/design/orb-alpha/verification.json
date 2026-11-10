@@ -1,0 +1,130 @@
+{
+  "source": "Actual Chromium WebGL buffers on synthetic isolated surfaces; no user data. Before uses unmodified 53b3225 renderer; after uses the working revision.",
+  "viewport_css_px": [
+    390,
+    500
+  ],
+  "device_scale_factor": 3,
+  "reduced_motion": true,
+  "detached_pixel_definition": "Nonzero alpha below128 with no alpha>=128 pixel in a 3px neighborhood.",
+  "results": [
+    {
+      "version": "before",
+      "metrics": [
+        {
+          "name": "alex",
+          "detachedTranslucentPixels": 27405,
+          "attributes": {
+            "alpha": true,
+            "antialias": true,
+            "depth": true,
+            "desynchronized": false,
+            "failIfMajorPerformanceCaveat": false,
+            "powerPreference": "low-power",
+            "premultipliedAlpha": false,
+            "preserveDrawingBuffer": true,
+            "stencil": false,
+            "xrCompatible": false
+          },
+          "size": 440,
+          "rgb_exceeds_alpha_pixels": 8465
+        },
+        {
+          "name": "mia",
+          "detachedTranslucentPixels": 517,
+          "attributes": {
+            "alpha": true,
+            "antialias": true,
+            "depth": true,
+            "desynchronized": false,
+            "failIfMajorPerformanceCaveat": false,
+            "powerPreference": "low-power",
+            "premultipliedAlpha": false,
+            "preserveDrawingBuffer": true,
+            "stencil": false,
+            "xrCompatible": false
+          },
+          "size": 440,
+          "rgb_exceeds_alpha_pixels": 2479
+        },
+        {
+          "name": "juno",
+          "detachedTranslucentPixels": 471,
+          "attributes": {
+            "alpha": true,
+            "antialias": true,
+            "depth": true,
+            "desynchronized": false,
+            "failIfMajorPerformanceCaveat": false,
+            "powerPreference": "low-power",
+            "premultipliedAlpha": false,
+            "preserveDrawingBuffer": true,
+            "stencil": false,
+            "xrCompatible": false
+          },
+          "size": 440,
+          "rgb_exceeds_alpha_pixels": 2481
+        }
+      ]
+    },
+    {
+      "version": "after",
+      "metrics": [
+        {
+          "name": "alex",
+          "detachedTranslucentPixels": 0,
+          "attributes": {
+            "alpha": true,
+            "antialias": true,
+            "depth": true,
+            "desynchronized": false,
+            "failIfMajorPerformanceCaveat": false,
+            "powerPreference": "low-power",
+            "premultipliedAlpha": true,
+            "preserveDrawingBuffer": true,
+            "stencil": false,
+            "xrCompatible": false
+          },
+          "size": 440,
+          "rgb_exceeds_alpha_pixels": 0
+        },
+        {
+          "name": "mia",
+          "detachedTranslucentPixels": 0,
+          "attributes": {
+            "alpha": true,
+            "antialias": true,
+            "depth": true,
+            "desynchronized": false,
+            "failIfMajorPerformanceCaveat": false,
+            "powerPreference": "low-power",
+            "premultipliedAlpha": true,
+            "preserveDrawingBuffer": true,
+            "stencil": false,
+            "xrCompatible": false
+          },
+          "size": 440,
+          "rgb_exceeds_alpha_pixels": 0
+        },
+        {
+          "name": "juno",
+          "detachedTranslucentPixels": 0,
+          "attributes": {
+            "alpha": true,
+            "antialias": true,
+            "depth": true,
+            "desynchronized": false,
+            "failIfMajorPerformanceCaveat": false,
+            "powerPreference": "low-power",
+            "premultipliedAlpha": true,
+            "preserveDrawingBuffer": true,
+            "stencil": false,
+            "xrCompatible": false
+          },
+          "size": 440,
+          "rgb_exceeds_alpha_pixels": 0
+        }
+      ]
+    }
+  ]
+}

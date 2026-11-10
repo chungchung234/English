@@ -4,12 +4,22 @@ const AI_ART_SOURCES = Object.fromEntries(['alex','mia','juno'].map(name => [nam
   document.getElementById('ai-art-'+name)?.dataset.src || document.getElementById('ai-art-'+name)?.src || new URL('assets/ai-'+name+'.webp',document.baseURI).href
 ]));
 const AI_ART_IMAGES = new Map();
+const EMPTY_ART = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 async function loadAIArtwork(name) {
   if(!AI_ART_IMAGES.has(name)) AI_ART_IMAGES.set(name,(async()=>{
     const image=new Image();image.src=AI_ART_SOURCES[name];await image.decode();
-    // Decode once per character; all visible surfaces share this source.
-    return typeof createImageBitmap==='function'
-      ? createImageBitmap(image,{resizeWidth:512,resizeHeight:512,resizeQuality:'high',imageOrientation:'flipY',premultiplyAlpha:'none'}) : image;
+    // The approved files contain near-transparent export debris outside the body.
+    // Remove it before resizing, so filtering cannot pull its RGB into the edge.
+    const source=document.createElement('canvas');source.width=image.naturalWidth;source.height=image.naturalHeight;
+    const pixels=source.getContext('2d',{colorSpace:'srgb',willReadFrequently:true});pixels.drawImage(image,0,0);
+    const frame=pixels.getImageData(0,0,source.width,source.height);
+    for(let i=0;i<frame.data.length;i+=4)if(frame.data[i+3]<=8)frame.data.fill(0,i,i+4);
+    pixels.putImageData(frame,0,0);
+    const texture=document.createElement('canvas');texture.width=texture.height=512;
+    texture.getContext('2d',{colorSpace:'srgb'}).drawImage(source,0,0,512,512);
+    // Canvas sources consistently honor WebGL's unpack flags on iOS as well.
+    // Share the cleaned silhouette with reduced-motion/GPU fallback and swipes.
+    return {texture,posterSrc:texture.toDataURL('image/png')};
   })());
   return AI_ART_IMAGES.get(name);
 }
@@ -70,12 +80,18 @@ export function createAIPresence(root = document) {
       vec2 inside=clamp(maskUV+((maskUV-.5)*attention.y*.08+flow*reach)*innerMask*original.a,0.,1.);
       vec4 moving=texture2D(art,inside);
       float safe=smoothstep(.72,.99,moving.a);
-      vec3 color=mix(original.rgb,moving.rgb,safe);
+      vec3 color=mix(original.rgb/max(original.a,.001),moving.rgb/max(moving.a,.001),safe);
       float light=1.+attention.y*.018+activity*.025;
       color=mix(color,min(vec3(1.),color*light),1.-rest*.55);
-      gl_FragColor=vec4(color,original.a);
+      gl_FragColor=vec4(color*original.a,original.a);
     }`;
   function nameFor(canvas){return canvas.dataset.aiProfile==='current'?profile:canvas.dataset.aiProfile;}
+  function updatePoster(s,name){
+    const prepared=artwork.get(name);
+    if(s.poster.dataset.profile!==name||s.posterArtwork!==prepared){
+      s.poster.src=prepared?.posterSrc||EMPTY_ART;s.poster.dataset.profile=name;s.posterArtwork=prepared;
+    }
+  }
   function showPoster(s,failed=false){
     if(!s.poster){
       s.poster=new Image();s.poster.loading='lazy';s.poster.decoding='async';s.poster.className=s.canvas.className+' ai-presence-poster';
@@ -84,7 +100,7 @@ export function createAIPresence(root = document) {
       s.canvas.before(s.poster);
     }
     const name=nameFor(s.canvas);
-    if(s.poster.dataset.profile!==name){s.poster.src=AI_ART_SOURCES[name];s.poster.dataset.profile=name;}
+    updatePoster(s,name);
     s.poster.style.animationPlayState=document.hidden?'paused':'running';
     s.poster.hidden=false;s.canvas.hidden=true;
     if(failed)s.canvas.classList.add('ai-presence-fallback');
@@ -92,8 +108,9 @@ export function createAIPresence(root = document) {
   const surfaces=[...root.querySelectorAll('canvas[data-ai-profile]')].map(canvas=>{
     const s={canvas};showPoster(s);
     try{
-      const gl=canvas.getContext('webgl',{alpha:true,antialias:true,premultipliedAlpha:false,powerPreference:'low-power'});
+      const gl=canvas.getContext('webgl',{alpha:true,antialias:true,premultipliedAlpha:true,powerPreference:'low-power'});
       if(!gl)throw Error('WebGL unavailable');
+      if('drawingBufferColorSpace' in gl)gl.drawingBufferColorSpace='srgb';
       const compile=(type,source)=>{const shader=gl.createShader(type);gl.shaderSource(shader,source);gl.compileShader(shader);if(!gl.getShaderParameter(shader,gl.COMPILE_STATUS)){const reason=gl.getShaderInfoLog(shader);gl.deleteShader(shader);throw Error(reason);}return shader;};
       const vs=compile(gl.VERTEX_SHADER,vertex),fs=compile(gl.FRAGMENT_SHADER,fragment),program=gl.createProgram();
       gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);gl.deleteShader(vs);gl.deleteShader(fs);
@@ -136,21 +153,21 @@ export function createAIPresence(root = document) {
     for(const s of surfaces){
       const {canvas,gl}=s,current=canvas.dataset.aiProfile==='current',name=nameFor(canvas);
       canvas.dataset.profile=name;canvas.dataset.state=current?state:'idle';
-      if(s.poster){s.poster.alt=canvas.getAttribute('aria-label')||'';if(s.poster.dataset.profile!==name){s.poster.src=AI_ART_SOURCES[name];s.poster.dataset.profile=name;}}
-      if(!gl||s.lost)continue;
+      if(s.poster){s.poster.alt=canvas.getAttribute('aria-label')||'';updatePoster(s,name);}
       const visible=canvas.hidden&&s.poster&&!s.poster.hidden?s.poster:canvas;
       let box=visible.getBoundingClientRect();
       if(!box.width||!box.height||box.bottom<0||box.top>innerHeight||(visible.checkVisibility&&!visible.checkVisibility()))continue;
       const image=artwork.get(name);
       if(!image){canvas.dataset.ready='false';showPoster(s);ensureArtwork(name);continue;}
+      if(!gl||s.lost){showPoster(s,true);continue;}
       canvas.hidden=false;if(s.poster)s.poster.hidden=true;
       box=canvas.getBoundingClientRect();
       const size=Math.min(440,Math.round(box.width*Math.min(devicePixelRatio||1,1.5)));
       if(canvas.width!==size){canvas.width=size;canvas.height=size;gl.viewport(0,0,size,size);}
       gl.useProgram(s.program);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,s.texture);
       if(s.textureName!==name){
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,false);
-        gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image);s.textureName=name;
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);
+        gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image.texture);s.textureName=name;
       }
       gl.uniform1f(s.uniforms.time,motion.matches?0:current?clock:idleClock);
       gl.uniform1f(s.uniforms.ambientTime,motion.matches?0:ambientClock);
@@ -168,7 +185,8 @@ export function createAIPresence(root = document) {
   const pendingArtwork=new Map();
   function ensureArtwork(name){
     if(!pendingArtwork.has(name))pendingArtwork.set(name,loadAIArtwork(name).then(image=>{
-      if(!destroyed){artwork.set(name,image);refresh();}
+      if(!destroyed){artwork.set(name,image);for(const s of surfaces)if(s.poster&&nameFor(s.canvas)===name)updatePoster(s,name);refresh();}
+      return image;
     }).catch(()=>{for(const s of surfaces)if(nameFor(s.canvas)===name)showPoster(s,true);}));
     return pendingArtwork.get(name);
   }
@@ -206,7 +224,7 @@ export function createAIPresence(root = document) {
   const visibility=()=>{for(const s of surfaces)if(s.poster)s.poster.style.animationPlayState=document.hidden?'paused':'running';if(document.hidden){cancelAnimationFrame(raf);raf=0;last=0;}else refresh();};
   const changed=()=>{cancelAnimationFrame(raf);raf=0;last=0;refresh();};
   document.addEventListener('visibilitychange',visibility);motion.addEventListener('change',changed);refresh();
-  return {get ready(){return ensureArtwork(profile);},snapshot,setProfile,setState,attachAudio,detachAudio,refresh,destroy(){
+  return {get ready(){return Promise.all([...new Set(surfaces.length?surfaces.map(s=>nameFor(s.canvas)):[profile])].map(ensureArtwork));},async posterSource(name){return (await ensureArtwork(Object.hasOwn(profiles,name)?name:'alex'))?.posterSrc||EMPTY_ART;},snapshot,setProfile,setState,attachAudio,detachAudio,refresh,destroy(){
     destroyed=true;cancelAnimationFrame(raf);detachAudio();document.removeEventListener('visibilitychange',visibility);motion.removeEventListener('change',changed);
     for(const s of surfaces){s.canvas.removeEventListener('webglcontextlost',s.lostHandler);s.poster?.remove();if(s.gl){s.gl.deleteTexture(s.texture);s.gl.deleteBuffer(s.buffer);s.gl.deleteProgram(s.program);}}
   }};

@@ -98,7 +98,7 @@ companionStage.addEventListener('pointermove',event=>{
     const next=index+(x<0?1:-1);let peek=companionStage.querySelector('.companion-swipe-peek');
     if(atEdge){peek?.remove();}else{
       if(!peek){peek=new Image();peek.className='companion-swipe-peek';peek.alt='';peek.setAttribute('aria-hidden','true');companionStage.append(peek);}
-      if(peek.dataset.profile!==order[next]){const source=$('ai-art-'+order[next]);peek.src=source.dataset.src||source.src;peek.dataset.profile=order[next];}
+      if(peek.dataset.profile!==order[next]){const name=order[next];peek.dataset.profile=name;presence.posterSource(name).then(source=>{if(peek.isConnected&&peek.dataset.profile===name)peek.src=source;});}
       peek.style.transform=`translateX(${x+(x<0?1:-1)*companionStage.clientWidth}px)`;
     }
     const lens=$('companion-selector').querySelector('.selection-lens');lens.style.transition='none';

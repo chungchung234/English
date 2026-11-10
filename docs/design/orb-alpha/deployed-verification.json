@@ -1,0 +1,15 @@
+{
+  "site": "https://chungchung234.github.io/English/",
+  "release_commit": "6a68f30c22c56ab472bf2631748cc29a4f2bb315",
+  "workflow": "https://github.com/chungchung234/English/actions/runs/42803405772",
+  "verified_at": "2026-11-10T20:02:36.026032+09:00",
+  "html_bytes": 105851,
+  "module": "assets/app.50ba7e01b52e.js",
+  "module_bytes": 243479,
+  "module_sha256": "50ba7e01b52ec91816a7fd540f52a4bcb7f1b8391b709e3f018ed0295295043e",
+  "module_integrity_valid": true,
+  "matches_local_release_build": true,
+  "physical_iphone_darkening": "Not verified on a physical iPhone; no claim of resolution beyond measured alpha cleanup and composition changes.",
+  "workflow_status": "completed",
+  "workflow_conclusion": "success"
+}

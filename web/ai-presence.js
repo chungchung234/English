@@ -135,7 +135,7 @@ export function createAIPresence(root = document) {
       let box=visible.getBoundingClientRect();
       if(!box.width||!box.height||box.bottom<0||box.top>innerHeight||(visible.checkVisibility&&!visible.checkVisibility()))continue;
       const image=artwork.get(name);
-      if(!image){ensureArtwork(name);continue;}
+      if(!image){canvas.dataset.ready='false';showPoster(s);ensureArtwork(name);continue;}
       canvas.hidden=false;if(s.poster)s.poster.hidden=true;
       box=canvas.getBoundingClientRect();
       const size=Math.min(440,Math.round(box.width*Math.min(devicePixelRatio||1,1.5)));

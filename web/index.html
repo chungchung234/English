@@ -28,39 +28,29 @@
 </section>
 <section id="workspace" hidden>
 <header class="app-header">
-<a class="brand" href="#" aria-label="시시콜콜 연락처"><img class="brand-logo" src="assets/brand-logo.webp" alt="시시콜콜"></a>
+<a class="brand" href="#" aria-label="시시콜콜 통화"><img class="brand-logo" src="assets/brand-logo.webp" alt="시시콜콜"></a>
 <button id="account-open" class="icon-button" aria-label="계정과 저장 설정"><img src="assets/settings.svg" alt=""></button>
 </header>
 <main id="app-main">
-<section data-panel="contacts" id="contacts-panel" class="contacts-panel">
-<div class="contacts-heading"><h1>연락처</h1></div>
-<label class="sr-only" for="contact-search">연락처 검색</label><input id="contact-search" class="contact-search" type="search" placeholder="검색" autocomplete="off">
-<p id="contacts-empty" class="empty-state" hidden>검색 결과가 없어요.</p>
-<div id="contacts-list" class="contacts-list">
-<article class="contact-row" data-contact="alex"><button class="contact-open" data-companion="alex"><img class="contact-avatar" src="assets/ai-alex.webp" alt="" loading="lazy" decoding="async"><span class="contact-copy"><strong>Alex</strong><small>차분하고 명료한 대화</small></span></button><button class="contact-call" data-call-companion="alex" aria-label="Alex에게 전화"><img src="assets/phone.svg" alt=""></button></article>
-<article class="contact-row" data-contact="juno"><button class="contact-open" data-companion="juno"><img class="contact-avatar" src="assets/ai-juno.webp" alt="" loading="lazy" decoding="async"><span class="contact-copy"><strong>Juno</strong><small>호기심 많은, 가벼운 수다</small></span></button><button class="contact-call" data-call-companion="juno" aria-label="Juno에게 전화"><img src="assets/phone.svg" alt=""></button></article>
-<article class="contact-row" data-contact="mia"><button class="contact-open" data-companion="mia"><img class="contact-avatar" src="assets/ai-mia.webp" alt="" loading="lazy" decoding="async"><span class="contact-copy"><strong>Mia</strong><small>다정하고 사려 깊은 대화</small></span></button><button class="contact-call" data-call-companion="mia" aria-label="Mia에게 전화"><img src="assets/phone.svg" alt=""></button></article>
+<section data-panel="contacts" id="contacts-panel" class="call-home-panel" aria-labelledby="companion-name">
+<div id="companion-selector" class="companion-selector glass-surface" data-selected="alex" role="group" aria-label="통화 상대">
+<span class="selection-lens" aria-hidden="true"></span>
+<button data-companion="alex" aria-pressed="true">Alex</button><button data-companion="juno" aria-pressed="false">Juno</button><button data-companion="mia" aria-pressed="false">Mia</button>
 </div>
-<p class="contacts-count">AI 통화 친구 3명</p>
-</section>
-<section data-panel="detail" id="detail-panel" class="detail-panel" hidden>
-<button id="contacts-back" class="back-button"><span aria-hidden="true">‹</span> 연락처</button>
 <div id="call-home" class="call-home">
-<div class="detail-identity">
-<canvas id="orb" class="ai-presence ai-presence-detail" data-ai-profile="current" role="img" aria-label="AI 통화 친구"></canvas>
-<p class="ai-identity">AI 통화 친구</p>
-<h1 id="companion-name">Alex</h1><p id="companion-trait" class="companion-trait">차분하고 명료한 대화</p>
+<div class="home-identity">
+<h1 id="companion-name" class="sr-only">Alex</h1>
+<canvas id="orb" class="ai-presence ai-presence-home" data-ai-profile="current" role="img" aria-label="Alex AI 통화 상대"></canvas>
+<p id="companion-trait" class="companion-trait">차분하고 명료한 대화</p>
 </div>
-<div class="detail-actions">
-<button id="start-call" class="primary-button call-start"><img src="assets/phone-white.svg" alt="">통화</button>
-<p class="duration-note">한 번에 최대 20분</p>
-<div class="detail-links"><button id="detail-memory" class="detail-link"><span class="detail-link-icon memory-icon" aria-hidden="true">✳</span><span>기억 관리</span><span class="detail-link-chevron" aria-hidden="true">›</span></button><button id="detail-history" class="detail-link"><span class="detail-link-icon history-icon" aria-hidden="true">◷</span><span>지난 대화</span><span class="detail-link-chevron" aria-hidden="true">›</span></button></div>
+<div class="home-actions">
+<button id="start-call" class="primary-button call-start" aria-label="Alex와 통화"><img src="assets/phone.svg" alt=""><span>통화</span></button>
 </div>
 </div>
 </section>
 <section data-panel="call" id="call-panel" class="call-panel" hidden>
 <div id="live-call" class="live-call" hidden>
-<div class="call-presence"><canvas id="live-avatar" class="ai-presence ai-presence-live" data-ai-profile="current" role="img" aria-label="AI 통화 상대"></canvas><p class="ai-identity">AI 통화 친구</p><h1 id="live-name">Alex</h1><p id="call-status" role="status" aria-live="polite">연결 준비 중</p><p id="call-timer" class="call-timer" role="timer" aria-live="off">00:00</p><p id="call-remaining" class="call-remaining">최대 20분</p><p id="save-status" class="save-status" role="status" aria-live="polite">연결 확인 중</p></div>
+<div class="call-presence"><canvas id="live-avatar" class="ai-presence ai-presence-live" data-ai-profile="current" role="img" aria-label="AI 통화 상대"></canvas><h1 id="live-name">Alex</h1><p id="call-status" role="status" aria-live="polite">연결 준비 중</p><p id="call-timer" class="call-timer" role="timer" aria-live="off">00:00</p><p id="call-remaining" class="call-remaining" hidden></p><p id="save-status" class="save-status" role="status" aria-live="polite">연결 확인 중</p></div>
 <div class="live-actions"><button id="mute-call" class="live-control" aria-label="음소거" aria-pressed="false"><span class="control-disc"><img src="assets/microphone.svg" alt=""></span><span>음소거</span></button><button id="hint-call" data-cue="Suggest one short English sentence I could say next in this conversation, then let me speak." class="live-control" aria-label="힌트" disabled><span class="control-disc"><span class="hint-glyph" aria-hidden="true"></span></span><span>힌트</span></button></div>
 <details class="transcript-details"><summary>대화문 보기 <span id="turn-count">0개 발화</span></summary><div class="transcript-scroll"><ol id="transcript" aria-live="polite"></ol><p id="empty-transcript" class="empty-state">대화를 기다리고 있어요.</p></div></details>
 <button id="end-call" class="primary-button end-call" aria-label="통화 종료" hidden><span class="end-call-disc"><img src="assets/phone-white.svg" alt=""></span><span class="sr-only">통화 종료</span></button>
@@ -77,11 +67,11 @@
 <div id="review-content"></div>
 </section>
 </main>
-<nav class="glass-dock" aria-label="주요 메뉴"><button data-view="contacts" aria-current="page"><span class="tab-icon contacts-tab-icon" aria-hidden="true"><i></i><i></i></span><span>연락처</span></button><button data-view="history"><img src="assets/history.svg" alt=""><span>최근 통화</span></button><button data-view="review"><img src="assets/book.svg" alt=""><span>복습</span></button></nav>
+<nav class="glass-dock" aria-label="주요 메뉴"><button data-view="contacts" aria-current="page"><img src="assets/phone.svg" alt=""><span>통화</span></button><button data-view="history"><img src="assets/history.svg" alt=""><span>최근 통화</span></button><button data-view="review"><img src="assets/book.svg" alt=""><span>복습</span></button></nav>
 </section>
 <div id="notice" role="status" aria-live="polite"></div>
 </div>
-<dialog id="account-dialog"><div class="dialog-heading"><h2>내 계정</h2><button data-close="account-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><p id="account-email" class="account-email"></p><section class="identity-settings"><h3>로그인 계정 연결</h3><p id="identity-note" class="dialog-note"></p><div class="identity-actions"><button class="glass-button" data-link-provider="google" disabled>Google 연결</button><button class="glass-button" data-link-provider="kakao" disabled>카카오 연결</button></div></section><div class="settings-actions"><button id="export" class="glass-button">전체 기록 내보내기</button><label class="file-button">기록 가져오기<input id="restore" type="file" accept="application/json,.json"></label><button class="quiet-button" data-open="privacy-dialog">저장·개인정보</button><button id="logout" class="quiet-button">로그아웃</button></div><p id="models" class="dialog-footnote"></p></dialog>
+<dialog id="account-dialog"><div class="dialog-heading"><h2>내 계정</h2><button data-close="account-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><p id="account-email" class="account-email"></p><section class="identity-settings"><h3>로그인 계정 연결</h3><p id="identity-note" class="dialog-note"></p><div class="identity-actions"><button class="glass-button" data-link-provider="google" disabled>Google 연결</button><button class="glass-button" data-link-provider="kakao" disabled>카카오 연결</button></div></section><div class="settings-actions"><button id="account-memory" class="glass-button">기억 관리</button><button id="export" class="glass-button">전체 기록 내보내기</button><label class="file-button">기록 가져오기<input id="restore" type="file" accept="application/json,.json"></label><button class="quiet-button" data-open="privacy-dialog">저장·개인정보</button><button id="logout" class="quiet-button">로그아웃</button></div><p id="models" class="dialog-footnote"></p></dialog>
 <dialog id="memory-dialog"><div class="dialog-heading"><h2>기억 관리</h2><button data-close="memory-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><p id="memory-companion" class="dialog-note"></p><p class="dialog-note">사실을 수정하거나 잊으면 그 전의 자유 대화는 기억 검색에서 제외됩니다. 원문은 기록에 남아요.</p><div id="memory-facts" class="memory-facts"></div><p id="memory-suppressed" class="memory-notice" hidden>수정·잊기 전의 대화는 기억 검색에서 제외됩니다. 원문은 기록에 남아요.</p><div class="memory-index"><button id="memory-index" class="glass-button">검색 기억 업데이트</button><button id="memory-index-more" class="text-button" hidden>더 업데이트</button><p id="memory-index-status" class="dialog-note" role="status"></p></div><h3 class="memory-section-title">기억에서 제외한 대화</h3><div id="memory-exclusions"></div></dialog>
 <dialog id="privacy-dialog"><div class="dialog-heading"><h2>저장·개인정보</h2><button data-close="privacy-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><p class="privacy-copy">대화문과 교정은 내 계정의 Supabase DB에 저장됩니다. 음성 처리와 피드백에는 OpenAI를 사용합니다. 원본 음성 파일은 보관하지 않습니다.</p><p class="privacy-copy">간편 로그인을 선택하면 Google 또는 카카오에서 계정 식별자와 이메일 등 동의한 기본 프로필 정보를 받아 로그인 계정을 연결합니다.</p><p class="privacy-copy">전송 대기 중인 기록은 이 기기에 임시 보관됩니다. 공용 기기에서는 사용하지 마세요. 기기 대기열이나 DB 삭제는 기록 손실로 이어질 수 있으며, 재해 복구에는 별도 백업 설정이 필요합니다.</p></dialog>
 <div hidden aria-hidden="true"><img id="ai-art-alex" data-src="assets/ai-alex.webp" alt=""><img id="ai-art-mia" data-src="assets/ai-mia.webp" alt=""><img id="ai-art-juno" data-src="assets/ai-juno.webp" alt=""></div>

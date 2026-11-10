@@ -167,7 +167,8 @@ async function main() {
       ensure((await page.locator('#companion-name').textContent()) === 'Alex', 'A fresh mobile session did not default to Alex.');
       await page.locator(`[data-companion="${profile.id}"]`).click();
       await page.waitForFunction(name => document.querySelector('#companion-name')?.textContent === name, profile.name);
-      await page.locator('#detail-panel').waitFor({state:'visible'});
+      await page.locator('#contacts-panel').waitFor({state:'visible'});
+      await page.locator('#companion-selector').evaluate(node=>Promise.all(node.getAnimations({subtree:true}).map(animation=>animation.finished)));
       await page.screenshot({ path: `test-results/live-${profile.id}-home.png`, fullPage: true });
       stage = `${profile.name}: actual WebRTC and provider transcription`;
       await page.locator('#start-call').click();

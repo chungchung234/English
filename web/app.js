@@ -20,19 +20,18 @@ let excludedMemorySessions=new Set();
 const companionName = () => companions[companionId].name;
 const companionStorageKey = () => 'loop.companion:' + config.url + '|' + auth.user.id;
 function setView(view) {
-  if(memoryBusy() || !['contacts','detail','call','history','review'].includes(view)) return false;
+  if(memoryBusy() || !['contacts','call','history','review'].includes(view)) return false;
   currentView=view;viewEpoch++;
   document.querySelectorAll('[data-panel]').forEach(panel => panel.hidden = panel.dataset.panel !== view);
   document.querySelectorAll('[data-view]').forEach(button => {
-    const selected = button.dataset.view === view || (view==='detail' && button.dataset.view==='contacts');
+    const selected = button.dataset.view === view;
     if(selected) button.setAttribute('aria-current','page'); else button.removeAttribute('aria-current');
   });
   presence.refresh();return true;
 }
 function navigationControls() {
   const busy=memoryBusy();
-  document.querySelectorAll('[data-view], [data-companion], [data-call-companion], [data-open], #contacts-back, #detail-history, #detail-memory, #account-open, #refresh-history, #weekly').forEach(button=>button.disabled=busy);
-  if($('contact-search'))$('contact-search').disabled=busy;
+  document.querySelectorAll('[data-view], [data-companion], [data-open], #account-memory, #account-open, #refresh-history, #weekly').forEach(button=>button.disabled=busy);
   memoryControlsDisabled(false);
 }
 function selectCompanion(next, {refresh=true}={}) {
@@ -48,12 +47,6 @@ function selectCompanion(next, {refresh=true}={}) {
   if($('practice-preview'))$('practice-preview').disabled=true;
   if(refresh&&auth){loadMemory().catch(e=>notice(e.message));loadHistory().catch(e=>notice(e.message));}
 }
-function filterContacts() {
-  const term=($('contact-search')?.value||'').trim().toLocaleLowerCase();let count=0;
-  const aliases={mia:'미아 다정 사려 깊은',alex:'알렉스 차분 명료한',juno:'주노 경쾌 호기심'};
-  document.querySelectorAll('[data-contact]').forEach(row=>{const id=row.dataset.contact;const text=`${id} ${companions[id]?.name||''} ${companions[id]?.trait||''} ${aliases[id]||''} ${row.textContent}`.toLocaleLowerCase();row.hidden=Boolean(term&&!text.includes(term));if(!row.hidden)count++;});
-  if($('contacts-empty'))$('contacts-empty').hidden=count>0;
-}
 function updateCompanion() {
   if($('companion-name')) $('companion-name').textContent = companionName();
   if($('live-name')) $('live-name').textContent=companionName();
@@ -61,6 +54,8 @@ function updateCompanion() {
   if($('companion-trait'))$('companion-trait').textContent=companions[companionId].trait;
   for(const id of ['orb','live-avatar'])$(id)?.setAttribute('aria-label',companionName()+' AI 통화 상대');
   document.querySelectorAll('[data-companion]').forEach(button => button.setAttribute('aria-pressed',String(button.dataset.companion === companionId)));
+  $('companion-selector').dataset.selected=companionId;
+  $('start-call').setAttribute('aria-label',companionName()+'와 통화');
   if(!call && !callStarting && !callEnding) $('call-status').textContent = companionName()+'와 대화할 준비가 되었어요';
 }
 function updateCallControls() {
@@ -83,7 +78,7 @@ function updateCallClock(current) {
   if(call!==current||current.ending)return;
   const elapsed=Math.min(CALL_DURATION,callElapsed(current)),remaining=Math.max(0,CALL_DURATION-elapsed);
   if($('call-timer'))$('call-timer').textContent=clockText(elapsed);
-  if($('call-remaining'))$('call-remaining').textContent=clockText(remaining)+' 남음';
+  if($('call-remaining')){$('call-remaining').textContent=clockText(remaining)+' 남음';$('call-remaining').hidden=current.startedAt===null||remaining>60000;}
   if(current.startedAt!==null&&remaining<=0){notice('20분이 되어 통화를 종료하고 저장합니다.');endCall().catch(e=>notice(e.message));}
 }
 function startCallClock(current) {
@@ -245,7 +240,7 @@ async function startCall() {
   closeDialog('memory-dialog');closeDialog('account-dialog');closeDialog('privacy-dialog');
   setView('call');callStarting=true;historyEpoch++;memoryEpoch++;selectedReviewSessionId=null;emptyReview(companionName()+'와의 통화를 마치면 피드백을 확인할 수 있어요.');setCallLayout(true);
   $('transcript').replaceChildren();$('turn-count').textContent='0개 발화';$('empty-transcript').hidden=false;
-  if($('call-timer'))$('call-timer').textContent='00:00';if($('call-remaining'))$('call-remaining').textContent='20:00 남음';
+  if($('call-timer'))$('call-timer').textContent='00:00';if($('call-remaining'))$('call-remaining').hidden=true;
   $('call-status').textContent=companionName()+'와 연결하고 있어요…';presence.setState('connecting');
   const callScope=scope, selectedCompanion=companionId;
   let stream,current;
@@ -317,7 +312,7 @@ async function startCall() {
     if(current){clearCallClock(current);current.pc.close();}
     if(!current||call===current){call=null;presence.detachAudio();$('remote-audio').srcObject=null;$('call-status').textContent='연결하지 못했어요. 다시 시도해 주세요.';}
     throw e;
-  } finally {callStarting=false;setCallLayout(Boolean(call));if(!call&&!callEnding)setView(current?.nextView||'detail');}
+  } finally {callStarting=false;setCallLayout(Boolean(call));if(!call&&!callEnding)setView(current?.nextView||'contacts');}
 }
 function endCall() {
   const current=call;
@@ -572,15 +567,21 @@ window.addEventListener('beforeunload',e=>{if(call || callStarting || callEnding
 setInterval(()=>{if(auth)sync().catch(()=>{});},5000);
 document.querySelectorAll('[data-view]').forEach(button=>button.onclick=protect(async()=>{if(memoryBusy())return;const view=button.dataset.view;if(view==='history')historyFilter=null;setView(view);if(view==='history')await loadHistory();}));
 document.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>closeDialog(button.dataset.close));
-document.querySelectorAll('[data-companion]').forEach(button=>button.onclick=protect(async()=>{selectCompanion(button.dataset.companion);setView('detail');}));
-document.querySelectorAll('[data-call-companion]').forEach(button=>button.onclick=protect(async()=>{selectCompanion(button.dataset.callCompanion);await startCall();}));
-if($('contact-search'))$('contact-search').addEventListener('input',filterContacts);
-if($('contacts-back'))$('contacts-back').onclick=()=>setView('contacts');
-if($('detail-history'))$('detail-history').onclick=protect(async()=>{if(memoryBusy())return;historyFilter=companionId;setView('history');await loadHistory();});
+const companionButtons=[...document.querySelectorAll('[data-companion]')];
+companionButtons.forEach(button=>{
+  button.onclick=protect(()=>selectCompanion(button.dataset.companion));
+  button.onkeydown=event=>{
+    if(memoryBusy()||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+    event.preventDefault();
+    const index=companionButtons.indexOf(button),count=companionButtons.length;
+    const next=event.key==='Home'?0:event.key==='End'?count-1:(index+(event.key==='ArrowRight'?1:count-1))%count;
+    companionButtons[next].focus();companionButtons[next].click();
+  };
+});
 document.querySelectorAll('[data-open]').forEach(button=>button.onclick=()=>{if(call || callStarting || callEnding)return;openDialog(button.dataset.open);});
 if($('account-open'))$('account-open').onclick=()=>{if(!memoryBusy())openDialog('account-dialog');};
-const openMemory=protect(async()=>{if(memoryBusy())return notice('통화를 마친 뒤 기억을 관리할 수 있어요.');openDialog('memory-dialog');$('memory-index-status').textContent='';$('memory-index-more').hidden=true;await loadMemoryControls();});
-if($('memory-manage-open'))$('memory-manage-open').onclick=openMemory;if($('detail-memory'))$('detail-memory').onclick=openMemory;
+const openMemory=protect(async()=>{if(memoryBusy())return notice('통화를 마친 뒤 기억을 관리할 수 있어요.');closeDialog('account-dialog');openDialog('memory-dialog');$('memory-index-status').textContent='';$('memory-index-more').hidden=true;await loadMemoryControls();});
+if($('memory-manage-open'))$('memory-manage-open').onclick=openMemory;if($('account-memory'))$('account-memory').onclick=openMemory;
 if($('memory-index'))$('memory-index').onclick=protect(indexMemory);if($('memory-index-more'))$('memory-index-more').onclick=protect(indexMemory);
 if($('practice-preview'))$('practice-preview').onclick=()=>{
   if(call || callStarting || callEnding || !practiceMemory || !$('review-content'))return;

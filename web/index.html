@@ -61,7 +61,8 @@
 <section data-panel="call" id="call-panel" class="call-panel" hidden>
 <div id="live-call" class="live-call" hidden>
 <div class="call-presence"><canvas id="live-avatar" class="ai-presence ai-presence-live" data-ai-profile="current" role="img" aria-label="AI 통화 상대"></canvas><h1 id="live-name">Alex</h1><p id="call-status" role="status" aria-live="polite">연결 준비 중</p><p id="call-timer" class="call-timer" role="timer" aria-live="off">00:00</p><p id="call-remaining" class="call-remaining" hidden></p><p id="save-status" class="save-status" role="status" aria-live="polite">연결 확인 중</p></div>
-<div class="live-actions"><button id="mute-call" class="live-control" aria-label="음소거" aria-pressed="false"><span class="control-disc"><img src="assets/microphone.svg" alt=""></span><span>음소거</span></button><button id="hint-call" data-cue="Suggest one short English sentence I could say next in this conversation, then let me speak." class="live-control" aria-label="힌트" disabled><span class="control-disc"><span class="hint-glyph" aria-hidden="true"></span></span><span>힌트</span></button></div>
+<div class="live-actions"><button id="mute-call" class="live-control" aria-label="음소거" aria-pressed="false"><span class="control-disc"><img src="assets/microphone.svg" alt=""></span><span>음소거</span></button><button id="speed-call" class="live-control" aria-label="말하기 속도 1.0배" aria-haspopup="dialog" aria-controls="speed-dialog" disabled><span id="speed-current" class="control-disc">1.0×</span><span>속도</span></button><button id="hint-call" data-cue="Suggest one short English sentence I could say next in this conversation, then let me speak." class="live-control" aria-label="힌트" disabled><span class="control-disc"><span class="hint-glyph" aria-hidden="true"></span></span><span>힌트</span></button></div>
+<p id="speed-pending" class="speed-pending" role="status" aria-live="polite" hidden></p>
 <details class="transcript-details"><summary>대화문 보기 <span id="turn-count">0개 발화</span></summary><div class="transcript-scroll"><ol id="transcript" aria-live="polite"></ol><p id="empty-transcript" class="empty-state">대화를 기다리고 있어요.</p></div></details>
 <button id="end-call" class="primary-button end-call" aria-label="통화 종료" hidden><span class="end-call-disc"><img src="assets/phone-white.svg" alt=""></span><span class="sr-only">통화 종료</span></button>
 </div>
@@ -87,5 +88,18 @@
 <dialog id="memory-dialog"><div class="dialog-heading"><h2>기억 관리</h2><button data-close="memory-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><p id="memory-companion" class="dialog-note"></p><p class="dialog-note">사실을 수정하거나 잊으면 그 전의 자유 대화는 기억 검색에서 제외됩니다. 원문은 기록에 남아요.</p><div id="memory-facts" class="memory-facts"></div><p id="memory-suppressed" class="memory-notice" hidden>수정·잊기 전의 대화는 기억 검색에서 제외됩니다. 원문은 기록에 남아요.</p><div class="memory-index"><button id="memory-index" class="glass-button">검색 기억 업데이트</button><button id="memory-index-more" class="text-button" hidden>더 업데이트</button><p id="memory-index-status" class="dialog-note" role="status"></p></div><h3 class="memory-section-title">기억에서 제외한 대화</h3><div id="memory-exclusions"></div></dialog>
 <dialog id="privacy-dialog"><div class="dialog-heading"><h2>저장·개인정보</h2><button data-close="privacy-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div><p class="privacy-copy">대화문과 교정은 내 계정의 Supabase DB에 저장됩니다. 음성 처리와 피드백에는 OpenAI를 사용합니다. 원본 음성 파일은 보관하지 않습니다.</p><p class="privacy-copy">간편 로그인을 선택하면 Google 또는 카카오에서 계정 식별자와 이메일 등 동의한 기본 프로필 정보를 받아 로그인 계정을 연결합니다.</p><p class="privacy-copy">전송 대기 중인 기록은 이 기기에 임시 보관됩니다. 공용 기기에서는 사용하지 마세요. 기기 대기열이나 DB 삭제는 기록 손실로 이어질 수 있으며, 재해 복구에는 별도 백업 설정이 필요합니다.</p></dialog>
 <div hidden aria-hidden="true"><img id="ai-art-alex" data-src="assets/ai-alex.webp" alt=""><img id="ai-art-mia" data-src="assets/ai-mia.webp" alt=""><img id="ai-art-juno" data-src="assets/ai-juno.webp" alt=""></div>
+<dialog id="speed-dialog" aria-labelledby="speed-title" aria-describedby="speed-note">
+<div class="sheet-handle" aria-hidden="true"></div>
+<div class="dialog-heading"><h2 id="speed-title">말하기 속도</h2><button data-close="speed-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div>
+<p id="speed-note" class="dialog-note">AI 음성에만 적용돼요</p>
+<form id="speed-form">
+<output id="speed-value" for="speed-range" class="speed-value">1.0×</output>
+<label class="sr-only" for="speed-range">말하기 속도</label>
+<div class="speed-slider"><progress id="speed-progress" max="1" value="0.5" aria-hidden="true"></progress><input id="speed-range" type="range" min="0.5" max="1.5" step="0.05" value="1" aria-valuetext="1.0배" aria-describedby="speed-help"></div>
+<div class="speed-scale" aria-hidden="true"><span>0.5×</span><span>1.0×</span><span>1.5×</span></div>
+<button id="speed-reset" type="button" class="text-button">기본 속도로</button>
+<p id="speed-help">다음 답변부터 적용</p>
+<button id="speed-apply" type="submit" class="primary-button">적용</button>
+</form></dialog>
 <audio id="remote-audio" autoplay></audio><script src="public-config.js"></script><script type="module" src="app.js"></script>
 </body></html>

@@ -23,6 +23,10 @@ export function requireCompanionId(value: unknown = 'alex'): CompanionId {
   return value as CompanionId;
 }
 export function companionProfile(id: CompanionId) { return COMPANIONS.find(companion => companion.id === id)!; }
+export function requireSpeechSpeed(value: unknown = 1): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0.5 || value > 1.5 || Math.abs(value * 20 - Math.round(value * 20)) > 1e-7) throw new AppError(400, 'INVALID_SPEECH_SPEED', 'Choose a speech speed from 0.5 to 1.5 in steps of 0.05.');
+  return value;
+}
 // UTF-8 bytes conservatively bound input tokens too (at most one token per byte).
 export const LIMITS = { bodyBytes: 120_000, sdpBytes: 100_000, events: 12000, sessions: 500, analysisChunks: 8, chunkBytes: 60_000, inputBytes: 120_000, memoryBytes: 16_000 };
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

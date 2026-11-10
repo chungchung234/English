@@ -1,5 +1,5 @@
 import { POLICY_VERSION, reviewPolicy, usageEstimate, spendReservation } from './policy.ts';
-import { AppError, embeddingVector, fingerprint, memoryManagement, COMPANIONS, CONVERSATION_GUIDELINES, LIMITS, allowKeys, allowedOrigins, analysisChunks, analysisContext, mergeAnalyses, analysisSchema, boundedJson, bytes, companionProfile, object, requireCompanionId, requireUuid, transcriptFingerprint, validateAnalysis, validateSdp, uuidPattern, type CompanionId, type TranscriptEvent } from './core.ts';
+import { AppError, embeddingVector, fingerprint, memoryManagement, COMPANIONS, CONVERSATION_GUIDELINES, LIMITS, allowKeys, allowedOrigins, analysisChunks, analysisContext, mergeAnalyses, analysisSchema, boundedJson, bytes, companionProfile, requireSpeechSpeed, object, requireCompanionId, requireUuid, transcriptFingerprint, validateAnalysis, validateSdp, uuidPattern, type CompanionId, type TranscriptEvent } from './core.ts';
 
 type Env = { supabase: string; serviceKey: string; openai: string; allowedEmails: Set<string>; publicAccess: boolean; voice: string; coach: string; checkpoint: string; analysis: string; embedding: string; embeddingDimensions: number };
 type Session = { id: string; user_id: string; companion_id: CompanionId; scenario: string; status: 'active' | 'ended'; ended_at: string | null };
@@ -257,9 +257,9 @@ function voiceInstructions(companion: ReturnType<typeof companionProfile>, scena
   return `${SAFETY}\nYour name is ${companion.name}. ${companion.description} ${CONVERSATION_GUIDELINES} You are an AI companion; never claim to be a human or invent a real-world relationship. Only use the supplied history with your own companion identity. Have a natural English conversation with brief replies. Ask one question at a time, match the learner's pace, and offer gentle corrections only when useful. ${checkpoint ? 'Continue the same natural conversation from the checkpoint and recent turns; do not greet again or restart the topic.' : 'Begin with a short friendly greeting and one easy everyday question. Follow the learner’s real interests and daily life naturally; no chosen topic or roleplay setup is required. Only when scenario begins with User-prepared conversation: treat it as the learner’s optional next topic; otherwise historical scenario metadata does not prescribe a role or activity.'} If memory.focus contains an expression, naturally invite the learner to try that one expression once when it fits. Do not force repetition, interrupt conversation, or treat an invitation as evidence of reuse or mastery. Do not select extra practice expressions from historical memory. If focus is empty, continue general conversation without a past-learning invitation. The facts profile takes precedence over old summaries. A fact with an empty value is an explicit forget marker: never recall or reconstruct that field from older memories. Prior summaries are fallible context; never assume mastery or claim to remember unsupported details.\nUNTRUSTED_CONTEXT_JSON:\n${boundedJson(context, 20_000)}`;
 }
 async function voice(env: Env, userId: string, body: Record<string, unknown>) {
-  allowKeys(body, ['sessionId', 'sdp', 'omitLearningContext']);
+  allowKeys(body, ['sessionId', 'sdp', 'omitLearningContext', 'speechSpeed']);
   const omitted = omitLearningContext(body);
-  const sessionId = requireUuid(body.sessionId), sdp = validateSdp(body.sdp);
+  const sessionId = requireUuid(body.sessionId), sdp = validateSdp(body.sdp), speechSpeed = requireSpeechSpeed(body.speechSpeed);
   const session = await ownedSession(env, userId, sessionId);
   if (session.status !== 'active') throw new AppError(409, 'SESSION_ENDED', 'Start a new conversation to use voice.');
   const companion = companionProfile(session.companion_id);
@@ -268,7 +268,7 @@ async function voice(env: Env, userId: string, body: Record<string, unknown>) {
   if (!run.reserved) throw new AppError(409, 'VOICE_ALREADY_STARTED', 'This voice connection has already been started. Create a new session to reconnect.');
   try {
     const form = new FormData(); form.set('sdp', sdp);
-    form.set('session', JSON.stringify({ type: 'realtime', model: env.voice, reasoning: { effort: 'low' }, max_output_tokens: 512, instructions: voiceInstructions(companion, session.scenario, memory), truncation: 'disabled', audio: { input: { transcription: { model: 'gpt-realtime-whisper', language: 'en', delay: 'medium' }, turn_detection: { type: 'server_vad' } }, output: { voice: companion.voice } } }));
+    form.set('session', JSON.stringify({ type: 'realtime', model: env.voice, reasoning: { effort: 'low' }, max_output_tokens: 512, instructions: voiceInstructions(companion, session.scenario, memory), truncation: 'disabled', audio: { input: { transcription: { model: 'gpt-realtime-whisper', language: 'en', delay: 'medium' }, turn_detection: { type: 'server_vad' } }, output: { voice: companion.voice, speed: speechSpeed } } }));
     if (!omitted) await verifyMemory(env, userId, session.companion_id, memory);
     const response = await request('https://api.openai.com/v1/realtime/calls', { method: 'POST', headers: { Authorization: `Bearer ${env.openai}` }, body: form }, 40_000);
     if (!response.ok) throw new AppError(502, 'VOICE_UNAVAILABLE', 'Voice could not connect. Please start a new session and retry.');

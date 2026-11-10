@@ -1,0 +1,103 @@
+{
+  "source": "http://127.0.0.1:4173/",
+  "version": "50be3e4 + speech-speed working changes",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "state": "Synthetic signed-in and active-call DOM state using current local production HTML/CSS/assets and renderer; interactive transport is tested separately in test/browser.mjs; no real account or voice connection",
+  "errors": [],
+  "metrics": [
+    {
+      "id": "live-avatar",
+      "box": {
+        "x": 113.09375,
+        "y": 12,
+        "width": 163.796875,
+        "height": 163.796875,
+        "top": 12,
+        "right": 276.890625,
+        "bottom": 175.796875,
+        "left": 113.09375
+      }
+    },
+    {
+      "id": "live-name",
+      "box": {
+        "x": 167.875,
+        "y": 176.796875,
+        "width": 54.25,
+        "height": 40.5,
+        "top": 176.796875,
+        "right": 222.125,
+        "bottom": 217.296875,
+        "left": 167.875
+      }
+    },
+    {
+      "id": "call-status",
+      "box": {
+        "x": 173.71875,
+        "y": 220.296875,
+        "width": 42.5625,
+        "height": 23,
+        "top": 220.296875,
+        "right": 216.28125,
+        "bottom": 243.296875,
+        "left": 173.71875
+      }
+    },
+    {
+      "id": "call-timer",
+      "box": {
+        "x": 150.015625,
+        "y": 250.296875,
+        "width": 89.953125,
+        "height": 35.1875,
+        "top": 250.296875,
+        "right": 239.96875,
+        "bottom": 285.484375,
+        "left": 150.015625
+      }
+    },
+    {
+      "id": "live-actions",
+      "box": {
+        "x": 47,
+        "y": 324.984375,
+        "width": 296,
+        "height": 90,
+        "top": 324.984375,
+        "right": 343,
+        "bottom": 414.984375,
+        "left": 47
+      }
+    },
+    {
+      "id": "transcript-details",
+      "box": {
+        "x": 20,
+        "y": 685,
+        "width": 350,
+        "height": 54,
+        "top": 685,
+        "right": 370,
+        "bottom": 739,
+        "left": 20
+      }
+    },
+    {
+      "id": "end-call",
+      "box": {
+        "x": 159,
+        "y": 755,
+        "width": 72,
+        "height": 72,
+        "top": 755,
+        "right": 231,
+        "bottom": 827,
+        "left": 159
+      }
+    }
+  ]
+}

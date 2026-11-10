@@ -187,7 +187,7 @@ test('all pages are read despite a lower database page cap, then stored atomical
 });
 
 test('voice uses server multipart exchange and persists no SDP or secret', async () => {
-  const original = globalThis.fetch; let completed;
+  const original = globalThis.fetch; let completed, expectedSpeed=1;
   globalThis.fetch = async (url, options) => {
     const path = String(url);
     if(path.includes('/reserve_model_spend'))return response(true);
@@ -206,6 +206,7 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.equal(session.max_output_tokens, 512);
       assert.equal(session.audio.input.transcription.model, 'gpt-realtime-whisper');
       assert.equal(session.audio.output.voice, 'cedar');
+      assert.equal(session.audio.output.speed, expectedSpeed);
       assert.equal(options.headers.Authorization, 'Bearer test-openai');
       return new Response(sdp);
     }
@@ -213,10 +214,24 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
     throw new Error('Unexpected request');
   };
   try {
-    const result = await handler(request('voice', { sessionId, sdp }));
-    assert.equal(result.status, 200); assert.deepEqual(await result.json(), { sdp });
+    for(const speechSpeed of [undefined, .5, .85, 1.5]) {
+      expectedSpeed=speechSpeed??1;
+      const result = await handler(request('voice', { sessionId, sdp, ...(speechSpeed===undefined?{}:{speechSpeed}) }));
+      assert.equal(result.status, 200); assert.deepEqual(await result.json(), { sdp });
+    }
     assert.deepEqual(completed.p_result, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',policy_version:'2026-11-10-v2' });
   } finally { globalThis.fetch = original; }
+});
+
+test('voice rejects invalid speed before reading history or spending a request',async()=>{
+  const original=globalThis.fetch;
+  try{
+    for(const speechSpeed of [null,'0.85',0,.45,1.55,.851,{instructions:'override'}]){
+      let calls=0;globalThis.fetch=async url=>{calls++;assert.ok(String(url).includes('/auth/'));return response(authUser);};
+      const result=await handler(request('voice',{sessionId,sdp,speechSpeed}));
+      assert.equal(result.status,400);assert.equal((await result.json()).error.code,'INVALID_SPEECH_SPEED');assert.equal(calls,1);
+    }
+  }finally{globalThis.fetch=original;}
 });
 
 test('memory retrieves old relevant corrections and practice through all-history search', async () => {

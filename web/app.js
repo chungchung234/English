@@ -1,5 +1,6 @@
 import { createLearningReview } from '../src/learning-review.mjs';
 import { createAIPresence } from './ai-presence.js';
+import { createSpeechSpeed, validSpeed, formatSpeed } from './speech-speed.js';
 import { createOutbox, flushOutbox } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
 import { mountEmailLogin } from '../src/email-login.mjs';
@@ -200,6 +201,24 @@ function updateCallControls() {
   const locked=!current||current.ending||current.compacting||callStarting;
   if($('mute-call')){$('mute-call').disabled=locked;$('mute-call').setAttribute('aria-pressed',String(Boolean(current?.muted)));$('mute-call').setAttribute('aria-label','음소거');}
   document.querySelectorAll('[data-cue]').forEach(button=>button.disabled=locked||!connected||current.responding||current.speaking||current.aiSpeaking);
+  $('speed-call').disabled=locked||!connected;
+  $('speed-apply').disabled=!current||current.ending||callStarting||!connected;
+  current?.speed?.availability(Boolean(connected&&current.dc?.readyState==='open'&&!current.ending), Boolean(current.responding||current.aiSpeaking||current.speaking||current.compacting||callStarting));
+}
+function savedSpeechSpeed() {
+  try { const value=Number(localStorage.getItem('loop.speech-speed:'+scope));return validSpeed(value)?value:1; } catch { return 1; }
+}
+function renderSpeechSpeed(state) {
+  $('speed-current').textContent=formatSpeed(state.applied);
+  $('speed-call').setAttribute('aria-label','말하기 속도 '+formatSpeed(state.applied).replace('×','배'));
+  $('speed-pending').hidden=!state.pending;
+  $('speed-pending').textContent=state.pending?formatSpeed(state.desired)+' · 다음 답변에 적용 대기 중':'';
+}
+function renderSpeedDraft() {
+  const value=Number($('speed-range').value);
+  $('speed-value').value=formatSpeed(value);
+  $('speed-progress').value=value-.5;
+  $('speed-range').setAttribute('aria-valuetext',formatSpeed(value).replace('×','배'));
 }
 function setCallLayout(active) {
   document.body.dataset.callState = active ? 'live' : '';
@@ -412,6 +431,12 @@ async function startCall() {
     const pc=new RTCPeerConnection();
     current={omitLearningContext,id:session.id,companionId:selectedCompanion,scope:callScope,pc,stream,remoteStream:null,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,acceptingFinalEvents:false,speaking:false,responding:false,aiSpeaking:false,muted:false,awaitingCommit:false,items:[],lastCompact:Date.now(),lastCompactAttempt:0,needsCompact:false,compacting:false,compactFailures:0,startedAt:null,startedMono:null,deadline:null,durationTimer:null,clockInterval:null};
     call=current;
+    const initialSpeed=savedSpeechSpeed();current.initialSpeed=initialSpeed;
+    current.speed=createSpeechSpeed({initial:initialSpeed,send:event=>dc.send(JSON.stringify(event)),
+      changed:state=>{if(call===current)renderSpeechSpeed(state);},
+      applied:value=>{if(call!==current||current.ending)return;try{localStorage.setItem('loop.speech-speed:'+current.scope,String(value));}catch{/* The call can continue without a stored preference. */}notice('말하기 속도를 '+formatSpeed(value)+'로 변경했어요.');},
+      failed:message=>{if(call===current&&!current.ending)notice(message);}});
+    renderSpeechSpeed(current.speed.state);
     stream.getTracks().forEach(track=>pc.addTrack(track,stream));
     pc.ontrack=e=>{
       if(call!==current||current.ending)return;
@@ -423,6 +448,7 @@ async function startCall() {
     dc.onmessage=e=>{
       if(call!==current || (current.ending&&!current.acceptingFinalEvents))return;
       let event;try{event=JSON.parse(e.data);}catch{return;}
+      const speedError=current.speed.event(event);
       if(!current.ending) {
         if(event.type==='input_audio_buffer.speech_started'){presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
         if(event.type==='input_audio_buffer.speech_stopped' || event.type==='response.created'){presence.setState('thinking');$('call-status').textContent='답변을 준비하고 있어요';}
@@ -445,7 +471,7 @@ async function startCall() {
       if(event.type==='input_audio_buffer.speech_stopped'){current.speaking=false;if(!current.ending)current.responding=true;}
       if(event.type==='input_audio_buffer.committed'){current.awaitingCommit=false;current.transcribing.add(event.item_id);}
       if(event.type==='conversation.item.input_audio_transcription.failed'){current.transcriptionError=true;current.transcribing.delete(event.item_id);notice('일부 발화의 전사에 실패했습니다. 해당 발화는 기록되지 않았습니다.');}
-      if(event.type==='error'&&!['response_cancel_not_active','conversation_already_has_active_response'].includes(event.error?.code)) {current.transcriptionError=true;notice('음성 연결 오류: '+(event.error?.message||'알 수 없는 오류'));}
+      if(event.type==='error'&&!speedError&&!['response_cancel_not_active','conversation_already_has_active_response'].includes(event.error?.code)) {current.transcriptionError=true;notice('음성 연결 오류: '+(event.error?.message||'알 수 없는 오류'));}
       if(!current.ending)updateCallControls();
       saving=saving.then(()=>capture(event,current)).catch(error=>{current.transcriptionError=true;if(call===current){notice('저장 실패: '+error.message);setStatus('저장 실패 · 통화를 중단하고 확인하세요');current.stream.getTracks().forEach(track=>track.enabled=false);}});
     };
@@ -465,12 +491,12 @@ async function startCall() {
     const offer=await pc.createOffer();if(call!==current||current.ending)return;await pc.setLocalDescription(offer);
     if(call!==current||current.ending)return;$('call-status').textContent='음성 연결 중…';
     current.omitLearningContext ||= learning.hasPendingExclusions();
-    const answer=await edge('voice',{sessionId:session.id,sdp:offer.sdp,omitLearningContext:current.omitLearningContext});
+    const answer=await edge('voice',{sessionId:session.id,sdp:offer.sdp,omitLearningContext:current.omitLearningContext,speechSpeed:current.initialSpeed});
     if(call!==current||current.ending)return;
     await pc.setRemoteDescription({type:'answer',sdp:answer.sdp});
   } catch(e) {
     stream?.getTracks().forEach(track=>track.stop());
-    if(current){clearCallClock(current);current.pc.close();}
+    if(current){current.speed?.dispose();clearCallClock(current);current.pc.close();}
     if(!current||call===current){call=null;presence.detachAudio();$('remote-audio').srcObject=null;$('call-status').textContent='연결하지 못했어요. 다시 시도해 주세요.';}
     throw e;
   } finally {callStarting=false;setCallLayout(Boolean(call));if(!call&&!callEnding)setView(current?.nextView||'contacts');}
@@ -481,6 +507,7 @@ function endCall() {
   if(current.ending)return current.endingPromise||Promise.resolve();
   // Reserve the end synchronously before any transcription/network awaits.
   current.ending=true;current.acceptingFinalEvents=true;callEnding=true;clearCallClock(current);navigationControls();updateCallControls();$('end-call').disabled=true;
+  current.speed?.dispose();closeDialog('speed-dialog');
   const wrapupTimer=setTimeout(()=>{
     if(!current.ending||!callEnding)return;
     const home=document.createElement('button');home.id='wrapup-home';home.className='text-button';home.dataset.action='wrapup-home';home.textContent='홈에서 기다리기';
@@ -777,6 +804,10 @@ $('logout').onclick=logout;$('auth-reset').onclick=logout;
 document.querySelectorAll('[data-oauth]').forEach(button=>button.onclick=protect(()=>startSocialLogin(button.dataset.oauth)));
 document.querySelectorAll('[data-link-provider]').forEach(button=>button.onclick=protect(()=>startSocialLogin(button.dataset.linkProvider,true)));
 $('start-call').onclick=protect(startCall);$('end-call').onclick=protect(endCall);
+$('speed-call').onclick=()=>{if(!call||call.ending)return;$('speed-range').value=String(call.speed.state.desired);renderSpeedDraft();openDialog('speed-dialog');};
+$('speed-range').oninput=renderSpeedDraft;
+$('speed-reset').onclick=()=>{$('speed-range').value='1';renderSpeedDraft();};
+$('speed-form').onsubmit=event=>{event.preventDefault();if(!call||call.ending||$('speed-apply').disabled)return;call.speed.request(Number($('speed-range').value));closeDialog('speed-dialog');};
 $('refresh-history').onclick=protect(async()=>{if(memoryBusy())return;await sync();await loadHistory();await loadMemory();});
 $('weekly').onclick=protect(async()=>{
   if(memoryBusy())throw Error('통화를 마친 뒤 분석하세요.');

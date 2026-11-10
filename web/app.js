@@ -9,6 +9,7 @@ const outbox = createOutbox();
 const presence = createAIPresence();
 const config = globalThis.LOOP_PUBLIC_CONFIG ? validatePublicConfig(globalThis.LOOP_PUBLIC_CONFIG.url,globalThis.LOOP_PUBLIC_CONFIG.key) : null;
 const authSession=config?createAuthSession(config):null;
+let readyEpoch=0,providersLoaded=false;
 let auth=null,loginReady=false,socialBusy=false,providers={google:false,kakao:false};
 let flushing, call, scope, saving = Promise.resolve(), historyEpoch = 0, memoryEpoch = 0, cloudVerified = false;
 const companions = {mia:{name:'Mia',trait:'다정하고 사려 깊은 대화'},alex:{name:'Alex',trait:'차분하고 명료한 대화'},juno:{name:'Juno',trait:'경쾌하고 호기심 많은 대화'}};
@@ -581,6 +582,8 @@ function renderAuthControls(){
 async function loadAuthProviders(){
   try{const {data}=await request('/auth/v1/settings');providers={google:data.external?.google===true,kakao:data.external?.kakao===true};}
   catch{providers={google:false,kakao:false};}
+  providersLoaded=true;
+  if(!providers.google&&!providers.kakao)$('email-login').open=true;
   renderAuthControls();
 }
 async function startSocialLogin(provider,link=false){
@@ -591,6 +594,7 @@ async function startSocialLogin(provider,link=false){
   catch{socialBusy=false;renderAuthControls();notice('로그인 연결을 시작하지 못했어요. 잠시 뒤 다시 선택해 주세요.');}
 }
 function resetSignedOutUI(){
+  readyEpoch++;$('auth-transition').hidden=true;
   learning.reset();auth=null;scope=null;historyEpoch++;memoryEpoch++;selectedReviewSessionId=null;
   weeklyCompanions.clear();weeklyRequest=null;renderWeeklyAction();
   closeDialog('memory-dialog');closeDialog('account-dialog');closeDialog('call-detail-dialog');
@@ -599,25 +603,35 @@ function resetSignedOutUI(){
 }
 async function ready(){
   if(!config){$('service-state').textContent='서비스 연결을 준비하고 있습니다. 설정이 완료되면 여기서 바로 시작할 수 있어요.';setStatus('서비스 준비 중');return;}
-  auth=await authSession.getSession();
+  const epoch=++readyEpoch;
+  const session=await authSession.getSession();
+  if(epoch!==readyEpoch)return;
+  auth=session;
   $('service-state').hidden=true;$('social-login').hidden=false;$('email-login').hidden=false;
   $('login-form').hidden=false;
   $('login-help').hidden=false;$('use-code').hidden=false;
-  if((!providers.google&&!providers.kakao)||!$('verify-form').hidden)$('email-login').open=true;
+  if((providersLoaded&&!providers.google&&!providers.kakao)||!$('verify-form').hidden)$('email-login').open=true;
   renderAuthControls();
-  if(!auth){setStatus('로그인하면 기록이 자동 저장됩니다');return;}
+  if(!auth){$('auth-transition').hidden=true;$('setup').hidden=false;setStatus('로그인하면 기록이 자동 저장됩니다');return;}
   scope=null;weeklyCompanions.clear();weeklyRequest=null;renderWeeklyAction();closeDialog('call-detail-dialog');
-  const user=await api('/auth/v1/user');auth.user=user;
-  let data;
-  try{data=await edge('config');}
-  catch(error){if(error.code==='ACCOUNT_NOT_ALLOWED'){$('auth-reset').hidden=false;throw Error('승인된 이메일 계정만 이용할 수 있습니다. 이메일이 다른 계정은 기존 계정으로 로그인한 뒤 내 계정에서 연결하세요.');}throw error;}
+  if($('workspace').hidden){$('setup').hidden=true;$('auth-transition').hidden=false;}
+  let user,data;
+  try{[user,data]=await Promise.all([api('/auth/v1/user'),edge('config')]);}
+  catch(error){
+    if(epoch!==readyEpoch)return;
+    $('auth-transition').hidden=true;$('setup').hidden=false;$('auth-reset').hidden=false;
+    if(error.code==='ACCOUNT_NOT_ALLOWED'){$('auth-reset').hidden=false;throw Error('승인된 이메일 계정만 이용할 수 있습니다. 이메일이 다른 계정은 기존 계정으로 로그인한 뒤 내 계정에서 연결하세요.');}
+    throw error;
+  }
+  if(epoch!==readyEpoch)return;
+  auth.user=user;
   scope=config.url+'|'+user.id;
   renderAuthControls();$('auth-reset').hidden=true;
   const savedCompanion=localStorage.getItem(companionStorageKey());companionId=Object.hasOwn(companions,savedCompanion)?savedCompanion:'alex';updateCompanion();setView('contacts');
-  $('setup').hidden=true;$('workspace').hidden=false;
+  $('auth-transition').hidden=true;$('setup').hidden=true;$('workspace').hidden=false;
+  $('models').textContent=`음성 ${data.models.voice} · 교정 ${data.models.coach} · 분석 ${data.models.analysis}`;
   await updatePending();try{await sync();}catch(e){notice('미전송 기록이 있습니다: '+e.message);}
   await loadHistory();await loadMemory();await learning.load();await loadPlan();await updatePending();
-  $('models').textContent=`음성 ${data.models.voice} · 교정 ${data.models.coach} · 분석 ${data.models.analysis}`;
 }
 mountEmailLogin({document,storage:localStorage,storageKey:'loop.email-login:'+(config?.url||'unconfigured'),request,notice,onAuthenticated:async data=>{auth=await authSession.adopt(data);notice('');await ready();}});
 const logout=protect(async()=>{if(memoryBusy())throw Error('먼저 통화를 종료하세요.');try{await authSession.signOut();}finally{resetSignedOutUI();notice('로그아웃했습니다. 전송 대기 기록이 있다면 같은 계정으로 다시 로그인해 주세요.');}});
@@ -694,6 +708,7 @@ updateCompanion();setView('contacts');
 async function initializeLogin(){
   if(!config){await ready();return;}
   const providersLoading=loadAuthProviders();let callbackMessage='';
+  if(new URL(location.href).searchParams.has('code')){$('setup').hidden=true;$('auth-transition').hidden=false;}
   try{const result=await authSession.completeRedirect();auth=result.session;if(result.linked)callbackMessage='계정을 연결했어요. 다음에는 연결한 계정으로 로그인할 수 있어요.';}
   catch(error){auth=await authSession.getSession().catch(()=>null);callbackMessage=error instanceof LoginFlowError?error.message:'로그인을 완료하지 못했어요. 다시 선택해 주세요.';}
   authSession.onChange((event,session)=>{
@@ -703,8 +718,8 @@ async function initializeLogin(){
       resetSignedOutUI();
     }else if(event==='SIGNED_IN'&&previousUser&&session?.user?.id!==previousUser&&!$('workspace').hidden)window.location.reload();
   });
-  await providersLoading;loginReady=true;await ready();if(callbackMessage)notice(callbackMessage);
+  loginReady=true;await ready();if(callbackMessage)notice(callbackMessage);await providersLoading;
 }
-initializeLogin().catch(error=>{loginReady=true;renderAuthControls();notice('연결 확인 필요: '+error.message);});
+initializeLogin().catch(error=>{loginReady=true;$('auth-transition').hidden=true;if($('workspace').hidden)$('setup').hidden=false;renderAuthControls();notice('연결 확인 필요: '+error.message);});
 
 document.querySelector('.brand').addEventListener('click',e=>{e.preventDefault();if(auth)setView('contacts');});

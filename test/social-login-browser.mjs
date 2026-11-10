@@ -7,14 +7,14 @@ function token(id,label='fixture'){
  const encode=value=>Buffer.from(JSON.stringify(value)).toString('base64url');
  return encode({alg:'HS256',typ:'JWT'})+'.'+encode({sub:id,exp:Math.floor(Date.now()/1000)+3600,jti:label})+'.'+Buffer.from('fixture-signature').toString('base64url');
 }
-async function fixture(browser,{approved=true}={}){
+async function fixture(browser,{approved=true,gates={},started={}}={}){
  const context=await browser.newContext({viewport:{width:390,height:844}});
  const state={authorizations:[],exchanges:[],refreshes:0,mails:0,history:0,linkRequests:0,errors:[],user:{id:uid,email:'existing@example.com',identities:[{provider:'google'}]}};
  await context.route('**/public-config.js',route=>route.fulfill({contentType:'text/javascript',body:`globalThis.LOOP_PUBLIC_CONFIG={url:"${endpoint}",key:"sb_publishable_fixture"};`}));
  await context.route('https://kauth.kakao.com/**',route=>route.fulfill({contentType:'text/html',body:'Kakao consent fixture'}));
  await context.route(endpoint+'/**',async route=>{
   const request=route.request(),url=new URL(request.url()),path=url.pathname;
-  if(path==='/auth/v1/settings')return route.fulfill({json:{external:{google:true,kakao:true}}});
+  if(path==='/auth/v1/settings'){started.settings?.();await gates.settings;return route.fulfill({json:{external:{google:true,kakao:true}}});}
   if(path==='/auth/v1/authorize'){
    state.authorizations.push(url);
    assert.equal(url.searchParams.get('code_challenge_method'),'s256');assert(url.searchParams.get('code_challenge'));
@@ -36,10 +36,10 @@ async function fixture(browser,{approved=true}={}){
    }else{assert.equal(grant,'refresh_token');state.refreshes++;}
    return route.fulfill({json:{access_token:token(state.user.id,grant),refresh_token:'fixture-refresh-'+state.refreshes,expires_in:3600,token_type:'bearer',user:state.user,provider_token:'unneeded-provider-token',provider_refresh_token:'unneeded-provider-refresh'}});
   }
-  if(path==='/auth/v1/user')return route.fulfill({json:state.user});
+  if(path==='/auth/v1/user'){started.user?.();await gates.user;return route.fulfill({json:state.user});}
   if(path==='/auth/v1/logout')return route.fulfill({status:204});
   if(path==='/auth/v1/otp'){state.mails++;throw Error('Social login must not send mail');}
-  if(path.endsWith('/coach/config'))return route.fulfill({status:approved?200:403,json:approved?{models:{voice:'fixture',coach:'fixture',analysis:'fixture'}}:{error:{code:'ACCOUNT_NOT_ALLOWED',message:'승인된 이메일 계정만 이용할 수 있습니다.'}}});
+  if(path.endsWith('/coach/config')){started.config?.();await gates.config;return route.fulfill({status:approved?200:403,json:approved?{models:{voice:'fixture',coach:'fixture',analysis:'fixture'}}:{error:{code:'ACCOUNT_NOT_ALLOWED',message:'승인된 이메일 계정만 이용할 수 있습니다.'}}});}
   if(path.startsWith('/rest/v1/')){state.history++;return route.fulfill({json:[],headers:{'Content-Range':'0-0/0','Access-Control-Expose-Headers':'Content-Range'}});}
   if(path.endsWith('/coach/memory'))return route.fulfill({json:{memories:[]}});
   if(path.endsWith('/rpc/learning_plan'))return route.fulfill({json:{scenario:null}});
@@ -51,6 +51,25 @@ async function fixture(browser,{approved=true}={}){
 }
 
 export async function testSocialLogin(browser,base){
+ const deferred=()=>{let resolve;const promise=new Promise(done=>resolve=done);return {promise,resolve};};
+ const settings=deferred(),user=deferred(),config=deferred(),userStarted=deferred(),configStarted=deferred();
+ const delayed=await fixture(browser,{gates:{settings:settings.promise,user:user.promise,config:config.promise},started:{user:userStarted.resolve,config:configStarted.resolve}});
+ try{
+  await delayed.context.addInitScript(({endpoint,uid,accessToken,origin})=>{if(location.origin===origin)localStorage.setItem('loop.auth:'+endpoint,JSON.stringify({access_token:accessToken,refresh_token:'fixture-refresh',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:uid}}));},{endpoint,uid,accessToken:token(uid),origin:base});
+  const page=await delayed.context.newPage();await page.goto(base,{waitUntil:'domcontentloaded'});
+  await page.locator('#auth-transition').waitFor({state:'visible'});
+  await Promise.all([userStarted.promise,configStarted.promise]);
+  assert.equal(await page.locator('#setup').isVisible(),false,'a recovered session leaves login immediately');
+  assert.equal(await page.locator('#workspace').isVisible(),false,'approval is still required before showing the app');
+  assert.equal(delayed.state.history,0,'no private reads while approval is pending');
+  config.resolve();user.resolve();
+  await page.locator('#workspace').waitFor({state:'visible'});
+  assert.equal(await page.locator('#auth-transition').isVisible(),false);
+  assert.equal(await page.locator('#setup').isVisible(),false,'slow provider settings must not block the authenticated screen');
+  settings.resolve();assert.deepEqual(delayed.state.errors,[]);
+  console.log('PASS: slow provider settings do not block entry; user/approval checks run concurrently with a visible transition and no private reads before approval.');
+ }finally{settings.resolve();user.resolve();config.resolve();await delayed.context.close();}
+
  const {context,state}=await fixture(browser);
  try{
   let page=await context.newPage();await page.goto(base);

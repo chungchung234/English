@@ -11,7 +11,7 @@ function fixture(){
  const client={
   async initialize(){return {error:null};},async getSession(){return {data:{session},error:null};},
   async signInWithOAuth(input){calls.signin=input;return {data:{url:'https://auth-fixture.supabase.co/auth/v1/authorize?provider='+input.provider,flowId:'flow-fixture'},error:null};},
-  async linkIdentity(input){calls.link=input;return {data:{url:'https://accounts.google.com/oauth',flowId:'flow-fixture'},error:null};},
+  async linkIdentity(input){calls.link=input;return {data:{url:input.provider==='kakao'?'https://kauth.kakao.com/oauth/authorize':'https://accounts.google.com/oauth',flowId:'flow-fixture'},error:null};},
   async exchangeCodeForSession(code,options){calls.exchange.push({code,options});return {data:{session},error:null};},
   async signOut(){calls.logout++;return {error:null};},
   async refreshSession(){calls.refresh++;return {data:{session:{...session,access_token:'renewed'}},error:null};},
@@ -70,4 +70,13 @@ test('unsupported providers and unexpected authorization hosts cannot initiate r
 test('an expired access token is refreshed through the official client without requesting an email',async()=>{
  const f=fixture();f.session.expires_at=1600000000;
  assert.equal(await f.auth.accessToken(),'renewed');assert.equal(f.calls.refresh,1);assert.equal(f.calls.signin,undefined);
+});
+
+test('Kakao sign-in and linking request only email without adding default photo or nickname consent',async()=>{
+ const f=fixture();await f.auth.begin('kakao');
+ assert.deepEqual(f.calls.signin.options.queryParams,{scope:'account_email'});
+ assert.equal(f.calls.signin.options.scopes,undefined);
+ await f.auth.begin('kakao',{link:true});
+ assert.deepEqual(f.calls.link.options.queryParams,{scope:'account_email'});
+ await f.auth.begin('google');assert.equal(f.calls.signin.options.queryParams,undefined);
 });

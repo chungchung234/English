@@ -11,9 +11,10 @@
 이후 실제 로그인 시도에서 확인한 추가 문제:
 
 - Google OAuth 인증과 검증된 계정 생성은 성공했지만 해당 Gmail이 앱 승인 목록에 없었다. 현재 사용자가 시도한 유일한 신규 Google 계정의 검증된 identity·기존 소유자 식별자 일치를 확인한 뒤 해당 이메일 하나를 추가 승인했다. 기존 승인 항목을 유지하고 `ACCESS_MODE=invite`와 Edge Function의 `ALLOWED_EMAILS`를 동기화했다. DB 승인과 두 서버 설정의 digest 일치를 확인했다. 승인은 해당 Google 사용자 ID에 적용되며 기존 네이버 사용자 ID와 데이터도 유지된다.
-- 카카오의 현재 등록값으로 의도적으로 무효인 진단용 인가 코드를 토큰 엔드포인트에 보냈을 때 HTTP 401 `invalid_client`, `KOE010`을 반환했다. 공식 설명은 Client Secret 누락 또는 불일치다. 키의 공백·따옴표 보정 필요와 두 입력란 뒤바뀜 가능성을 확인했고 자동으로 보정할 조건은 없었다. 사용하는 **동일 REST API 키 화면의 Kakao Login Client Secret**을 Supabase Kakao의 Client Secret 필드에 정확히 입력해야 한다. 진단에서는 사용자 인가 코드·액세스 토큰을 사용하거나 발급하지 않았다.
+- **카카오 `KOE010` 진단 정정:** 관리 API가 반환한 64자리 16진수의 보안 표현을 실제 Client Secret처럼 토큰 요청에 재사용한 검사는 유효하지 않았다. 이 검사로 등록 시크릿 불일치를 단정한 결론과 재입력 안내를 철회한다. 조회한 시크릿 표현은 불투명하게 취급하고 제공자 인증에 재사용하지 않는다. Supabase가 실제 저장 설정으로 처리하는 새 PKCE flow의 callback에 의도적으로 무효인 진단 코드를 보냈을 때, 서버 로그는 시크릿 거부 대신 예상한 `invalid_grant`를 기록했다. 실제 사용자 코드·세션을 사용하지 않은 검사이며 최종 로그인 성공을 뜻하지 않는다.
+- 카카오 기본 요청의 `account_email profile_image profile_nickname` 중 이 앱에는 이메일만 필요하다. Supabase의 `scopes` 옵션은 기본값에 추가되므로, SDK의 provider query parameter `scope=account_email`로 기본 프로필 권한을 대체했다. 실제 Supabase authorize 응답에서도 카카오에 전달되는 scope가 `account_email` 하나임을 확인했다. 프로필 사진·닉네임 동의 설정과 충돌할 수 있는 불필요한 요청을 줄이는 수정이며, 사용자에게 나타난 제공자 화면의 오류 코드를 직접 확인한 것은 아니다.
 
-Client Secret 수정 후 Google로 접속한 상태에서 **내 계정 → 카카오 연결**을 사용하면 같은 사용자 ID로 두 소셜 계정을 연결할 수 있다. 카카오 제공자 자체 오류는 Supabase의 승인 목록 변경만으로 해결되지 않는다. `KOE010`의 [공식 원인과 조치](https://developers.kakao.com/docs/ko/kakaologin/trouble-shooting)를 참고한다.
+Google로 접속한 상태에서 **내 계정 → 카카오 연결**을 사용하면 같은 사용자 ID로 두 소셜 계정을 연결할 수 있다. 카카오 제공자 자체 오류는 Supabase의 승인 목록 변경만으로 해결되지 않는다. 이후 오류는 실제 Supabase callback 로그와 제공자 오류 코드로 판단한다. `KOE205` 등 동의 범위 오류의 [공식 원인과 조치](https://developers.kakao.com/docs/ko/kakaologin/trouble-shooting)를 참고한다.
 
 Supabase 공식 `@supabase/auth-js` SDK를 앱에 묶어 외부 JavaScript CDN 없이 실행한다. 기존 `loop.auth:<프로젝트 URL>` 세션을 이어 쓰며 자동 갱신·탭 간 상태 공유를 적용한다. 명시적 로그아웃, 서버 세션 해제, 브라우저 저장 데이터 삭제 후에는 다시 로그인해야 한다.
 
@@ -43,7 +44,7 @@ Supabase의 정확한 앱 복귀 주소와 인증된 사용자 계정 연결 기
 
 1. [Kakao Developers](https://developers.kakao.com/console/app)에서 앱과 웹 플랫폼을 만들고 위 표의 웹 도메인·Redirect URI를 등록한다.
 2. 카카오 로그인을 활성화하고 **REST API 키와 Kakao Login Client Secret**을 확인한다. Client Secret도 카카오 콘솔에서 활성화한다. JavaScript 키나 Admin 키를 대신 넣지 않는다.
-3. `account_email` 동의 항목을 구성한다. 공식 가이드상 이 항목은 **비즈앱**에서 제공되므로 메뉴가 없으면 카카오의 비즈앱 전환·본인 확인 절차를 먼저 완료한다. `profile_nickname`, `profile_image` 기본 프로필 동의 항목도 공식 가이드에 맞춘다.
+3. `account_email` 동의 항목을 구성한다. 공식 가이드상 이 항목은 **비즈앱**에서 제공되므로 메뉴가 없으면 카카오의 비즈앱 전환·본인 확인 절차를 먼저 완료한다. 이 앱은 카카오 이메일만 요청하며 `profile_nickname`, `profile_image` 동의는 요청하지 않는다.
 4. Supabase Kakao 제공자에 REST API 키(Client ID)·Client Secret을 입력하고 활성화한다. 현재 서비스는 승인된 이메일을 검사하므로 **Allow users without an email은 끈다.** 일반 방문자에게 공개할 때는 콘솔에서 요구하는 앱 상태·동의 권한 심사도 확인한다.
 
 **키·시크릿·인증 코드를 채팅이나 저장소에 보내지 않는다.** 키는 Supabase 대시보드 보안 입력란에 직접 저장한다. 현재 환경에는 Google·카카오 개발자 권한이나 키가 없고, 공유 브라우저도 초기화 도구 오류로 열리지 않아 등록 단계는 진행할 수 없었다.
@@ -62,7 +63,7 @@ node scripts/configure-social-login.mjs --prepare
 node scripts/configure-social-login.mjs --prepare --enable-configured
 ```
 
-기본 명령은 읽기 전용이다. 마지막 명령도 Client ID·Secret이 모두 있는 제공자만 활성화한다. 값·원시 제공자 오류는 출력하지 않는다. 보안 환경 변수에 키를 설정했다면 `--configure-from-env`를 추가해 `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `KAKAO_REST_API_KEY`, `KAKAO_CLIENT_SECRET`에서 읽을 수 있다. 클라우드 프록시 환경에서는 명령 앞에 `NODE_USE_ENV_PROXY=1`을 붙인다.
+기본 명령은 읽기 전용이다. 마지막 명령도 Client ID·Secret이 모두 있는 제공자만 활성화한다. 값·원시 제공자 오류는 출력하지 않는다. 보안 환경 변수에 키를 설정했다면 `--configure-from-env`를 추가해 `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `KAKAO_REST_API_KEY`, `KAKAO_CLIENT_SECRET`에서 읽을 수 있다. 시크릿 readback은 원문 또는 SHA-256 표현과 비교할 수 있으며 조회값을 인증용 원문으로 취급하지 않는다. 클라우드 프록시 환경에서는 명령 앞에 `NODE_USE_ENV_PROXY=1`을 붙인다.
 
 단위·브라우저 검사는 실제 SDK와 합성 제공자 응답으로 PKCE proof 일치, 요청 없는 callback·취소·만료 거부, URL 정리, 제공자 토큰 미보관, 새로고침·탭 재접속·갱신, 같은 사용자에게 카카오 연결, 탭 간 로그아웃, 승인 전 기록·대기열 접근 차단을 확인한다. **실제 제공자 동의·로그인 성공은 키 등록 후 별도 확인해야 한다.**
 

@@ -18,10 +18,12 @@ async function fixture(browser,{approved=true}={}){
   if(path==='/auth/v1/authorize'){
    state.authorizations.push(url);
    assert.equal(url.searchParams.get('code_challenge_method'),'s256');assert(url.searchParams.get('code_challenge'));
+    if(url.searchParams.get('provider')==='kakao')assert.equal(url.searchParams.get('scope'),'account_email');
    return route.fulfill({contentType:'text/html',body:'Google or Kakao consent fixture'});
   }
   if(path==='/auth/v1/user/identities/authorize'){
    state.linkRequests++;assert(request.headers().authorization?.startsWith('Bearer '));
+    assert.equal(url.searchParams.get('scope'),'account_email');
    state.authorizations.push(url);
    return route.fulfill({json:{url:'https://kauth.kakao.com/oauth/authorize?fixture=link'}});
   }

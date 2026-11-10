@@ -74,6 +74,10 @@ export function createAuthSession(config, {
     intentStorage.setItem(intentKey,JSON.stringify({pending:true}));
     try{
       const options={redirectTo:redirectUrl(),skipBrowserRedirect:true};
+      // Supabase's Kakao defaults also request photo/nickname consent. This app
+      // only needs the verified email. Override the provider scope directly;
+      // options.scopes would append to those defaults instead of replacing them.
+      if(provider==='kakao')options.queryParams={scope:'account_email'};
       const result=link?await client.linkIdentity({provider,options}):await client.signInWithOAuth({provider,options});
       const data=unwrap(result);
       if(!data.url||!data.flowId)throw new LoginFlowError('로그인 연결을 준비하지 못했어요. 다시 시도하세요.');

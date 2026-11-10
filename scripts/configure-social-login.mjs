@@ -1,4 +1,5 @@
 import {pathToFileURL} from 'node:url';
+import {createHash} from 'node:crypto';
 class SocialLoginSetupError extends Error {}
 
 // Only the management API receives credentials. Never echo provider responses,
@@ -35,7 +36,12 @@ export async function configureSocialLogin(env,{prepare=false,enableConfigured=f
   let after=before;
   if(Object.keys(patch).length){
     await call('PATCH',patch);after=await call('GET');
-    for(const [key,value] of Object.entries(patch))if(after[key]!==value)throw new SocialLoginSetupError('Social login configuration readback did not match. No credentials printed.');
+    for(const [key,value] of Object.entries(patch)){
+      // GET values for secrets can be opaque SHA-256 representations. Verify
+      // secure input against that representation; never reuse GET as a secret.
+      const secretDigest=key.endsWith('_secret')&&typeof value==='string'?createHash('sha256').update(value).digest('hex'):null;
+      if(after[key]!==value&&(!secretDigest||after[key]!==secretDigest))throw new SocialLoginSetupError('Social login configuration readback did not match. No credentials printed.');
+    }
     for(const key of Object.keys(before)){
       if(key in patch)continue;
       if(/^(smtp_|rate_limit_|sessions_|mailer_autoconfirm$)/.test(key)&&JSON.stringify(before[key])!==JSON.stringify(after[key]))throw new SocialLoginSetupError('An unrelated authentication setting changed during configuration.');

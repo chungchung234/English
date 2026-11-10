@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {configureSocialLogin} from '../scripts/configure-social-login.mjs';
+import {createHash} from 'node:crypto';
 
 test('social auth preparation preserves SMTP, limits, existing redirects and disabled unconfigured providers',async()=>{
  let config={uri_allow_list:'https://existing.example/app',security_manual_linking_enabled:false,external_google_enabled:false,external_kakao_enabled:false,smtp_pass:'private-smtp',rate_limit_email_sent:30,mailer_autoconfirm:false};
@@ -31,4 +32,15 @@ test('only configured Google and Kakao providers can be enabled, without publish
 test('configuration errors never echo raw provider validation that may contain a secret',async()=>{
  await assert.rejects(configureSocialLogin({SUPABASE_ACCESS_TOKEN:'management-secret'},{},async()=>Response.json({message:'leaked-client-secret'},{status:400})),error=>error.message.includes('400')&&!error.message.includes('leaked-client-secret'));
  await assert.rejects(configureSocialLogin({SUPABASE_ACCESS_TOKEN:'management-secret'},{},async()=>new Response('leaked-client-secret')),error=>!error.message.includes('leaked-client-secret'));
+});
+
+test('configuration verifies hashed secret readback without treating it as a reusable credential',async()=>{
+ const secret='secure-input-fixture',digest=createHash('sha256').update(secret).digest('hex');
+ let config={external_kakao_enabled:false},sent;
+ const result=await configureSocialLogin({SUPABASE_ACCESS_TOKEN:'management-fixture',KAKAO_REST_API_KEY:'client-fixture',KAKAO_CLIENT_SECRET:secret},{fromEnv:true,enableConfigured:true},async(url,options)=>{
+  if(options.method==='PATCH'){sent=JSON.parse(options.body);config={...config,...sent,external_kakao_secret:digest};}
+  return Response.json(config);
+ });
+ assert.equal(sent.external_kakao_secret,secret);assert(result.providers.kakao.enabled);
+ assert(!JSON.stringify(result).includes(secret));assert(!JSON.stringify(result).includes(digest));
 });

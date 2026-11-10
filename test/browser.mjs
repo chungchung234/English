@@ -5,6 +5,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { testEmailLogin } from './email-login-browser.mjs';
 import { testSocialLogin } from './social-login-browser.mjs';
+import { testSpeechSpeed } from './speech-speed-browser.mjs';
 import { testTabUI } from './tab-ui-browser.mjs';
 const port=4187, base=`http://127.0.0.1:${port}`;
 async function assertVisibleImagesLoaded(page){
@@ -26,7 +27,7 @@ try{
  const artRequests=[];page.on('request',request=>{if(/assets\/ai-.*\.webp/.test(request.url()))artRequests.push(request.url());});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  const uid='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';const session='11111111-1111-4111-8111-111111111111';
- const analyses=[];
+ const analyses=[],voiceSpeeds=[];
  const sessions=[{id:session,user_id:uid,scenario:'Coffee',companion_id:'alex',status:'ended',created_at:new Date().toISOString(),ended_at:new Date().toISOString()}];
  const memoryQueries=[];const controlCalls=[],indexCalls=[];const memoryFacts={alex:[],mia:[],juno:[]},memoryExcluded={alex:[],mia:[],juno:[]};let indexRemaining=true,indexFailure=false,releaseSlowMemorySearch,slowMemorySearchStarted,slowMemorySearchDone;const slowMemorySearchWaiting=new Promise(resolve=>slowMemorySearchStarted=resolve);const slowMemorySearchFinished=new Promise(resolve=>slowMemorySearchDone=resolve);
  const companionMemory={alex:[{summary:'Alex memory fixture',practice:[{expression:'Could you repeat that?'}]}],mia:[{summary:'Mia memory fixture',practice:[]}],juno:[{summary:'Juno memory fixture',practice:[]}]};
@@ -46,7 +47,7 @@ try{
   else if(url.pathname.endsWith('/coach/memory-manage')){controlCalls.push(body);const c=body.companionId;const facts=memoryFacts[c],excluded=memoryExcluded[c];if(body.action==='setFact'){const old=facts.find(f=>f.key===body.key);if(old)Object.assign(old,{value:body.value,forgotten:false,source:'직접 입력',updated_at:new Date().toISOString()});else facts.push({key:body.key,value:body.value,forgotten:false,source:'직접 입력',updated_at:new Date().toISOString()});}else if(body.action==='forgetFact'){const old=facts.find(f=>f.key===body.key);if(old)old.forgotten=true;}else if(body.action==='excludeSession'&&!excluded.some(x=>x.session_id===body.sessionId))excluded.push({session_id:body.sessionId,scenario:'Coffee',ended_at:new Date().toISOString()});else if(body.action==='restoreSession'){const i=excluded.findIndex(x=>x.session_id===body.sessionId);if(i>=0)excluded.splice(i,1);}data={revision:1,facts:[...facts],excluded_sessions:[...excluded],history_suppressed:facts.some(f=>!f.forgotten)};}
   else if(url.pathname.endsWith('/coach/memory-index')){indexCalls.push(body);if(indexFailure)return route.fulfill({status:503,json:{error:{message:'Index fixture unavailable'}}});data={indexed:2,remaining:indexRemaining,model:'fixture'};}
   else if(url.pathname.endsWith('/coach/memory')){memoryQueries.push(body);if(body?.query==='slow'){slowMemorySearchStarted();await new Promise(resolve=>releaseSlowMemorySearch=resolve);slowMemorySearchDone();}const memories=companionMemory[body?.companionId]||[];data={memories:body?.query?memories.filter(m=>m.summary.toLowerCase().includes(body.query.toLowerCase())):memories};}
-  else if(url.pathname.endsWith('/coach/voice')){if(voiceFailure){voiceFailure=false;return route.fulfill({status:503,json:{message:'Voice fixture unavailable'}});}data={sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};}
+  else if(url.pathname.endsWith('/coach/voice')){voiceSpeeds.push(body.speechSpeed);if(voiceFailure){voiceFailure=false;return route.fulfill({status:503,json:{message:'Voice fixture unavailable'}});}data={sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};}
   else if(url.pathname.endsWith('/coach/checkpoint')){checkpoints++;if(checkpointFail)return route.fulfill({status:503,json:{error:{code:'UPSTREAM_UNAVAILABLE',message:'Checkpoint fixture unavailable'}}});data={instructions:'Trusted rolling conversation summary'};}
   else if(url.pathname.endsWith('/coach/review')){reviews++;if(holdReview){holdReview=false;await new Promise(resolve=>releaseReview=resolve);}const session=sessions.find(item=>item.id===body.sessionId);const analysis={id:crypto.randomUUID(),session_id:body.sessionId,kind:'session',created_at:new Date().toISOString(),content:{summary:session.companion_id+'의 통화 피드백',strengths:[],corrections:[],practice:[],scope:{companionId:session.companion_id,session_count:1,user_event_count:1}}};analyses.unshift(analysis);data={analysis};}
   else if(url.pathname==='/rest/v1/transcript_events'){let all=[...saved.values()].map(e=>({...e,timestamp:e.occurred_at,session_id:savedSession.get(e.id)}));const sid=url.searchParams.get('session_id'),ids=url.searchParams.get('id');if(sid?.startsWith('eq.'))all=all.filter(e=>e.session_id===sid.slice(3));if(ids?.startsWith('in.('))all=all.filter(e=>ids.slice(4,-1).split(',').includes(e.id));const offset=Number(url.searchParams.get('offset')||0);return route.fulfill({status:200,json:all.slice(offset,offset+1),headers:{'Content-Range':`${offset}-${offset}/${all.length}`,'Access-Control-Expose-Headers':'Content-Range'}});}
@@ -185,7 +186,7 @@ try{
   window.RTCPeerConnection=class{
    constructor(){window.testPeer=this;window.testPeers.push(this);this.connectionState='new';}
    addTrack(track){this.track=track;}
-   createDataChannel(){return this.dc={readyState:'open',send:raw=>{const message=JSON.parse(raw);(window.testMessages ||= []).push(message);if(message.type==='session.update'&&message.session.instructions)setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'session.updated',session:{instructions:message.session.instructions}})}),10);if(message.type==='input_audio_buffer.commit'){this.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.committed',item_id:'last-item'})});setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'last-item',transcript:'One last thing before we end.'})}),30);}}};}
+   createDataChannel(){return this.dc={readyState:'open',send:raw=>{const message=JSON.parse(raw);(window.testMessages ||= []).push(message);if(message.session?.audio?.output?.speed!==undefined){const failed=window.failNextSpeed;window.failNextSpeed=false;setTimeout(()=>this.dc.onmessage({data:JSON.stringify(failed?{type:'error',error:{event_id:message.event_id,code:'speed_update_failed',message:'fixture'}}:{type:'session.updated',session:{audio:{output:{speed:message.session.audio.output.speed}}}})}),10);}if(message.type==='session.update'&&message.session.instructions)setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'session.updated',session:{instructions:message.session.instructions}})}),10);if(message.type==='input_audio_buffer.commit'){this.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.committed',item_id:'last-item'})});setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'last-item',transcript:'One last thing before we end.'})}),30);}}};}
    async createOffer(){return{type:'offer',sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};}
    async setLocalDescription(){}
    async setRemoteDescription(){this.audio=new NativeAudio();this.osc=this.audio.createOscillator();this.gain=this.audio.createGain();this.gain.gain.value=.1;this.destination=this.audio.createMediaStreamDestination();this.osc.connect(this.gain).connect(this.destination);this.osc.start();this.ontrack?.({streams:[this.destination.stream],track:this.destination.stream.getAudioTracks()[0]});this.connectionState='connected';this.onconnectionstatechange?.();this.dc.onopen?.();}
@@ -220,6 +221,8 @@ try{
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'response.done',response:{status:'completed',usage:{input_tokens:100}}})}));
  await page.locator('#hint-call').click();assert.equal(await page.locator('#hint-call').isDisabled(),true,'hint reserves a response immediately');
  const hintMessage=await page.evaluate(()=>window.testMessages.at(-1));assert.equal(hintMessage.type,'response.create');assert.match(hintMessage.response.instructions,/sentence/);
+ await testSpeechSpeed(page);
+ assert.equal(voiceSpeeds[0],1,'first call starts at normal speed');
  await assertVisibleImagesLoaded(page);await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/mobile-call.png',fullPage:true});
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'item1',content_index:0,transcript:'I am thinking of visiting a friend.'})}));
  await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.waitForFunction(()=>document.querySelector('#save-status').textContent==='클라우드 저장 확인됨');assert.equal(saved.size,2);
@@ -283,6 +286,7 @@ try{
  // attempt stays in history instead of being falsely represented as a call.
  await openContact('alex');voiceFailure=true;await page.locator('#start-call').click();await page.locator('#contacts-panel').waitFor({state:'visible'});assert.equal(await page.locator('#start-call').isEnabled(),true);
  await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});assert.equal(sessions[0].companion_id,'alex');
+ assert.equal(voiceSpeeds.at(-1),1.15,'the next call starts at the acknowledged saved speed');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'alex-turn',transcript:'I am ready to speak again.'})}));await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.locator('#end-call').click();await page.clock.fastForward(2000);await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='통화와 피드백 서버 저장 확인');
  // Redial a Mia row while Alex was selected. The new session and final review
  // must follow the row, and duplicate end requests must create one finish only.

@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
+import {readdirSync} from 'node:fs';
 import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 function buildSql(change='',file='202611090001_init.sql',version='202611090001'){
@@ -9,7 +10,7 @@ function buildSql(change='',file='202611090001_init.sql',version='202611090001')
 }
 test('HTTPS deploy payload is idempotent, refuses changed checksum, and blocks missing-token deployment',async t=>{
  const db=new PGlite({extensions:{pgcrypto}});t.after(()=>db.close());
- await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create schema extensions;create table auth.users(id uuid primary key);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`);
+ await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create schema extensions;create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;`);
  const sql=buildSql();await db.exec(sql);await db.exec(sql);
  assert.equal((await db.query('select count(*) from loop_private.migrations')).rows[0].count,1);
  await assert.rejects(db.exec(buildSql('\n-- changed')),/checksum differs/);
@@ -18,6 +19,9 @@ test('HTTPS deploy payload is idempotent, refuses changed checksum, and blocks m
  const companionSql=buildSql('','202611090002_companions.sql','202611090002');await db.exec(companionSql);await db.exec(companionSql);
  assert.equal((await db.query('select count(*) from loop_private.migrations')).rows[0].count,2);
  assert.equal((await db.query("select column_default from information_schema.columns where table_name='sessions' and column_name='companion_id'")).rows.length,1);
+ const allMigrations=readdirSync('supabase/migrations').filter(name=>name.endsWith('.sql')).sort();
+ for(const file of allMigrations.slice(2)){const wrapped=buildSql('',file,file.split('_')[0]);await db.exec(wrapped);await db.exec(wrapped);}
+ assert.equal((await db.query('select count(*) from loop_private.migrations')).rows[0].count,allMigrations.length);
  const verify=spawnSync('python3',['scripts/deploy.py'],{env:{...process.env,SUPABASE_PROJECT_REF:'domkmxmwmihcfadophfg',SUPABASE_ACCESS_TOKEN:''},encoding:'utf8'});
  assert.notEqual(verify.status,0);assert.match(verify.stderr,/missing/);assert.doesNotMatch(verify.stderr,/https:\/\//);
 });

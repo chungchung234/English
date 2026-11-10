@@ -95,6 +95,8 @@ test('unreserved voice job never reaches OpenAI', async () => {
   const original = globalThis.fetch; let openai = 0;
   globalThis.fetch = async url => {
     const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('api.openai.com')) { openai++; throw new Error('Must not call'); }
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
@@ -109,14 +111,16 @@ test('invalid generated evidence fails the reserved run and never stores analysi
   const bad = content(); bad.corrections[0].original = 'an invented quote';
   globalThis.fetch = async (url, options) => {
     const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'ended', scenario: 'Travel', ended_at: '2026-11-08T12:00:00Z' }]);
     if (path.includes('/transcript_events?')) return response([event]);
     if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
     if (path.includes('api.openai.com')) {
       const payload = JSON.parse(options.body); assert.equal(payload.text.format.type, 'json_schema'); assert.equal(payload.store, false);
-      assert.ok(payload.instructions.includes('in Korean'));
-      assert.ok(payload.instructions.includes('in English'));
+      assert.ok(payload.input[0].content[0].text.includes('in Korean'));
+      assert.ok(payload.input[0].content[0].text.includes('in English'));
       return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(bad) }] }] });
     }
     if (path.includes('/fail_run')) { failed = true; return response(true); }
@@ -133,6 +137,8 @@ test('oversized transcript pagination fails explicitly without reserving a job',
   const original = globalThis.fetch; let reserved = false;
   globalThis.fetch = async url => {
     const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'ended', scenario: 'Travel' }]);
     if (path.includes('/transcript_events?')) { const count = Number(new URL(path).searchParams.get('limit')); return response(Array.from({ length: count }, () => event), 12001); }
@@ -149,6 +155,8 @@ test('all pages are read despite a lower database page cap, then stored atomical
   const second = { ...event, id: '44444444-4444-4444-8444-444444444444', speaker: 'assistant', text: 'What did you buy?' };
   globalThis.fetch = async (url, options) => {
     const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'ended', scenario: 'Travel' }]);
     if (path.includes('/transcript_events?')) {
@@ -176,6 +184,8 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
   const original = globalThis.fetch; let completed;
   globalThis.fetch = async (url, options) => {
     const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
     if (path.includes('/memory_context')) return memoryResponse();
@@ -184,9 +194,9 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.ok(options.body instanceof FormData);
       assert.equal(options.body.get('sdp'), sdp);
       const session = JSON.parse(options.body.get('session'));
-      assert.equal(session.model, 'gpt-realtime-mini');
+      assert.equal(session.model, 'gpt-realtime-2.1-mini');
       assert.equal(session.max_output_tokens, 512);
-      assert.equal(session.audio.input.transcription.model, 'gpt-4o-mini-transcribe');
+      assert.equal(session.audio.input.transcription.model, 'gpt-realtime-whisper');
       assert.equal(session.audio.output.voice, 'cedar');
       assert.equal(options.headers.Authorization, 'Bearer test-openai');
       return new Response(sdp);
@@ -197,7 +207,7 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
   try {
     const result = await handler(request('voice', { sessionId, sdp }));
     assert.equal(result.status, 200); assert.deepEqual(await result.json(), { sdp });
-    assert.deepEqual(completed.p_result, { connected: true });
+    assert.deepEqual(completed.p_result, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',policy_version:'2026-11-10-v2' });
   } finally { globalThis.fetch = original; }
 });
 
@@ -205,6 +215,8 @@ test('memory retrieves old relevant corrections and practice through all-history
   const original = globalThis.fetch; let search;
   globalThis.fetch = async (url, options) => {
     const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/memory_context')) {
       search = JSON.parse(options.body);
@@ -228,6 +240,8 @@ test('weekly review selects ended sessions in a seven-day window and records its
   const original = globalThis.fetch; let saved;
   globalThis.fetch = async (url, options) => {
     const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) {
       const params = new URL(path).searchParams;
@@ -239,11 +253,11 @@ test('weekly review selects ended sessions in a seven-day window and records its
     if (path.includes('/transcript_events?')) return response([event]);
     if (path.includes('/reserve_run')) {
       const body = JSON.parse(options.body); assert.equal(body.p_kind, 'weekly');
-      assert.match(body.p_request_key, /^v4:alex:\d{4}-\d{2}-\d{2}:[a-f0-9]{16}:[a-f0-9]{64}$/);
+      assert.match(body.p_request_key, /^2026-11-10-v2:alex:\d{4}-\d{2}-\d{2}:[a-f0-9]{64}:[a-f0-9]{64}$/);
       return response({ reserved: true, job_id: sessionId, lease_token: eventId });
     }
     if (path.includes('api.openai.com')) {
-      assert.equal(JSON.parse(options.body).model, 'gpt-4.1');
+      assert.equal(JSON.parse(options.body).model, 'gpt-6.1-sol');
       return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify({ ...content(), patterns: [{ text: 'Practicing past events.', evidence_ids: [eventId] }] }) }] }] });
     }
     if (path.includes('/complete_analysis_run')) { saved = JSON.parse(options.body); return response({ analysis: { content: saved.p_content } }); }
@@ -263,6 +277,8 @@ test('upstream failures never expose provider response text or credentials', asy
   const original = globalThis.fetch;
   globalThis.fetch = async url => {
     const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
     if (path.includes('/memory_context')) return memoryResponse();
@@ -302,7 +318,7 @@ test('config exposes exactly the three companion profiles and their voices', asy
     assert.equal(result.status, 200);
     const data = await result.json();
     assert.deepEqual(data.companions.map(({ id, voice }) => [id, voice]), [['mia', 'marin'], ['alex', 'cedar'], ['juno', 'verse']]);
-    assert.equal(data.models.voice, 'gpt-realtime-mini');
+    assert.equal(data.models.voice, 'gpt-realtime-2.1-mini');
     assert.equal(JSON.stringify(data).includes('test-service'), false);
   } finally { globalThis.fetch = original; }
 });
@@ -315,6 +331,8 @@ test('each stored companion controls its voice, persona, and isolated retrieved 
       let searched = false, connected = false;
       globalThis.fetch = async (url, options) => {
         const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) {
           assert.ok(new URL(path).searchParams.get('select').includes('companion_id'));
@@ -351,6 +369,8 @@ test('memory derives the stored companion and rejects an explicit mismatch befor
       let searched = false;
       globalThis.fetch = async (url, options) => {
         const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'juno', scenario: 'Travel', status: 'active' }]);
         if (path.includes('/memory_context')) { searched = true; assert.equal(JSON.parse(options.body).p_companion_id, 'juno'); return memoryResponse(); }
@@ -390,6 +410,8 @@ test('weekly history, model context, scope, and cache key are isolated to the se
       let stored;
       globalThis.fetch = async (url, options) => {
         const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) {
           assert.equal(new URL(path).searchParams.get('companion_id'), `eq.${companionId}`);
@@ -400,11 +422,11 @@ test('weekly history, model context, scope, and cache key are isolated to the se
           return response([event]);
         }
         if (path.includes('/reserve_run')) {
-          assert.ok(JSON.parse(options.body).p_request_key.startsWith(`v4:${companionId}:`));
+          assert.ok(JSON.parse(options.body).p_request_key.startsWith(`2026-11-10-v2:${companionId}:`));
           return response({ reserved: true, job_id: sessionId, lease_token: eventId });
         }
         if (path.includes('/responses')) {
-          const input = JSON.parse(JSON.parse(options.body).input);
+          const input = JSON.parse(JSON.parse(options.body).input[1].content[0].text);
           assert.equal(input.context.companion.id, companionId);
           return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify({ ...content(), patterns: [] }) }] }] });
         }
@@ -422,6 +444,8 @@ test('weekly rejects any unexpected cross-companion database rows before model s
   const original = globalThis.fetch; let calls = 0;
   globalThis.fetch = async url => {
     calls++; const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     assert.ok(path.includes('/sessions?'));
     return response([{ id: sessionId, user_id: userId, companion_id: 'alex', scenario: 'Travel', status: 'ended' }]);
@@ -436,15 +460,17 @@ test('session review derives its companion identity without a client override', 
   const original = globalThis.fetch; let stored;
   globalThis.fetch = async (url, options) => {
     const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Travel', status: 'ended' }]);
     if (path.includes('/transcript_events?')) return response([event]);
     if (path.includes('/reserve_run')) {
-      assert.ok(JSON.parse(options.body).p_request_key.startsWith(`v4:mia:${sessionId}:`));
+      assert.ok(JSON.parse(options.body).p_request_key.startsWith(`2026-11-10-v2:mia:${sessionId}:`));
       return response({ reserved: true, job_id: sessionId, lease_token: eventId });
     }
     if (path.includes('/responses')) {
-      assert.equal(JSON.parse(JSON.parse(options.body).input).context.companion.name, 'Mia');
+      assert.equal(JSON.parse(JSON.parse(options.body).input[1].content[0].text).context.companion.name, 'Mia');
       return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(content()) }] }] });
     }
     if (path.includes('/complete_analysis_run')) { stored = JSON.parse(options.body).p_content; return response({ analysis: { content: stored } }); }
@@ -483,6 +509,8 @@ test('large review resumes cached parts and never generates more than two per re
   const events=Array.from({length:6},(_,i)=>({...event,id:crypto.randomUUID(),text:'I practice English. '+'x'.repeat(25000),timestamp:new Date(Date.parse(event.timestamp)+i*1000).toISOString()}));
   globalThis.fetch=async(url,options)=>{
     const path=String(url), body=options?.body?JSON.parse(options.body):null;
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if(path.includes('/auth/'))return response(authUser);
     if(path.includes('/sessions?'))return response([{id:sessionId,user_id:userId,companion_id:'alex',status:'ended',scenario:'Travel'}]);
     if(path.includes('/transcript_events?'))return response(events);
@@ -490,7 +518,7 @@ test('large review resumes cached parts and never generates more than two per re
     if(path.includes('/reserve_run'))return response({reserved:true,job_id:body.p_request_key,lease_token:eventId});
     if(path.includes('/complete_run')){cached.set(body.p_job_id,body.p_result);return response({});}
     if(path.includes('/fail_run'))return response({});
-    if(path.includes('/responses')){calls++;const input=JSON.parse(body.input),id=input.transcript_events[0].id;const output={summary:'연습한 대화',strengths:[{text:'Explains an idea',evidence_ids:[id]}],corrections:[],practice:[],memory_facts:[],next_scenario:'Continue'};return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(output)}]}]});}
+    if(path.includes('/responses')){calls++;const input=JSON.parse(body.input[1].content[0].text),id=input.transcript_events[0].id;const output={summary:'연습한 대화',strengths:[{text:'Explains an idea',evidence_ids:[id]}],corrections:[],practice:[],memory_facts:[],next_scenario:'Continue'};return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(output)}]}]});}
     if(path.includes('/complete_analysis_run')){saved=body;return response({analysis:{content:body.p_content}});}
     throw Error('Unexpected '+path);
   };
@@ -504,12 +532,14 @@ test('checkpoint uses server history, chains prior context and preserves compani
   const original=globalThis.fetch;let persisted;
   globalThis.fetch=async(url,options)=>{
     const path=String(url),body=options?.body?JSON.parse(options.body):null;
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if(path.includes('/auth/'))return response(authUser);
     if(path.includes('/sessions?'))return response([{id:sessionId,user_id:userId,companion_id:'mia',scenario:'Weekend',status:'active'}]);
     if(path.includes('/transcript_events?'))return response([event]);
     if(path.includes('/analysis_jobs?'))return response([]);
-    if(path.includes('/reserve_run')){assert.equal(body.p_kind,'checkpoint');assert.match(body.p_request_key,/^checkpoint:v4:/);return response({reserved:true,job_id:sessionId,lease_token:eventId});}
-    if(path.includes('/responses')){assert.equal(JSON.parse(body.input).transcript_events[0].text,event.text);return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(content())}]}]});}
+    if(path.includes('/reserve_run')){assert.equal(body.p_kind,'checkpoint');assert.match(body.p_request_key,/^checkpoint:2026-11-10-v2:/);return response({reserved:true,job_id:sessionId,lease_token:eventId});}
+    if(path.includes('/responses')){assert.equal(JSON.parse(body.input[1].content[0].text).transcript_events[0].text,event.text);return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(content())}]}]});}
     if(path.includes('/complete_run')){persisted=body.p_result;return response({});}
     if(path.includes('/memory_context'))return memoryResponse();
     throw Error('Unexpected '+path);
@@ -531,6 +561,8 @@ test('nonempty retrieval caches query embeddings by companion, revision, and mod
   const keys = [];
   globalThis.fetch = async (url, options) => {
     const path = String(url), body = options?.body ? JSON.parse(options.body) : null;
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/memory_context')) {
       assert.equal(body.p_user_id, userId);
@@ -570,6 +602,8 @@ test('empty retrieval spends nothing; provider errors, malformed vectors and quo
       let calls = 0, failed = false;
       globalThis.fetch = async (url, options) => {
         const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/memory_context')) return memoryResponse(mode === 'no-history' ? [] : [memoryRow], [{ key: 'name', value: 'A' }], 1);
         if (path.includes('/reserve_run')) { assert.ok(!['empty', 'no-history'].includes(mode)); return response(mode === 'quota' ? { reserved: false, reason: 'budget_exceeded' } : { reserved: true, job_id: sessionId, lease_token: eventId }); }
@@ -635,6 +669,8 @@ test('bounded indexing honors provider ordering and stores only source-verified 
   const candidates = [sessionId, eventId, userId, '44444444-4444-4444-8444-444444444444'].map((id, i) => ({ analysis_id: id, session_id: sessionId, document: String(i).repeat(8000), content_hash: `hash${i}`, revision: 4 }));
   globalThis.fetch = async (url, options) => {
     const path = String(url), body = options?.body ? JSON.parse(options.body) : null;
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/memory_index_candidates')) { assert.equal(body.p_user_id, userId); assert.equal(body.p_companion_id, 'mia'); candidateCalls++; assert.equal(body.p_limit, candidateCalls === 1 ? 4 : 1); return response(candidateCalls === 1 ? candidates : [candidates[3]]); }
     if (path.includes('/reserve_run')) { assert.equal(body.p_kind, 'embedding'); assert.ok(body.p_request_key.includes(':index:')); return response({ reserved: true, job_id: sessionId, lease_token: eventId }); }
@@ -661,6 +697,8 @@ test('indexing invalid vectors never reach storage and oversized documents never
       let spend = 0, stored = false;
       globalThis.fetch = async (url, options) => {
         const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/memory_index_candidates')) return response([{ analysis_id: sessionId, session_id: sessionId, document: 'x'.repeat(mode === 'oversized' ? 24001 : 10), content_hash: 'hash', revision: 1 }]);
         if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
@@ -677,10 +715,12 @@ test('indexing invalid vectors never reach storage and oversized documents never
 
 test('checkpoint ignores previous revisions, routes independently, and voice facts omit provenance', async () => {
   const original = globalThis.fetch, previousCoach = config.COACH_MODEL, previousCheckpoint = config.CHECKPOINT_MODEL;
-  config.COACH_MODEL = 'review-only-model'; config.CHECKPOINT_MODEL = 'checkpoint-only-model';
+  config.COACH_MODEL = 'gpt-6.1-sol'; config.CHECKPOINT_MODEL = 'gpt-6-luna';
   let persisted, generated = false;
   globalThis.fetch = async (url, options) => {
     const path = String(url), body = options?.body ? JSON.parse(options.body) : null;
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
     if (path.includes('/transcript_events?')) return response([event]);
@@ -688,11 +728,11 @@ test('checkpoint ignores previous revisions, routes independently, and voice fac
     if (path.includes('/analysis_jobs?')) {
       const params = new URL(path).searchParams; assert.equal(params.get('kind'), 'eq.checkpoint'); assert.ok(params.get('request_key').includes(':8:'));
       // Even if a database response includes stale rows, Edge checks metadata.
-      return response([{ result: { revision: 7, model: 'checkpoint-only-model', prompt_version: 'v4', covered_ids: [eventId], checkpoint: { summary: 'OLD PRIVATE NAME' } } }]);
+      return response([{ result: { revision: 7, model: 'gpt-6-luna', prompt_version: '2026-11-10-v2', covered_ids: [eventId], checkpoint: { summary: 'OLD PRIVATE NAME' } } }]);
     }
     if (path.includes('/reserve_run')) { assert.equal(body.p_kind, 'checkpoint'); assert.ok(body.p_request_key.length < 200); return response({ reserved: true, job_id: sessionId, lease_token: eventId }); }
     if (path.includes('/responses')) {
-      generated = true; assert.equal(body.model, 'checkpoint-only-model'); const input = JSON.parse(body.input); assert.equal(input.context.previous_checkpoint, null); assert.equal(body.input.includes('OLD PRIVATE NAME'), false);
+      generated = true; assert.equal(body.model, 'gpt-6-luna'); const input = JSON.parse(body.input[1].content[0].text); assert.equal(input.context.previous_checkpoint, null); assert.equal(JSON.stringify(body.input).includes('OLD PRIVATE NAME'), false);
       return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(content()) }] }] });
     }
     if (path.includes('/complete_run')) { persisted = body.p_result; return response(true); }
@@ -700,7 +740,7 @@ test('checkpoint ignores previous revisions, routes independently, and voice fac
   };
   try {
     const result = await handler(request('checkpoint', { sessionId })); assert.equal(result.status, 200); const data = await result.json();
-    assert.equal(generated, true); assert.equal(persisted.revision, 8); assert.equal(persisted.model, 'checkpoint-only-model');
+    assert.equal(generated, true); assert.equal(persisted.revision, 8); assert.equal(persisted.model, 'gpt-6-luna');
     assert.equal(data.instructions.includes('OLD PRIVATE NAME'), false);
     const context = JSON.parse(data.instructions.split('UNTRUSTED_CONTEXT_JSON:\n')[1]);
     assert.deepEqual(context.memory.facts, [{ key: 'name', value: '', forgotten: true }]);
@@ -712,9 +752,11 @@ test('checkpoint revision races fail closed for newly generated, cached and no-n
   try {
     for (const mode of ['generated', 'cached', 'covered']) {
       let reads = 0, generated = false, completed = false, failed = false;
-      const cached = { revision: 1, model: 'gpt-4.1-mini', prompt_version: 'v4', covered_ids: [eventId], checkpoint: { summary: 'stale' } };
+      const cached = { revision: 1, model: 'gpt-6-luna', prompt_version: '2026-11-10-v2', covered_ids: [eventId], checkpoint: { summary: 'stale' } };
       globalThis.fetch = async (url, options) => {
         const path = String(url), body = options?.body ? JSON.parse(options.body) : null;
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
         if (path.includes('/transcript_events?')) return response([event]);
@@ -739,6 +781,8 @@ test('voice revision races never return stale SDP or persist a successful connec
       let reads = 0, provider = 0, completed = false, failed = false;
       globalThis.fetch = async (url, options) => {
         const path = String(url);
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
         if (path.includes('/memory_context')) return memoryResponse([], [], ++reads >= changedAt ? 2 : 1);
@@ -757,9 +801,11 @@ test('voice revision races never return stale SDP or persist a successful connec
 test('model configuration exposes separate roles and long model IDs keep cache keys bounded', async () => {
   const original = globalThis.fetch, names = ['VOICE_MODEL', 'COACH_MODEL', 'CHECKPOINT_MODEL', 'ANALYSIS_MODEL', 'EMBEDDING_MODEL'];
   const saved = names.map(name => config[name]); const requested = [];
-  names.forEach((name, i) => { config[name] = `independent-${i}-` + 'x'.repeat(180); });
+  names.forEach((name, i) => { config[name] = ['gpt-realtime-2.1-mini','gpt-6.1-sol','gpt-6-luna','gpt-6.1-sol','text-embedding-3-small'][i]; });
   globalThis.fetch = async (url, options) => {
     const path = String(url), body = options?.body ? JSON.parse(options.body) : null;
+    if(path.includes('/reserve_model_spend'))return response(true);
+    if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/memory_context')) return memoryResponse([memoryRow]);
     if (path.includes('/reserve_run')) { assert.ok(body.p_request_key.length <= 200); requested.push(body.p_kind); return response({ reserved: true, job_id: sessionId, lease_token: eventId }); }
@@ -773,9 +819,48 @@ test('model configuration exposes separate roles and long model IDs keep cache k
   };
   try {
     const result = await handler(new Request('https://project.supabase.co/functions/v1/coach/config', { headers: { Origin: 'https://example.com', Authorization: 'Bearer test-user' } }));
-    assert.deepEqual((await result.json()).models, { voice: config.VOICE_MODEL, coach: config.COACH_MODEL, checkpoint: config.CHECKPOINT_MODEL, analysis: config.ANALYSIS_MODEL, embedding: config.EMBEDDING_MODEL });
+    assert.deepEqual((await result.json()).models, { voice: config.VOICE_MODEL, coach: config.COACH_MODEL, checkpoint: config.CHECKPOINT_MODEL, analysis: config.ANALYSIS_MODEL, embedding: config.EMBEDDING_MODEL, transcription:'gpt-realtime-whisper' });
     assert.equal((await handler(request('memory', { companionId: 'mia', query: 'hi' }))).status, 200);
     assert.equal((await handler(request('review', { sessionId }))).status, 200);
     assert.deepEqual(requested, ['embedding', 'session']);
   } finally { globalThis.fetch = original; names.forEach((name, i) => { if (saved[i] === undefined) delete config[name]; else config[name] = saved[i]; }); }
+});
+
+test('review cache varies by policy, spends only on misses, and records incomplete usage', async () => {
+  const original = globalThis.fetch; const keys = [], calls = [], records = [];
+  let deny = false, cached = false;
+  globalThis.fetch = async (url, options) => {
+    const path = String(url), body = options?.body ? JSON.parse(options.body) : {};
+    if (path.includes('/auth/')) return response(authUser);
+    if (path.includes('/sessions?')) return response([{id:sessionId,user_id:userId,status:'ended',scenario:'Travel'}]);
+    if(path.includes('/memory_context'))return memoryResponse();
+    if (path.includes('/transcript_events?')) return response([event]);
+    if (path.includes('/reserve_run')) { keys.push(body.p_request_key); return response(cached ? {reserved:false,state:'completed',result:{cached:true}} : {reserved:true,job_id:sessionId,lease_token:eventId}); }
+    if (path.includes('/reserve_model_spend')) return response(!deny);
+    if (path.includes('/record_model_spend')) { records.push(body);return response(null); }
+    if (path.includes('/fail_run')) return response(true);
+    if (path.includes('api.openai.com')) {
+      calls.push(body);
+      return response({status:'incomplete',usage:{input_tokens:1000,output_tokens:500,input_tokens_details:{cached_tokens:100,cache_write_tokens:200},output_tokens_details:{reasoning_tokens:450}}});
+    }
+    throw Error('Unexpected request');
+  };
+  try {
+    assert.equal((await handler(request('review',{sessionId}))).status,502);
+    assert.equal(calls[0].model,'gpt-6-luna');assert.equal(calls[0].reasoning.effort,'low');
+    assert.equal(calls[0].prompt_cache_options.mode,'explicit');
+    assert.equal(calls[0].input[0].content[0].prompt_cache_breakpoint.mode,'explicit');
+    assert.equal(calls[0].input[1].content[0].prompt_cache_breakpoint,undefined);
+    assert.equal(records[0].p_usage.reasoning_tokens,450);
+    assert.equal(records[0].p_outcome,'incomplete');
+    assert.ok(Math.abs(records[0].p_estimated_usd-.000346)<1e-10);
+    cached=true;assert.equal((await handler(request('review',{sessionId}))).status,200);
+    assert.equal(calls.length,1);assert.equal(keys[0],keys[1]);
+    cached=false;deny=true;config.COACH_REASONING='medium';
+    assert.equal((await handler(request('review',{sessionId}))).status,429);
+    assert.notEqual(keys[0],keys[2]);assert.equal(calls.length,1);
+    config.COACH_MODEL='gpt-6.1-sol';
+    assert.equal((await handler(request('review',{sessionId}))).status,429);
+    assert.notEqual(keys[2],keys[3]);
+  } finally { globalThis.fetch=original;delete config.COACH_REASONING;delete config.COACH_MODEL; }
 });

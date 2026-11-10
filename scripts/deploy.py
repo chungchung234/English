@@ -54,6 +54,26 @@ def management_request(ref, token, path, method='GET', payload=None):
     except urllib.error.URLError:
         raise SystemExit('Supabase management could not connect. Check destination access and provider availability.')
 
+def deploy_function_https(ref, token):
+    # Same Management API used by --use-api, without local token-format checks.
+    import uuid
+    boundary = 'loop-' + uuid.uuid4().hex
+    parts = []
+    metadata = json.dumps({'name': 'coach', 'entrypoint_path': 'index.ts', 'verify_jwt': False}).encode()
+    parts.append(b'--'+boundary.encode()+b'\r\nContent-Disposition: form-data; name="metadata"\r\n\r\n'+metadata+b'\r\n')
+    for name in ('index.ts', 'core.ts', 'policy.ts'):
+        parts.append(b'--'+boundary.encode()+b'\r\nContent-Disposition: form-data; name="file"; filename="'+name.encode()+b'"\r\nContent-Type: application/typescript\r\n\r\n'+(ROOT/'supabase/functions/coach'/name).read_bytes()+b'\r\n')
+    parts.append(b'--'+boundary.encode()+b'--\r\n')
+    request = urllib.request.Request(f'https://api.supabase.com/v1/projects/{ref}/functions/deploy?slug=coach',
+        data=b''.join(parts), headers={'Authorization': 'Bearer '+token, 'Content-Type': 'multipart/form-data; boundary='+boundary}, method='POST')
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            result = json.load(response)
+        if result.get('status') != 'ACTIVE':
+            raise SystemExit('Function deployment did not report ACTIVE.')
+    except urllib.error.HTTPError as error:
+        raise SystemExit(f'Function HTTPS deployment failed (HTTP {error.code}); no provider response printed.')
+
 def main():
     ref = os.environ.get('SUPABASE_PROJECT_REF', '')
     token = os.environ.get('SUPABASE_ACCESS_TOKEN', '')
@@ -90,6 +110,10 @@ def main():
     management_request(ref,token,'secrets','POST',[
         {'name':'ACCESS_MODE','value':'invite'}, {'name':'ALLOWED_EMAILS','value':emails}])
     print('Invite-only Edge access synchronized with database approvals.')
+    if '--https-function' in sys.argv:
+        deploy_function_https(ref,token)
+        print('Coach function deployed through HTTPS Management API.')
+        return
     cli_env = {**os.environ, 'SUPABASE_HOME': str(ROOT.parent/'.supabase-cli')}
     # Provider secrets must already be configured in the dashboard. The proxy
     # OpenAI binding is deliberately NOT forwarded into another provider.

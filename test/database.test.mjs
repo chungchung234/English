@@ -88,7 +88,7 @@ test('migration applies to the Supabase auth and role contract', async (t) => {
   `);
   assert.deepEqual(rows.map((row) => row.tablename), [
     'analyses', 'analysis_jobs', 'api_daily_usage', 'memory_embeddings', 'memory_fact_overrides',
-    'memory_session_exclusions', 'memory_state', 'sessions', 'transcript_events',
+    'memory_session_exclusions', 'memory_state', 'model_spend', 'sessions', 'transcript_events',
   ]);
 });
 
@@ -636,4 +636,31 @@ test('fact mutations never decrease a later cutoff restored from backup',async t
   assert.equal(new Date(state.history_cutoff).toISOString(),cutoff);
   assert.equal(Number(state.revision),3);
   assert.equal((await context(db)).facts[0].forgotten,true);
+});
+
+test('text spend budget is shared across jobs, counts uncertain calls and is service-only', async t => {
+  const db = await database(t);
+  const reserve = async (user, key) => (await db.query("select public.reserve_run($1,'weekly',$2,null,180) as r", [user,key])).rows[0].r;
+  const charge = async (job, amount) => (await db.query("select public.reserve_model_spend($1,$2,'gpt-6.1-sol','{}',$3) as ok", [job.job_id,job.lease_token,amount])).rows[0].ok;
+  const a = await asService(db, () => reserve(USER_A,'a'));
+  const b = await asService(db, () => reserve(USER_A,'b'));
+  const c = await asService(db, () => reserve(USER_B,'c'));
+  assert.equal(await asService(db, () => charge(a,.6)),true);
+  assert.equal(await asService(db, () => charge(a,.6)),false);
+  assert.equal(await asService(db, () => charge(b,.5)),false);
+  assert.equal(await asService(db, () => charge(c,.5)),true);
+  await assert.rejects(asUser(db, USER_A, () => charge(b,.1)), /permission denied/);
+  await assert.rejects(asUser(db, USER_A, () => db.query('select * from public.model_spend')), /permission denied/);
+  await assert.rejects(asService(db, () => charge({...b,lease_token:USER_A},.1)), /Invalid spend lease/);
+  await asService(db, () => db.query("select public.record_model_spend($1,$2,null,null,'transport_unknown')", [a.job_id,a.lease_token]));
+  assert.equal(await asService(db, () => charge(b,.5)),false);
+  await asService(db, () => db.query("select public.record_model_spend($1,$2,'{\"input_tokens\":100}',.01,'generated')", [c.job_id,c.lease_token]));
+  const row = (await asService(db, () => db.query('select estimated_usd,outcome from public.model_spend where job_id=$1',[c.job_id]))).rows[0];
+  assert.equal(Number(row.estimated_usd),.01);assert.equal(row.outcome,'generated');
+  const active = await makeSession(db,USER_A);
+  for(const kind of ['part','checkpoint','embedding']) {
+    const job = await asService(db,async () => (await db.query('select public.reserve_run($1,$2,$3,$4,180) as r',[USER_A,kind,'spend-'+kind,kind==='embedding'?null:active.id])).rows[0].r);
+    assert.equal(await asService(db,()=>charge(job,.1)),true,kind+' must participate in the same cost ledger');
+  }
+  assert.equal(await asService(db,()=>charge(b,.2)),false,'all stage kinds share the daily budget');
 });

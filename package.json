@@ -6,14 +6,15 @@
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "test": "node --experimental-transform-types --test test/*.test.mjs supabase/functions/coach/*.test.mjs",
-    "test:browser": "node test/browser.mjs && node test/post-call.browser.mjs && node test/enhancements.browser.mjs && node test/end-transcript.browser.mjs",
-    "check": "node --check web/ai-presence.js && node --check web/app.js && node --check web/post-call.js && node --check web/post-call-transcript.js && node --check web/learning-enhancements.js && node --check src/learning-telemetry.mjs && node --check src/learning-outbox.js && node --check src/outbox.js && node --check src/learning-review.mjs && node --check src/auth-session.mjs && node --check scripts/configure-social-login.mjs && deno check supabase/functions/coach/index.ts",
+    "test:browser": "node test/browser.mjs && node test/post-call.browser.mjs && node test/enhancements.browser.mjs && node test/end-transcript.browser.mjs && node test/voice-turn-controls.browser.mjs && node test/research-recall.browser.mjs",
+    "check": "node --check web/ai-presence.js && node --check web/app.js && node --check web/voice-turn-controls.js && node --check web/post-call.js && node --check web/post-call-transcript.js && node --check web/learning-enhancements.js && node --check src/learning-telemetry.mjs && node --check src/learning-outbox.js && node --check src/outbox.js && node --check src/learning-review.mjs && node --check src/auth-session.mjs && node --check scripts/configure-social-login.mjs && deno check supabase/functions/coach/index.ts",
     "build": "node scripts/build-web.mjs",
     "test:edge": "node --experimental-transform-types --test supabase/functions/coach/*.test.mjs",
     "deploy:check": "python3 scripts/deploy.py",
     "test:presence": "node test/ai-presence.mjs",
     "eval:memory": "node scripts/evaluate-memory.mjs",
-    "eval:learning": "node --experimental-transform-types scripts/evaluate-learning-enhancements.mjs --synthetic"
+    "eval:learning": "node --experimental-transform-types scripts/evaluate-learning-enhancements.mjs --synthetic",
+    "eval:voice": "node scripts/evaluate-voice-experience.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.15",

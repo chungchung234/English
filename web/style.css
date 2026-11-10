@@ -332,3 +332,12 @@ dialog::backdrop{background:rgba(8,23,68,.24)}
 
 .review-summary{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 #next-plan{font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+.call-floor-controls{text-align:center;margin:8px 0 0}
+#hold-call{min-height:44px;padding:8px 16px;color:inherit;font-size:14px}
+#hold-call[aria-pressed=true]{text-decoration:underline;text-underline-offset:4px}
+#hold-status{margin:0 auto 8px;max-width:32ch;font-size:12px;line-height:1.55;color:inherit;opacity:.82;overflow-wrap:anywhere}
+@media(max-height:700px){
+  body[data-call-state=live] .live-call:has(#hold-call[aria-pressed=true]){height:calc(100svh - 105px - env(safe-area-inset-bottom));min-height:0;overflow-y:auto;padding-bottom:8px;overscroll-behavior:contain}
+  body[data-call-state=live] .live-call:has(#hold-call[aria-pressed=true])>*{flex-shrink:0}
+}

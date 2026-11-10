@@ -89,8 +89,9 @@ export async function testTabUI(browser,base){
   await page.locator('#learning-session > details > summary').first().click();
   await page.locator('#learning-session .learning-actions').first().scrollIntoViewIfNeeded();await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));await page.screenshot({path:'test-results/post-call-practice.png'});await page.setViewportSize({width:320,height:568});
   await page.locator('#learning-session [data-action="practice"]').click();
+  assert(await page.locator('#learning-session [data-practice-expression]').isHidden(),'rephrasing begins with the model answer hidden');
+  await page.locator('#learning-session [data-action="toggle-expression"]').click();assert(await page.locator('#learning-session [data-practice-expression]').isVisible());
   await page.locator('#learning-session [data-action="toggle-expression"]').click();assert(await page.locator('#learning-session [data-practice-expression]').isHidden());
-  await page.locator('#learning-session [data-action="toggle-expression"]').click();
   learningFailure=true;await page.locator('#learning-session [data-action="save-practice"]').click();await page.locator('[data-practice-status]').filter({hasText:'기기 보관 확인'}).waitFor();assert.equal(learningItem.status,'active');
   learningFailure=false;await page.locator('#learning-queue').getByRole('button',{name:'같은 요청 다시 전송',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-practice-status]')?.textContent.includes('서버에 저장'));
   assert.equal(learningItem.state,'practiced');

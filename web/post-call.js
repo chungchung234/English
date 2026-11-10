@@ -1,5 +1,5 @@
 import { createLearningOutbox } from '../src/learning-outbox.js';
-import { createLearningEnhancements } from './learning-enhancements.js';
+import { createLearningEnhancements, practiceCue } from './learning-enhancements.js';
 import { telemetryMetadata } from '../src/learning-telemetry.mjs';
 
 const $ = id => document.getElementById(id);
@@ -43,6 +43,8 @@ export function createPostCallFlow(deps) {
   let pending = [], volatile = new Map(), actionStates = new Map(), actionResults = new Map(), errors = new Map();
   let attempts = new Map(), activePractice = null, flushing = null, flushAgain = false, pollTimer = null;
   let exposureObserver = null, exposureTimer = null, exposed = new Set();
+  let practiceObserver = null;
+  const practiceHidden = new Map();
   let previousFocus = null, previousFocusKey = null, pendingFocusRestore = null, planApplied = '', requests = new Set(), panelOpen = false;
   const ctx = () => deps.context();
   const token = () => ({ generation, identity, scope: accountScope, companion });
@@ -88,8 +90,29 @@ export function createPostCallFlow(deps) {
     exposureObserver?.disconnect(); exposureObserver = null;
     clearTimeout(exposureTimer); exposureTimer = null;
   }
+  function syncPracticeVisibility() {
+    for (const [node, hidden] of practiceHidden) node.hidden = hidden;
+    practiceHidden.clear();
+    if (!activePractice || activePractice.saved) {
+      practiceObserver?.disconnect(); practiceObserver = null; return;
+    }
+    // Keep answer copies in the transcript, feedback, library and weekly goals
+    // out of the visible practice surface. Closing restores their original state.
+    const conceal = node => {
+      if (!node || node === activePractice.box) return;
+      if (node.contains(activePractice.box)) { for (const child of node.children) conceal(child); return; }
+      if (!practiceHidden.has(node)) practiceHidden.set(node, node.hidden);
+      node.hidden = true;
+    };
+    for (const node of document.querySelectorAll('#review-content, #post-call-transcript, [data-practice-surrounding], [data-weekly-analysis-id], #learning-queue [data-session-id]')) conceal(node);
+    for (const node of $('learning-session')?.children || []) conceal(node);
+    if (!practiceObserver && typeof MutationObserver !== 'undefined') {
+      practiceObserver = new MutationObserver(syncPracticeVisibility);
+      practiceObserver.observe(document.body, { childList: true, subtree: true });
+    }
+  }
   function closePractice() {
-    activePractice = null;render();
+    activePractice = null;syncPracticeVisibility();render();
     const original=previousFocus,key=previousFocusKey,t=token();previousFocus=null;previousFocusKey=null;let provisionalFocus=null;
     const restoreFocus=(remaining=4)=>{
       if(!same(t)||activePractice||document.querySelector('[data-panel="review"]')?.hidden){pendingFocusRestore=null;return;}
@@ -545,7 +568,7 @@ export function createPostCallFlow(deps) {
     if (!snapshot) return;
     if(Number.isInteger(snapshot.daily_practice_count))target.append(text('p',`오늘 직접 연습한 표현 ${snapshot.daily_practice_count}개 · 서버 확인 기준`,'help'));
     const recommended = enhancements.recommendedIds(snapshot.recommended_item_ids || []).slice(0, (snapshot.recommended_item_ids || []).length).map(itemOf).filter(canRecommend);
-    const collection=document.createElement('details');collection.className='feedback-context';collection.append(text('summary','남겨둔 복습 · '+recommended.length+'개'));target.append(collection);
+    const collection=document.createElement('details');collection.className='feedback-context';collection.dataset.practiceSurrounding='';collection.append(text('summary','남겨둔 복습 · '+recommended.length+'개'));target.append(collection);
     const content=document.createElement('div');collection.append(content);
     const heading = text('h4', '오늘 추천 표현'); content.append(heading);
     if (!recommended.length) content.append(text('p', '지금 권할 표현이 없어요. 원하면 보관함에서 직접 연습하거나 다음에 대화해요.', 'help'));
@@ -626,6 +649,7 @@ export function createPostCallFlow(deps) {
     const ownProjection = item.source_session_id === analysis.session_id && item.source_analysis_id === analysis.id;
     return { ...item, source_session_id: analysis.session_id, source_analysis_id: analysis.id,
       original: correction?.original || (ownProjection ? item.original : '') || '',
+      next_scenario: analysis.content?.next_scenario || (ownProjection ? item.next_scenario : '') || '',
       reason: reconsidered?.reason || correction?.reason || (ownProjection ? item.reason : '') || '',
       category: reconsidered?.category || correction?.category || (ownProjection ? item.category : '') || 'alternative',
       evidence_ids: reconsidered?.evidence_ids || correction?.evidence_ids || practice?.evidence_ids || (ownProjection ? item.evidence_ids : []) || [],
@@ -709,7 +733,7 @@ export function createPostCallFlow(deps) {
     const focusSession = focused?.closest?.('[data-feedback-session]')?.dataset.feedbackSession;
     const inReview = focused?.closest?.('#learning-queue, #review-content, #learning-session');
     const expanded = [...document.querySelectorAll('#learning-queue details[open], #review-content details[open], #learning-session details[open]')].map(node => `${node.closest('[id]')?.id}|${node.querySelector('summary')?.textContent}`);
-    renderBacklog(); renderSession(); renderWeekly(); renderPreview();
+    renderBacklog(); renderSession(); renderWeekly(); renderPreview(); syncPracticeVisibility();
     for (const detail of document.querySelectorAll('#learning-queue details, #review-content details, #learning-session details')) {
       if (expanded.includes(`${detail.closest('[id]')?.id}|${detail.querySelector('summary')?.textContent}`)) detail.open = true;
     }
@@ -755,6 +779,7 @@ export function createPostCallFlow(deps) {
   async function openSession(id) {
     if (!ensureIdentity() || !sessionFor(id)) return;
     if (busy()) { notify('현재 통화를 마친 뒤 피드백을 확인해 주세요.'); return; }
+    if (activePractice) closePractice();
     selected=id;panelOpen=true;await deps.openSession(id,analysisFor(id));renderSession();
   }
   async function openPreview() {
@@ -840,7 +865,7 @@ export function createPostCallFlow(deps) {
   function confirmRecall(record) {
     const attempt = activePractice;
     if (!attempt || attempt.mode !== 'delayed' || attempt.saved || record.body?._enhancement?.attemptId !== attempt.id || !same(attempt.t)) return;
-    attempt.saved = true;
+    attempt.saved = true; syncPracticeVisibility();
     attempt.state.textContent = '시간을 둔 회상 자기보고를 서버에 저장했어요. 즉시 따라 말하기와 별도 기록이에요.';
     for (const node of attempt.gradeButtons) node.hidden = true;
     attempt.toggle.hidden = true; attempt.finish.replaceChildren();
@@ -859,23 +884,27 @@ export function createPostCallFlow(deps) {
     // Attribution is fixed at the explicit click. A merged item is never counted
     // toward every source; home and library clicks intentionally have no source.
     const source = attribution?.sessionId && attribution?.analysisId ? attribution : null;
-    const attempt = { id: attemptId, itemId: id, source, t, saveId: null, saved: false };
+    const attempt = { id: attemptId, itemId: id, source, t, saveId: null, saved: false, mode: 'rephrase' };
     attempts.set(attemptId, attempt); activePractice = attempt;
     previousFocus = trigger||document.activeElement;
     previousFocusKey = {action:'practice',itemId:id,container:trigger?.closest?.('#learning-session, #learning-queue')?.id||(source?'learning-session':'learning-queue')};
     const box=document.createElement('section');box.className='learning-practice';box.dataset.itemId=id;attempt.box=box;const target=box;
     if (!target) { notify('연습 창을 열지 못했어요. 다시 선택해 주세요.'); return; }
     target.replaceChildren();
-    const intro = text('p', '추천 표현을 보고 소리 내어 말해 보세요. 원하면 가리고 다시 말해도 좋아요. 마이크·녹음·자동 채점은 사용하지 않아요.', 'help');
-    const original = text('p', item.original, 'original');
-    const expression = text('p', item.expression, 'improved'); expression.dataset.practiceExpression = '';
-    const reason = text('p', item.reason);
-    const toggle = button('표현 가리기', () => {
+    const intro = text('p', '단서를 보고 같은 뜻을 영어로 말해 보세요. 똑같이 외울 필요는 없고, 표현을 다시 봐도 괜찮아요.', 'help');
+    const cue = practiceCue(item, enhancements.scheduleFor(id)?.goal);
+    const original = text('p', cue.value, cue.kind === 'source' ? 'original' : 'help'); original.dataset.practiceCue = cue.kind;
+    const expression = text('p', item.expression, 'improved'); expression.dataset.practiceExpression = ''; expression.hidden = true;
+    const reason = text('p', item.reason); reason.hidden = true;
+    const assistance = text('p', '교정 뒤 다시 말해본 연습으로 기록해요. 녹음·자동 채점은 하지 않아요.', 'help');
+    const toggle = button('표현 다시 보기 · 도움 받기', () => {
+      if (!same(t) || activePractice !== attempt || attempt.saved) return;
       expression.hidden = !expression.hidden;
       reason.hidden = expression.hidden;
-      toggle.textContent = expression.hidden ? '표현 다시 보기' : '표현 가리기';
+      toggle.textContent = expression.hidden ? '표현 다시 보기 · 도움 받기' : '표현 가리고 내 말로';
+      assistance.textContent = '표현을 참고했어요. 가리고 다시 말해봐도 좋아요. 녹음·자동 채점은 하지 않아요.';
       toggle.setAttribute('aria-expanded', String(!expression.hidden));
-    }); toggle.dataset.action = 'toggle-expression'; toggle.setAttribute('aria-expanded', 'true');
+    }); toggle.dataset.action = 'toggle-expression'; toggle.setAttribute('aria-expanded', 'false');
     const state = status('아직 연습 기록을 저장하지 않았어요.'); state.dataset.practiceStatus = '';
     const finish = document.createElement('div');
     const save = button('직접 연습했어요', async () => {
@@ -888,7 +917,7 @@ export function createPostCallFlow(deps) {
       if (!same(t) || activePractice !== attempt || !state.isConnected) return;
       attempt.saveId = [...pending].find(record => record.body?.p_action === 'practice' && record.body?.p_payload?.attempt_id === attemptId)?.id || null;
       if (confirmed) {
-        attempt.saved = true; state.textContent = '직접 연습 기록을 서버에 저장했어요.';
+        attempt.saved = true; syncPracticeVisibility(); state.textContent = '교정 뒤 다시 말해본 기록을 서버에 저장했어요.';
         save.hidden = true; toggle.hidden = true; finish.replaceChildren();
         const home = button('홈으로', () => { closePractice(); panelOpen = false; deps.setView('contacts'); }, true); home.dataset.action = 'home';
         const prepare = button('다음 통화 준비', () => prepareNext(id)); prepare.dataset.action = 'prepare-next';
@@ -909,7 +938,7 @@ export function createPostCallFlow(deps) {
     Object.assign(attempt, { state, save, toggle, finish });
     const actions=document.createElement('div');actions.className='learning-actions';actions.append(toggle,save,later);
     const close=button('연습 닫기',closePractice);close.dataset.action='close-practice';actions.append(close);
-    target.append(text('h4', '보고 말해 보세요'), intro, original, expression, reason, actions, state, finish);
+    target.append(text('h4', '같은 뜻을 내 말로'), intro, text('small', cue.label), original, expression, reason, assistance, actions, state, finish);
     const home = button('홈으로', () => { closePractice(); panelOpen = false; deps.setView('contacts'); }); home.dataset.action = 'home'; target.append(home);
     render();toggle.focus();
     const started = await event('practice_started', { sessionId: source?.sessionId, analysisId: source?.analysisId, itemId: id, attemptId }, { attribution: source ? 'session' : 'library', status: 'success' }, t);
@@ -921,8 +950,8 @@ export function createPostCallFlow(deps) {
   function confirmPractice(record) {
     const attempt = activePractice;
     if (!attempt || record.body?.p_payload?.attempt_id !== attempt.id || !same(attempt.t) || !attempt.state?.isConnected) return;
-    attempt.saved = true;
-    attempt.state.textContent = '직접 연습 기록을 서버에 저장했어요.';
+    attempt.saved = true; syncPracticeVisibility();
+    attempt.state.textContent = '교정 뒤 다시 말해본 기록을 서버에 저장했어요.';
     attempt.save.hidden = true; attempt.toggle.hidden = true; attempt.finish.replaceChildren();
     const home = button('홈으로', () => { closePractice(); panelOpen = false; deps.setView('contacts'); }, true); home.dataset.action = 'home';
     const prepare = button('다음 통화 준비', () => prepareNext(attempt.itemId)); prepare.dataset.action = 'prepare-next';

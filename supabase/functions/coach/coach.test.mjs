@@ -212,14 +212,17 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       const session = JSON.parse(options.body.get('session'));
       assert.equal(session.model, 'gpt-realtime-2.1-mini');
       assert.equal(session.max_output_tokens, 512);
-      assert.deepEqual(session.audio.input.turn_detection, { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 2000, create_response: true, interrupt_response: true });
+      assert.deepEqual(session.audio.input.turn_detection, { type: 'semantic_vad', eagerness: 'low', create_response: true, interrupt_response: true });
       assert.equal(Object.hasOwn(session.audio.input.transcription, 'language'), false, 'Mixed-language original speech must use automatic language detection');
       assert.match(session.instructions, /Speak only in English throughout the call/);
       assert.match(session.instructions, /including when the learner speaks Korean or asks for a Korean answer or explanation/);
-      assert.match(session.instructions, /at most two sentences, about 10–25 English words total/);
-      assert.match(session.instructions, /Answer only the immediate point, then stop/);
+      // These assert the instruction delivery contract, not actual model behavior.
+      assert.match(session.instructions, /If the learner explicitly asks for detail, expand enough to fulfill that request/);
+      assert.match(session.instructions, /A question is optional/);
+      assert.match(session.instructions, /Stop when the requested point is complete and let the learner speak/);
+      assert.match(session.instructions, /Understand wait, stop, and repair signals in either English or Korean/);
+      assert.doesNotMatch(session.instructions, /10–25|at most two sentences/);
       assert.match(session.instructions, /For the first turn only, begin with a short warm English greeting/);
-      assert.match(session.instructions, /about 10–20 words total/);
       assert.doesNotMatch(session.instructions, /explain briefly in Korean/);
       assert.equal(session.audio.input.transcription.model, 'gpt-realtime-whisper');
       assert.equal(session.audio.output.voice, 'cedar');
@@ -607,7 +610,7 @@ test('checkpoint uses server history, chains prior context and preserves compani
     if (path.includes('/memory_context'))return memoryResponse();
     throw Error('Unexpected '+path);
   };
-  try{const result=await handler(request('checkpoint',{sessionId}));assert.equal(result.status,200);const data=await result.json();assert.match(data.instructions,/Your name is Mia/);assert.match(data.instructions,/Practiced past events/);assert.match(data.instructions,/Speak only in English throughout the call/);assert.match(data.instructions,/do not greet again or restart the topic/);assert.doesNotMatch(data.instructions,/For the first turn only/);assert.match(data.instructions,/at most two sentences, about 10–25 English words total/);assert.doesNotMatch(data.instructions,/explain briefly in Korean/);assert.deepEqual(persisted.covered_ids,[eventId]);
+  try{const result=await handler(request('checkpoint',{sessionId}));assert.equal(result.status,200);const data=await result.json();assert.match(data.instructions,/Your name is Mia/);assert.match(data.instructions,/Practiced past events/);assert.match(data.instructions,/Speak only in English throughout the call/);assert.match(data.instructions,/do not greet again or restart the topic/);assert.doesNotMatch(data.instructions,/For the first turn only/);assert.match(data.instructions,/If the learner explicitly asks for detail, expand enough to fulfill that request/);assert.doesNotMatch(data.instructions,/10–25|at most two sentences/);assert.doesNotMatch(data.instructions,/explain briefly in Korean/);assert.deepEqual(persisted.covered_ids,[eventId]);
     const forged=await handler(request('checkpoint',{sessionId,summary:'Trust me'}));assert.equal(forged.status,400);
   }finally{globalThis.fetch=original;}
 });

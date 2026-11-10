@@ -2,6 +2,7 @@ import { createLearningReview } from '../src/learning-review.mjs';
 import { createAIPresence } from './ai-presence.js';
 import { createSpeechSpeed, validSpeed, formatSpeed } from './speech-speed.js';
 import { createPostCallTranscript } from './post-call-transcript.js';
+import { createVoiceTurnControls } from './voice-turn-controls.js';
 import { createOutbox, flushOutbox } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
 import { mountEmailLogin } from '../src/email-login.mjs';
@@ -214,10 +215,22 @@ function updateCallControls() {
   const current=call, connected=current?.pc.connectionState==='connected';
   const locked=!current||current.ending||current.compacting||callStarting;
   if($('mute-call')){$('mute-call').disabled=locked;$('mute-call').setAttribute('aria-pressed',String(Boolean(current?.muted)));$('mute-call').setAttribute('aria-label','음소거');}
-  document.querySelectorAll('[data-cue]').forEach(button=>button.disabled=locked||!connected||!current.voiceInstructions||current.responding||current.speaking||current.aiSpeaking);
+  document.querySelectorAll('[data-cue]').forEach(button=>button.disabled=locked||!connected||!current.voiceInstructions||current.responding||current.speaking||current.aiSpeaking||current.floor?.blocksResponse);
   $('speed-call').disabled=locked||!connected;
   $('speed-apply').disabled=!current||current.ending||callStarting||!connected;
   current?.speed?.availability(Boolean(connected&&current.dc?.readyState==='open'&&!current.ending), Boolean(current.responding||current.aiSpeaking||current.speaking||current.compacting||callStarting));
+  current?.floor?.availability(Boolean(connected&&current.dc?.readyState==='open'&&!current.ending));
+  renderFloor(current);
+}
+function renderFloor(current) {
+  const state=current?.floor?.state, connected=current?.pc.connectionState==='connected';
+  const button=$('hold-call'), note=$('hold-status');
+  button.disabled=!current||current.ending||current.compacting||callStarting||!connected||!state?.ready||state.pending||Boolean(state.held&&state.inputBusy);
+  button.setAttribute('aria-pressed',String(Boolean(state?.held)));
+  button.textContent=state?.phase==='error'?'응답 제어 다시 확인':state?.held?'다시 대화':'생각 중';
+  note.hidden=!state?.held;
+  note.textContent=state?.phase==='error'?'응답 제어를 확인하지 못했어요. 다시 확인하거나 통화를 마쳐 주세요.':state?.pending?(state.desiredHold?'AI 응답을 멈추고 있어요…':'대화를 다시 연결하고 있어요…'):current?.muted?'AI가 기다려요. 마이크는 음소거 상태예요.':state?.inputBusy?'듣고 있어요. 말을 마치면 다시 대화를 누를 수 있어요.':'AI가 기다려요. 내 말은 계속 기록돼요. 말을 마친 뒤 다시 대화를 누르세요.';
+  if(state?.held&&!current.ending){presence.setState('listening');$('call-status').textContent=state.pending?'응답 제어 확인 중':state.phase==='error'?'응답 제어 확인 필요':'생각할 시간 · AI가 기다려요';}
 }
 function savedSpeechSpeed() {
   try { const value=Number(localStorage.getItem('loop.speech-speed:'+scope));return validSpeed(value)?value:1; } catch { return 1; }
@@ -371,6 +384,7 @@ function observeCallItem(current,itemId) {
 }
 function receiveTurn(event,current) {
   if(!current || (current.ending&&!current.acceptingFinalEvents))return;
+  if(current.floor?.ignoresTranscript(event))return;
   let speaker,text;
   if(event.type==='conversation.item.input_audio_transcription.completed') {speaker='user';text=event.transcript;current.transcribing.delete(event.item_id);}
   else if(event.type==='response.output_audio_transcript.done') {speaker='assistant';text=event.transcript;}
@@ -400,7 +414,7 @@ async function capture(item,current) {
 // durable checkpoint, then delete old items only after the server acknowledges
 // the replacement instructions. A failed checkpoint leaves the live context intact.
 async function compactCall(current) {
-  if(call!==current || current.ending || current.compacting || current.transcriptionError || current.pc.connectionState!=='connected') return;
+  if(call!==current || current.ending || current.compacting || current.floor?.blocksResponse || current.transcriptionError || current.pc.connectionState!=='connected') return;
   current.compacting=true;
   const enabled=current.stream.getAudioTracks().map(track=>track.enabled);current.compactionInput=enabled;
   const deleted=current.items.slice(0,-6);
@@ -468,6 +482,11 @@ async function startCall() {
     const pc=new RTCPeerConnection();
     current={omitLearningContext,id:session.id,companionId:selectedCompanion,scope:callScope,pc,stream,remoteStream:null,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,acceptingFinalEvents:false,speaking:false,responding:false,aiSpeaking:false,muted:false,awaitingCommit:false,items:[],lastCompact:Date.now(),lastCompactAttempt:0,needsCompact:false,compacting:false,compactFailures:0,startedAt:null,startedMono:null,deadline:null,durationTimer:null,clockInterval:null};
     current.transcript=new Map();current.itemTimes=new Map();call=current;
+    current.floor=createVoiceTurnControls({send:event=>{const wasResponding=current.responding;if(event.type==='response.create')current.responding=true;try{current.dc.send(JSON.stringify(event));}catch(error){current.responding=wasResponding;throw error;}},
+      blockOutput:blocked=>{if(call===current&&!current.ending)$('remote-audio').muted=blocked;},
+      changed:state=>{if(call!==current||current.ending)return;if(current.floorHeld&&!state.held){presence.setState(current.aiSpeaking?'speaking':current.responding?'thinking':'listening');$('call-status').textContent=current.aiSpeaking?companionName()+'가 말하고 있어요':current.responding?'답변을 준비하고 있어요':'듣고 있어요 · 편하게 말씀하세요';}current.floorHeld=state.held;renderFloor(current);},
+      failed:message=>{if(call===current&&!current.ending)notice(message);}});
+    $('remote-audio').muted=false;
     current.connectedTelemetry=createConnectedTelemetry({sessionId:current.id,metadata:releaseMetadata,
       isCurrent:()=>call===current&&!current.ending&&scope===callScope&&auth?.user?.id===callUserId&&companionId===selectedCompanion&&pc.connectionState!=='closed',
       enqueue:receipt=>learning.recordConnected(current.id,receipt),
@@ -514,15 +533,22 @@ async function startCall() {
         if(!current.ending&&current.needsCompact&&Date.now()-current.lastCompactAttempt>=60000)setTimeout(()=>compactCall(current),250);
       }
       if(event.type==='input_audio_buffer.speech_started')current.speaking=true;
-      if(event.type==='input_audio_buffer.speech_stopped'){current.speaking=false;if(!current.ending)current.responding=true;}
+      if(event.type==='input_audio_buffer.speech_stopped'){current.speaking=false;current.awaitingCommit=true;if(!current.ending&&!current.floor.blocksResponse)current.responding=true;}
       if(event.type==='input_audio_buffer.committed'){current.awaitingCommit=false;current.transcribing.add(event.item_id);observeCallItem(current,event.item_id);}
       if(event.type==='conversation.item.input_audio_transcription.failed'){current.transcriptionError=true;current.transcribing.delete(event.item_id);notice('일부 발화의 전사에 실패했습니다. 해당 발화는 기록되지 않았습니다.');}
-      if(event.type==='error'&&!speedError&&!['response_cancel_not_active','conversation_already_has_active_response'].includes(event.error?.code)) {current.transcriptionError=true;notice('음성 연결 오류: '+(event.error?.message||'알 수 없는 오류'));}
+      // An old cancelled response.done must be processed before resume can
+      // issue a new response and mark its request as pending synchronously.
+      const floorError=current.floor.event(event);
+      // A VAD commit may race the final manual commit. An empty-buffer error
+      // for our own final request is not proof of lost speech: keep waiting
+      // for committed + ASR receipts, and retain partial status if absent.
+      const finalCommitEmpty=event.type==='error'&&Boolean(current.ending&&current.finalCommitId)&&event.error?.event_id===current.finalCommitId&&event.error?.code==='input_audio_buffer_commit_empty';
+      if(event.type==='error'&&!speedError&&!floorError&&!finalCommitEmpty&&!['response_cancel_not_active','conversation_already_has_active_response'].includes(event.error?.code)) {current.transcriptionError=true;notice('음성 연결 오류: '+(event.error?.message||'알 수 없는 오류'));}
       if(!current.ending)updateCallControls();
       const received=receiveTurn(event,current);
       saving=saving.then(()=>capture(received,current)).catch(error=>{current.transcriptionError=true;if(call===current){notice('저장 실패: '+error.message);setStatus('저장 실패 · 통화를 중단하고 확인하세요');current.stream.getTracks().forEach(track=>track.enabled=false);}});
     };
-    dc.onopen=()=>{if(call!==current||current.ending)return;current.responding=true;updateCallControls();dc.send(JSON.stringify({type:'response.create'}));};
+    dc.onopen=()=>{if(call!==current||current.ending||current.floor.blocksResponse)return;current.responding=true;updateCallControls();dc.send(JSON.stringify({type:'response.create'}));};
     pc.onconnectionstatechange=()=>{
       if(call!==current||current.ending)return;
       if(pc.connectionState==='connected') {
@@ -543,7 +569,7 @@ async function startCall() {
     await pc.setRemoteDescription({type:'answer',sdp:answer.sdp});
   } catch(e) {
     stream?.getTracks().forEach(track=>track.stop());
-    if(current){current.connectedTelemetry?.stop();current.speed?.dispose();clearCallClock(current);current.pc.close();}
+    if(current){current.connectedTelemetry?.stop();current.speed?.dispose();current.floor?.dispose();clearCallClock(current);current.pc.close();}
     if(!current||call===current){call=null;presence.detachAudio();$('remote-audio').srcObject=null;$('call-status').textContent='연결하지 못했어요. 다시 시도해 주세요.';}
     throw e;
   } finally {callStarting=false;setCallLayout(Boolean(call));if(!call&&!callEnding)setView(current?.nextView||'contacts');}
@@ -554,7 +580,7 @@ function endCall() {
   if(current.ending)return current.endingPromise||Promise.resolve();
   // Reserve the end synchronously before any transcription/network awaits.
   current.ending=true;current.connectedTelemetry?.stop();current.acceptingFinalEvents=true;callEnding=true;clearCallClock(current);navigationControls();updateCallControls();$('end-call').disabled=true;
-  current.speed?.dispose();closeDialog('speed-dialog');
+  current.speed?.dispose();current.floor?.dispose();closeDialog('speed-dialog');
   presence.detachAudio();$('remote-audio').pause();$('remote-audio').srcObject=null;
   current.remoteStream?.getAudioTracks().forEach(track=>track.enabled=false);
   current.assistantInterrupted=Boolean(current.responding||current.aiSpeaking);
@@ -573,8 +599,8 @@ function endCall() {
       presence.detachAudio();current.stream.getTracks().forEach(track=>track.stop());
       $('call-status').textContent='마지막 발화의 전사와 저장을 확인하는 중…';
       if(current.dc.readyState==='open') {
-        current.dc.send(JSON.stringify({type:'session.update',session:{type:'realtime',audio:{input:{turn_detection:{type:'server_vad',threshold:0.5,prefix_padding_ms:300,silence_duration_ms:2000,create_response:false,interrupt_response:false}}}}}));
-        if(current.speaking){current.awaitingCommit=true;current.dc.send(JSON.stringify({type:'input_audio_buffer.commit'}));}
+        current.dc.send(JSON.stringify({type:'session.update',session:{type:'realtime',audio:{input:{turn_detection:current.floor?.shutdownPolicy()??null}}}}));
+        if(current.speaking){current.awaitingCommit=true;current.finalCommitId='final-commit-'+crypto.randomUUID();current.dc.send(JSON.stringify({type:'input_audio_buffer.commit',event_id:current.finalCommitId}));}
         current.dc.send(JSON.stringify({type:'response.cancel'}));
         await new Promise(resolve=>setTimeout(resolve,1800));
         const until=Date.now()+8000;
@@ -696,7 +722,8 @@ function openCallDetails({session,analysis,excluded,meta,onReview,requestScope,e
       const rows=await allRows('transcript_events','session_id=eq.'+session.id+'&order=timestamp.asc,id.asc');
       if(!valid())return;
       const pre=document.createElement('pre');pre.textContent=rows.filter(event=>event.session_id===session.id).map(event=>(event.speaker==='user'?'나':name)+': '+event.text).join('\n\n')||'저장된 발화가 없습니다.';
-      transcript.body.replaceChildren(pre);loaded=true;
+      const note=document.createElement('p');note.className='help';note.textContent='자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.';
+      transcript.body.replaceChildren(note,pre);loaded=true;
     }catch(error){if(!valid())return;transcript.body.textContent='다시 열어 대화문을 불러와 주세요.';throw error;}
     finally{loading=false;}
   });
@@ -923,7 +950,7 @@ if(!data.sessions.length)await restoreRpc('restore_history',{p_backup:{sessions:
 for(const session of data.sessions)if(session.record_incomplete===true)await restoreRpc('learning_finish_partial',{p_session_id:session.id});if(scope!==restoreScope||!auth)throw Error('복원 중 계정이 바뀌었어요. 같은 계정에서 다시 시도해 주세요.');if(data.schema_version===2)await learning.restoreBackup(data.learning_progress);notice('대화와 복습 이력을 복원했습니다. 피드백은 유효한 근거로 다시 생성하세요.');}finally{e.target.value='';if(scope&&auth)await Promise.allSettled([loadHistory(),loadMemory()]);}});
 document.querySelectorAll('[data-cue]').forEach(button=>button.onclick=protect(async()=>{
   const current=call;
-  if(!current||!current.voiceInstructions||current.ending||current.compacting||current.responding||current.speaking||current.aiSpeaking||current.dc.readyState!=='open'||current.pc.connectionState!=='connected')return;
+  if(!current||!current.voiceInstructions||current.ending||current.compacting||current.floor?.blocksResponse||current.responding||current.speaking||current.aiSpeaking||current.dc.readyState!=='open'||current.pc.connectionState!=='connected')return;
   current.responding=true;updateCallControls();
   try{current.dc.send(JSON.stringify({type:'response.create',response:{instructions:current.voiceInstructions+'\nFor this response only: '+button.dataset.cue}}));}catch(error){current.responding=false;updateCallControls();throw error;}
 }));
@@ -953,6 +980,7 @@ if($('memory-manage-open'))$('memory-manage-open').onclick=openMemory;if($('acco
 if($('memory-index'))$('memory-index').onclick=protect(indexMemory);if($('memory-index-more'))$('memory-index-more').onclick=protect(indexMemory);
 if($('practice-preview'))$('practice-preview').onclick=protect(()=>learning.openPreview());
 if($('mute-call'))$('mute-call').onclick=()=>{const current=call;if(!current||current.ending||current.compacting)return;current.muted=!current.muted;current.stream.getAudioTracks().forEach(track=>track.enabled=!current.muted);updateCallControls();};
+$('hold-call').onclick=()=>{const current=call;if(!current||current.ending||current.compacting||callStarting)return;const state=current.floor.state;if(state.phase==='error')current.floor.retry();else current.floor.request(!state.held);updateCallControls();};
 updateCompanion();setView('contacts');
 async function initializeLogin(){
   if(!config){await ready();return;}

@@ -4,6 +4,21 @@ const reasons = { delayed_recall: '내가 예약한 회상 시점이 됐어요.'
 const empty = () => ({ reviews: [], schedules: [], recalls: [], usage: [], weekly_goals: [], imports: [], personalized_item_ids: [], recommendation_reasons: {} });
 const stamp = value => value ? new Date(value).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) + ' KST' : '시각 확인 필요';
 
+// A cue is a labelled source or suggestion, never a fabricated translation of
+// the learner's intent. Reject exact target copies (including punctuation/case
+// variants) so a saved goal cannot accidentally reveal the answer.
+const cueKey = value => String(value || '').normalize('NFKC').toLocaleLowerCase().replace(/[\p{P}\p{S}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+export function practiceCue(item, goal = '') {
+  const target = cueKey(item.expression);
+  const safe = value => { const key = cueKey(value); return key && target && !key.includes(target); };
+  const choices = [
+    { kind: 'goal', label: '내가 정한 연습 목표', value: goal },
+    { kind: 'source', label: '지난 통화에서 말한 내용 · 자동 전사', value: item.original },
+    { kind: 'scenario', label: '다음에 이야기할 상황 · 제안', value: item.next_scenario }
+  ];
+  return choices.find(cue => safe(cue.value)) || { kind: 'choice', label: '내가 정하는 연습 상황', value: '이 표현을 쓰고 싶었던 상황을 떠올려 보세요. 뜻이 기억나지 않으면 표현을 다시 봐도 괜찮아요.' };
+}
+
 // This controller only presents server-confirmed extension state. All mutations
 // use the existing account-partitioned durable queue and compare-and-swap path.
 export function createLearningEnhancements(host) {
@@ -155,18 +170,27 @@ export function createLearningEnhancements(host) {
     target.append(section);
   }
   function buildRecall(item, handlers) {
-    const schedule = scheduleFor(item.id);
+    const schedule = scheduleFor(item.id), cue = practiceCue(item, schedule?.goal);
     const box = text('section', '', 'learning-practice'); box.dataset.itemId = item.id; box.dataset.practiceKind = 'delayed';
+    const cueValue = text('p', cue.value, cue.kind === 'source' ? 'original' : 'help'); cueValue.dataset.practiceCue = cue.kind;
     const expression = text('p', item.expression, 'improved'); expression.hidden = true; expression.dataset.practiceExpression = '';
-    const state = status('표현을 가린 채 떠올려 보세요. 녹음·자동 채점 없이 내가 느낀 정도를 선택해요.');
+    const state = status('단서만 보고 같은 뜻을 영어로 말해 보세요. 똑같은 문장일 필요는 없어요. 해본 뒤 내 느낌을 선택해요. 녹음·자동 채점은 하지 않아요.');
     const finish = document.createElement('div'), actions = text('div', '', 'learning-actions');
     const gradeButtons = [];
-    const reveal = button('표현 다시 보기 · 도움 받기', () => { expression.hidden = false; reveal.setAttribute('aria-expanded', 'true'); gradeButtons.find(node => node.dataset.action === 'recall-independent').disabled = true; }); reveal.dataset.action = 'reveal-delayed-expression'; reveal.setAttribute('aria-expanded', 'false');
-    const save = button('어려움', () => {}); // A stable primary control for shared pending-state and focus handling.
+    let revealed = false, submitting = false;
+    const available = () => handlers.current() && !handlers.saved() && !host.suppressed(host.itemOf(item.id)) && !pending(item);
+    const reveal = button('표현 다시 보기 · 도움 받기', () => {
+      if (!available() || submitting) return;
+      revealed = true; expression.hidden = false; reveal.setAttribute('aria-expanded', 'true');
+      gradeButtons.find(node => node.dataset.action === 'recall-independent').disabled = true;
+      state.textContent = '표현을 확인했어요. 같은 뜻을 내 말로 해보고, 도움이 필요했는지 기록해요.';
+    }); reveal.dataset.action = 'reveal-delayed-expression'; reveal.setAttribute('aria-expanded', 'false');
+    const save = button('어려움', () => {}); // Stable control for shared pending-state and focus handling.
     for (const [rating, label] of Object.entries(ratings)) {
       const node = rating === 'hard' ? save : button(label, () => {}); node.textContent = label; node.dataset.action = `recall-${rating}`;
       node.onclick = async () => {
-        if (node.disabled) return;
+        if (node.disabled || !available() || submitting || rating === 'independent' && revealed) return;
+        submitting = true; reveal.disabled = true;
         for (const grade of gradeButtons) grade.disabled = true;
         state.textContent = '기기 보관과 서버 저장을 확인하고 있어요.';
         try {
@@ -174,13 +198,19 @@ export function createLearningEnhancements(host) {
           if (!handlers.current()) return;
           if (result?.outcome === 'applied') handlers.confirm(result);
           else state.textContent = host.pending(item.id).length ? '기기 보관 확인 · 회상 자기보고 서버 반영 대기' : '저장하지 못했어요. 다시 선택해 주세요.';
-        } catch { if (handlers.current()) { state.textContent = '서버 저장을 확인하지 못했어요. 동기화 안내에서 다시 확인해 주세요.'; } }
-        if (!host.pending(item.id).length && !handlers.saved()) for (const grade of gradeButtons) grade.disabled = grade.dataset.action === 'recall-independent' && !expression.hidden;
+        } catch { if (handlers.current()) state.textContent = '서버 저장을 확인하지 못했어요. 동기화 안내에서 다시 확인해 주세요.'; }
+        finally {
+          submitting = false;
+          if (available()) {
+            reveal.disabled = false;
+            for (const grade of gradeButtons) grade.disabled = grade.dataset.action === 'recall-independent' && revealed;
+          }
+        }
       };
       gradeButtons.push(node); actions.append(node);
     }
     const close = button('연습 닫기', handlers.close); close.dataset.action = 'close-practice';
-    box.append(text('h4', '시간을 두고 가려서 회상'), state, expression, reveal, actions, close, finish);
+    box.append(text('h4', '시간을 두고 가려서 회상'), text('small', cue.label), cueValue, state, expression, reveal, actions, close, finish);
     return { box, state, save, toggle: reveal, finish, gradeButtons };
   }
   return {

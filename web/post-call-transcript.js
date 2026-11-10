@@ -41,7 +41,7 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
       : '서버에서 확인된 발화가 없어요. 수신되지 않은 음성은 기록에 포함되지 않아요.';
     if (phase === 'saved' && (current?.recordIncomplete || state.recordIncomplete)) message = '수신된 기록으로 마무리한 통화예요. 누락된 음성은 포함되지 않아요.';
     const status = text('p', message, 'help'); status.dataset.transcriptStatus = ''; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); host.append(status);
-    if (current?.assistantInterrupted && rows.some(row=>row.speaker==='assistant')) host.append(text('p', '종료 직전 상대가 생성한 문장은 실제 재생된 범위와 다를 수 있어요.', 'help'));
+    if (rows.length) host.append(text('p', '자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.', 'help'));
     if (current?.wrapupCanLeave && phase === 'finalizing') {
       const home = text('button', '홈에서 기다리기', 'text-button'); home.id = 'wrapup-home'; home.type = 'button'; home.dataset.action = 'wrapup-home'; home.onclick = current.onWrapupHome; host.append(home);
     }

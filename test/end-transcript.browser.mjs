@@ -120,6 +120,7 @@ try {
   await transcript().waitFor({ state: 'visible', timeout: 1500 });
   assert.match(await textRows().innerText(), /I would like to review what we said\./);
   assert.match(await textRows().innerText(), /Of course\. What stood out to you\?/);
+  assert.match(await transcript().innerText(), /중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요/);
   assert.equal(saved.size, 0, 'readable received turns precede append acknowledgement');
   assert.equal(finishes.length, 0, 'immediate transcript does not wait for finish RPC');
   assert.match(await transcriptStatus().innerText(), /전사|전송|저장.*확인|대기/);
@@ -150,6 +151,7 @@ try {
 
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' });
   await page.locator('[data-view="review"]').click(); await transcript().waitFor({ state: 'visible' });
+  assert.match(await transcript().innerText(), /중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요/, 'reload retains the generated-versus-heard transcript limitation');
   assert.match(await textRows().innerText(), /I would like to review what we said\./);
   assert.match(await textRows().innerText(), /This is my final sentence after hangup\./);
   await page.screenshot({ path: 'test-results/end-transcript-reloaded.png', fullPage: true });

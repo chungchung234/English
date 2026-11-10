@@ -317,7 +317,9 @@ try {
     await revealAndClick(itemCard(page, recallItem.id).locator('[data-action="start-delayed-recall"]'));
     const delayed = page.locator('.learning-practice[data-practice-kind="delayed"]');
     assert(await delayed.locator('[data-practice-expression]').isHidden(), 'delayed recall initially hides the expression from visual and accessibility output');
-    assert(!(await page.locator('#review-content').innerText()).includes(recallSource.expression), 'the surrounding source feedback does not reveal the answer during delayed recall');
+    assert(await page.locator('#review-content').isHidden(), 'the surrounding source feedback does not reveal the answer during delayed recall');
+    assert.match(await delayed.locator('[data-practice-cue]').innerText(), /Please say again slow/);
+    assert(!(await page.locator('body').innerText()).includes(recallSource.expression), 'no visible feedback, library, transcript or weekly-goal copy reveals the answer');
     if (rating === 'assisted') {
       await delayed.locator('[data-action="reveal-delayed-expression"]').click();
       assert(await delayed.locator('[data-action="recall-independent"]').isDisabled(), 'revealed answer cannot be self-reported as independent recall');

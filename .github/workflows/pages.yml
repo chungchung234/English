@@ -95,7 +95,7 @@ jobs:
           sudo apt-get install -y espeak-ng
           espeak-ng -s 145 -w /tmp/loop-utterance.wav "Hi there. Yesterday I went to a cafe with my friend. Today I am thinking of visiting a park."
           python3 scripts/synthetic-audio.py /tmp/loop-utterance.wav /tmp/loop-smoke.wav
-      - name: Verify live voice, memory and account isolation
+      - name: Verify live access policy and available voice paths
         run: node scripts/live-smoke.mjs
         env:
           SUPABASE_PROJECT_REF: domkmxmwmihcfadophfg

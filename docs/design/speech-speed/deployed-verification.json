@@ -1,0 +1,29 @@
+{
+  "site": "https://chungchung234.github.io/English/",
+  "commit": "7f08a1956a422df4d1bc3b6110044f99105e7b9a",
+  "verified_at": "2026-11-10T11:34:58.982Z",
+  "range": {
+    "min": 0.5,
+    "max": 1.5,
+    "step": 0.05
+  },
+  "initialSpeed": 1,
+  "appliedSpeed": 0.85,
+  "checks": [
+    "published HTML and hashed bundle",
+    "slider draft and apply",
+    "wait for generation and audio playback",
+    "server acknowledgement via fixture",
+    "320px apply visibility"
+  ],
+  "errors": [],
+  "transport": "Synthetic auth and WebRTC; real hosted files, no live AI connection",
+  "workflow": "https://github.com/chungchung234/English/actions/runs/42807866662",
+  "workflow_conclusion": "success",
+  "backend": {
+    "function": "coach",
+    "version": 68,
+    "status": "ACTIVE"
+  },
+  "live_voice": "Not run: private installation requires an approved account; CI verified unapproved-account access denial without changing approvals."
+}

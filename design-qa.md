@@ -21,6 +21,12 @@ final result: passed
 
 범위: 음성 API는 모의 응답으로 검사했다. 실제 제공자 실연결·iOS Safari 실기기 검사는 별도이며 공개 배포는 하지 않았다. 배포할 때는 선택적인 `speechSpeed`를 받는 함수를 먼저 갱신하고 웹을 게시해야 한다.
 
+### 속도 기능 공개 배포 확인
+
+[배포 실행 42807866662](https://github.com/chungchung234/English/actions/runs/42807866662)이 성공했다. 배포 소스는 `7f08a1956a422df4d1bc3b6110044f99105e7b9a`이며, 관리 API에서 coach 함수 버전 68의 ACTIVE 상태를 확인했다. [공개 사이트](https://chungchung234.github.io/English/)에서 실제 게시 HTML·해시 번들을 로드해 [패널](docs/design/speech-speed/deployed-sheet.png)·[통화](docs/design/speech-speed/deployed-call.png)·[320px](docs/design/speech-speed/deployed-compact.png)를 캡처했다. [검증 결과](docs/design/speech-speed/deployed-verification.json)에 0.85배 선택, 생성/재생 종료 대기, 확인 응답 후 반영, 작은 화면 적용 버튼과 JavaScript 오류 0건을 기록했다.
+
+게시 번들 기능 검증의 인증·음성 전송은 모의 값이다. 실제 CI는 임시 비승인 계정의 데이터/API 접근 차단을 통과했으며, 승인 계정이 필요한 실제 AI 통화는 수행하지 않았다. 승인 목록을 변경하지 않았다.
+
 ## 통화 이후 기능 추가 · 2026-11-10
 
 기존 디자인 패턴에 표현 하나 연습·가리기·미루기·직접 연습 표시·다음 통화 준비를 연결했다. [화면 및 구현·검증 범위](docs/post-call-flow.md)를 기록했다. 390px/320px 합성 데이터 브라우저 검사에서 클라우드 저장 실패·재시도·새로고침 복원·주제 준비 후 마이크 미연결을 확인했다. [게시 파일·DB 검증](docs/design/post-call/deployed-verification.json)을 함께 보존한다.

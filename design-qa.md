@@ -49,3 +49,7 @@ final result: passed
 ## 후속 미세 조정
 
 P3: 플랫폼에 따른 글자 두께와 웹 글래스의 광학적 차이는 실기기 확인 때 조정할 수 있다. 현재 추가 배치를 바꿀 정도의 시각 불일치는 없다.
+
+## 게시 파일 확인
+
+[배포 검사](https://github.com/chungchung234/English/actions/runs/42755922694) 성공. 앱 릴리스 `caabb35fff8285d8f7cbd77669282490643d3564`의 공개 HTML과 세 AI 이미지의 검증된 HTTPS 다운로드를 확인했다. 세 이미지는 저장소의 승인 원본과 바이트 단위로 동일하다. 다운로드한 HTML과 이미지를 변형 없이 게시 URL·CSP에서 렌더링한 [390px 홈](docs/design/call-glass/deployed-home.png), [320px 홈](docs/design/call-glass/deployed-compact.png)을 직접 열어 확인했다. 보호 API만 합성 응답으로 대체했으며 가로 넘침 없음, 플랫 발신 버튼, Mia 선택, 실행 오류 0건이다. [메타데이터](docs/design/call-glass/deployed-verification.json).

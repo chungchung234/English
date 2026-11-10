@@ -30,3 +30,10 @@
 - 오디오 반응은 실제 생성한 브라우저 오디오 트랙으로 검사했다. AI 제공자 통화와 OAuth 제공자 응답은 모의이며 실계정 통화 성공을 주장하지 않는다.
 
 웹의 반투명·블러·경계빛 표현이며 애플 네이티브 Liquid Glass API를 사용하는 앱은 아니다. 실제 iPhone Safari의 재질·마이크·백그라운드 동작은 별도 실기기 확인 범위다.
+
+## 배포 확인
+
+- [서비스](https://chungchung234.github.io/English/), 앱 릴리스 `caabb35fff8285d8f7cbd77669282490643d3564`.
+- [배포 검사 성공](https://github.com/chungchung234/English/actions/runs/42755922694). 빌드·검사·게시 및 기존 비승인 계정 접근 차단 확인을 통과했다.
+- [게시된 Alex 홈](deployed-home.png), [게시된 320px Mia 홈](deployed-compact.png), [HTTPS·원본 일치·브라우저 메타데이터](deployed-verification.json).
+- 공개 HTML과 세 이미지의 HTTPS 응답을 확인하고, 세 이미지가 승인 WebP와 바이트 단위로 동일함을 확인했다. 게시 HTML을 수정 없이 같은 URL·CSP에서 렌더링하되 보호된 API는 브라우저 합성 응답으로 대체했다. 선택, 플랫 발신 버튼, 작은 화면 배치, 실행 오류 0건을 확인했다. 실제 사용자 계정으로 로그인하거나 음성 통화를 우회하지 않았다.

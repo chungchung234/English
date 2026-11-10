@@ -1,0 +1,50 @@
+{
+  "site": "https://chungchung234.github.io/English/",
+  "release_commit": "caabb35fff8285d8f7cbd77669282490643d3564",
+  "https_status": 200,
+  "html_bytes": 274714,
+  "html_sha256": "c1fb6f7503b9cce81162ea2e4375932cee9942b5fccef866b9b539ae320a1091",
+  "assets": [
+    {
+      "path": "assets/ai-alex.cc68fe3acd91.webp",
+      "bytes": 515878,
+      "sha256": "cc68fe3acd919db19a6a8f2f5a54bd093e2b49af0807bfb4299c9c4ee56af37d",
+      "matches_source": true
+    },
+    {
+      "path": "assets/ai-juno.9af4cc7fb746.webp",
+      "bytes": 458512,
+      "sha256": "9af4cc7fb746af15fd7d599b6e4f54f21c6ebc8593cd8ca52f84f295f15e52da",
+      "matches_source": true
+    },
+    {
+      "path": "assets/ai-mia.c2811706559f.webp",
+      "bytes": 491026,
+      "sha256": "c2811706559f2d38ba5c0801531f8bdb3c338a587b37e1e36aecb980444e80b3",
+      "matches_source": true
+    }
+  ],
+  "tls": "standard verified HTTPS, inherited proxy and CA trust",
+  "protected_screen": "browser-only synthetic fixtures; no real user access",
+  "browser": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "compact": {
+      "width": 320,
+      "height": 568
+    },
+    "metrics": {
+      "overflow": false,
+      "callShadow": "none",
+      "callBottom": 434,
+      "dockTop": 486,
+      "selector": "mia",
+      "searchFields": 0
+    },
+    "consoleErrors": [],
+    "source": "unchanged HTTPS-fetched HTML/assets under published URL and CSP; protected APIs intercepted with synthetic data"
+  },
+  "verified_at_utc": "2026-11-10T04:31:18.614257+00:00"
+}

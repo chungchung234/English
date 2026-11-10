@@ -1,6 +1,29 @@
-# 통화 홈 디자인 QA
+# 모바일 통화·최근 통화·복습 디자인 QA
 
 final result: passed
+
+## 최근 통화·복습 추가 검수 · 2026-11-10
+
+기준은 직전 검수에서 제시한 [최근 통화](docs/design/tabs-refinement/before-history.png)·[복습](docs/design/tabs-refinement/before-review.png), 승인된 통화 홈의 디자인 패턴, 사용자가 진행을 요청한 네 보완 항목이다. 새 브랜드나 새 시각 방향으로 교체하지 않았다.
+
+- 구현 증거: [최근 통화](docs/design/tabs-refinement/01-history.png), [복습](docs/design/tabs-refinement/03-review.png), [통화 상세](docs/design/tabs-refinement/call-detail.png).
+- 전체 비교: [최근 통화 전후](docs/design/tabs-refinement/comparison-history.png), [복습 전후](docs/design/tabs-refinement/comparison-review.png).
+- 확대/추가 상태: [문장 대비](docs/design/tabs-refinement/comparison-contrast.png), [320px·상세·긴 대화문·빈 상태](docs/design/tabs-refinement/comparison-states.png).
+- Source/implementation: 390×844 px/CSS px, deviceScaleFactor 1, 로그인 후 동일한 합성 기록·피드백. 추가 320×568. 기기 프레임 없음. 대비 영역만 1.5배로 확대했으며 새로운 화면 요소를 그리지 않았다.
+
+| 필수 표면 | 결과 |
+| --- | --- |
+| 글꼴·타이포그래피 | 시스템 한글 산세리프와 기존 위계 유지. 320px 첫 화면에 교정 문장 표시. 원문 대비 5.93:1. |
+| 간격·배치 | 목록의 행당 최대 5개 버튼을 상세/다시 걸기 두 진입으로 정리. 긴 대화문은 본문만 스크롤하고 닫기 버튼은 유지. 작은 화면 가로 넘침 없음. |
+| 색·토큰 | 승인된 블루·네이비·녹색과 글래스 조작부 유지. 통화 홈의 발신 및 목록의 다시 걸기는 플랫. |
+| 자산·아이콘 | 기존 승인 AI WebP와 Phosphor 아이콘. 새로 사용한 새로고침 아이콘은 기존 패키지의 regular/arrow-clockwise다. |
+| 문구·내용 | 교정/연습 우선, 부가 분석 접기, 이름/안내 반복 감소. 검색에는 대상 상대를 표시하며 검색 범위를 넓히지 않았다. |
+
+비교 이력: 최초 P2는 목록 조작 과밀, 교정이 뒤로 밀림, 3.61:1 원문 대비, 데이터 없이 활성화된 분석 버튼이었다. 각각 통화 상세로 분리, 교정/연습 우선 배치, 5.93:1 토큰, 상대별 7일 종료 통화 확인으로 수정했다. 수정 후 전체/확대/작은 화면 비교에서 남은 P0/P1/P2 없음.
+
+검증은 실제 Chromium·배포 구조 CSP 검사와 합성 API 데이터로 수행했다. 실행 오류 0건. 전체 브라우저 회귀 검사, 추가 탭 검사, 타입/문법, 서버/DB/빌드 테스트 82/82 통과. 느린 대화문의 다른 통화 유입 방지, 선택 상대 보존, 주간 결과 표시·중복 방지·빈 상태·30개 밖의 대상도 확인했다. [상세 기록](docs/design/tabs-refinement/README.md), [메타데이터](docs/design/tabs-refinement/verification.json).
+
+이하 통화 홈의 기존 검수와 게시 파일 기록을 보존한다. 최신 추가 게시 검증은 위 상세 기록에 이어서 관리한다.
 
 ## 비교 대상과 상태
 

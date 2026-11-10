@@ -83,15 +83,15 @@ try{
  await page.waitForFunction(()=>document.querySelector('#orb').dataset.ready==='true'&&document.querySelector('#orb').dataset.profile==='alex');
  const slide=await page.evaluate(()=>{
   document.querySelector('[data-companion="juno"]').click();
-  const outgoing=document.querySelector('.companion-slide-out'),data=outgoing?.getContext('2d').getImageData(0,0,outgoing.width,outgoing.height).data;
+  const outgoing=document.querySelector('.companion-slide-out canvas'),data=outgoing?.getContext('2d').getImageData(0,0,outgoing.width,outgoing.height).data;
   return {first:document.querySelector('#companion-art').getAnimations()[0]?.effect.getKeyframes()[0].transform,hasArtwork:data&&data.some((value,index)=>index%4===3&&value>0)};
  });
- assert.equal(slide.first,'translateX(100%)');assert.equal(slide.hasArtwork,true,'outgoing slide must retain actual WebGL artwork');
+ assert.match(slide.first,/^translateX\([0-9.]+px\)$/);assert.equal(slide.hasArtwork,true,'outgoing slide must retain actual WebGL artwork');
  const reversed=await page.evaluate(()=>{
   document.querySelector('[data-companion="mia"]').click();document.querySelector('[data-companion="alex"]').click();
   return {first:document.querySelector('#companion-art').getAnimations()[0]?.effect.getKeyframes()[0].transform,outgoing:document.querySelectorAll('.companion-slide-out').length};
  });
- assert.equal(reversed.first,'translateX(-100%)');assert(reversed.outgoing<=1,'rapid selection must discard older slides');
+ assert.match(reversed.first,/^translateX\(-[0-9.]+px\)$/);assert(reversed.outgoing<=1,'rapid selection must discard older slides');
  await page.waitForFunction(()=>!document.querySelector('.companion-slide-out')&&!document.querySelector('#companion-art').getAnimations().length&&document.querySelector('#orb').dataset.profile==='alex');
  assert.equal(await page.locator('#start-call').getAttribute('aria-label'),'Alex와 통화');
  await page.emulateMedia({reducedMotion:'reduce'});
@@ -121,6 +121,28 @@ try{
  await touch.send('Emulation.setTouchEmulationEnabled',{enabled:false});await touch.detach();await page.locator('[data-companion="alex"]').click();
  await page.waitForFunction(()=>document.querySelector('#orb').dataset.profile==='alex'&&!document.querySelector('.companion-slide-out'));
  console.log('PASS: mouse drag and real browser touch swipe change companions; short, vertical and boundary gestures preserve selection.');
+ const wide=await page.locator('#companion-stage').boundingBox(),artSize=await page.locator('#orb').boundingBox();
+ assert(wide.width>=389&&artSize.width<=240,'edge fades span the screen without stretching the artwork');
+ assert((await page.locator('#companion-stage').evaluate(node=>getComputedStyle(node).maskImage||getComputedStyle(node).webkitMaskImage)).includes('gradient'));
+ const trait=await page.locator('#companion-trait').boundingBox();
+ await page.mouse.move(trait.x+trait.width/2,trait.y+trait.height/2);await page.mouse.down();await page.mouse.move(trait.x+trait.width/2-90,trait.y+trait.height/2,{steps:5});await page.mouse.up();
+ await page.waitForFunction(()=>document.querySelector('#orb').dataset.profile==='juno'&&!document.querySelector('.companion-slide-out'));
+ const broadTouch=await page.context().newCDPSession(page);await broadTouch.send('Emulation.setTouchEmulationEnabled',{enabled:true});
+ await broadTouch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:40,y:wide.y-24,id:1}]});
+ for(let step=1;step<=5;step++)await broadTouch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:40+step*18,y:wide.y-24,id:1}]});
+ await broadTouch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ await page.waitForFunction(()=>document.querySelector('#orb').dataset.profile==='alex'&&!document.querySelector('.companion-slide-out'));
+ await broadTouch.send('Emulation.setTouchEmulationEnabled',{enabled:false});await broadTouch.detach();
+ assert.equal(await page.locator('#start-call').getAttribute('aria-label'),'Alex와 통화');
+ console.log('PASS: swipes on description and blank page space work beyond the artwork, with full-width fades and unchanged artwork size.');
+ const countBeforeSwipe=sessions.length,phone=await page.locator('#start-call').boundingBox();
+ await page.mouse.move(phone.x+phone.width/2,phone.y+phone.height/2);await page.mouse.down();await page.mouse.move(phone.x+phone.width/2-90,phone.y+phone.height/2,{steps:5});await page.mouse.up();
+ await page.waitForFunction(()=>document.querySelector('#orb').dataset.profile==='juno'&&!document.querySelector('.companion-slide-out'));
+ assert.equal(sessions.length,countBeforeSwipe,'swiping across the call button must not start a call');
+ await page.locator('[data-companion="alex"]').click();await page.waitForFunction(()=>document.querySelector('#orb').dataset.profile==='alex'&&!document.querySelector('.companion-slide-out'));
+ console.log('PASS: a swipe can start on the call button without activating it; normal button taps remain available.');
+
+
 
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await assertVisibleImagesLoaded(page);

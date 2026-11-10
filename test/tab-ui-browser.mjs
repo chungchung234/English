@@ -12,6 +12,7 @@ export async function testTabUI(browser,base){
  const analysis={id:'55555555-5555-4555-8555-555555555555',session_id:sid,kind:'session',content};
  const transcriptText=Array(80).fill(content.corrections[0].original).join('\n');
  let mode='populated',weeklyCalls=0,reviewCalls=0,holdWeekly=false,releaseWeekly,weeklyArrived,slowTranscript=false,transcriptStarted,releaseTranscript;
+ let holdHistory=false,historyArrived,releaseHistory;
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/public-config.js',route=>route.fulfill({contentType:'text/javascript',body:'globalThis.LOOP_PUBLIC_CONFIG={url:"https://test-project.supabase.co",key:"sb_publishable_test"};'}));
  await page.route('https://test-project.supabase.co/**',async route=>{
@@ -20,6 +21,7 @@ export async function testTabUI(browser,base){
   else if(url.pathname==='/auth/v1/settings')data={external:{google:false,kakao:false}};
   else if(url.pathname.endsWith('/coach/config'))data={models:{voice:'fixture',coach:'fixture',analysis:'fixture'}};
   else if(url.pathname==='/rest/v1/sessions'){
+   if(holdHistory&&url.searchParams.get('select')==='*'){holdHistory=false;const waiting=new Promise(resolve=>releaseHistory=resolve);historyArrived();await waiting;}
    if(mode==='empty')data=[];
    else if(mode==='older-page')data=url.searchParams.get('select')==='*'?Array.from({length:30},(_,i)=>({...sessions[1],id:'old-'+i})): [{companion_id:'mia',status:'ended',ended_at:stamp(1)}];
    else data=sessions;
@@ -43,9 +45,14 @@ export async function testTabUI(browser,base){
   await page.goto(base);await page.locator('#login-form').waitFor({state:'visible'});
   await page.evaluate(uid=>localStorage.setItem('loop.auth:https://test-project.supabase.co',JSON.stringify({access_token:'test-jwt',refresh_token:'test-refresh',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:uid}})),uid);
   await page.reload();await page.locator('#workspace').waitFor({state:'visible'});await page.waitForFunction(()=>document.querySelectorAll('#history .history-entry').length===3);
-  await page.locator('[data-view="history"]').click();
+  holdHistory=true;const historyWaiting=new Promise(resolve=>historyArrived=resolve);
+  const previousRow=await page.locator('#history .history-entry').first().elementHandle();
+  await page.locator('[data-view="history"]').click();await historyWaiting;
   assert.equal(await page.locator('#history .history-entry').first().getByRole('button').count(),2,'each call row exposes only detail and redial');
-  await page.locator('#history .history-open').first().click();await page.locator('.call-transcript summary').click();
+  await page.locator('#history .history-open').first().click();
+  const historyDone=page.waitForResponse(response=>{const url=new URL(response.url());return url.pathname==='/rest/v1/sessions'&&url.searchParams.get('select')==='*';});releaseHistory();await historyDone;
+  await page.waitForFunction(row=>!row.isConnected,previousRow);await previousRow.dispose();
+  await page.locator('.call-transcript summary').click();
   await page.waitForFunction(()=>document.querySelector('.call-transcript pre')?.textContent.includes('Yesterday'));
   assert.equal(await page.locator('.call-transcript pre').textContent(),'나: '+transcriptText);
   await page.locator('#call-detail-content').evaluate(node=>node.scrollTop=node.scrollHeight);
@@ -87,7 +94,7 @@ export async function testTabUI(browser,base){
   await page.reload();await page.locator('#workspace').waitFor({state:'visible'});await page.waitForFunction(()=>document.querySelectorAll('#history .history-entry').length===30);
   await page.locator('[data-view="review"]').click();assert.equal(await page.locator('#weekly').isEnabled(),true,'an eligible call outside the recent 30 must still permit weekly analysis');
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
- }finally{releaseWeekly?.();releaseTranscript?.();await context.close();}
+ }finally{releaseHistory?.();releaseWeekly?.();releaseTranscript?.();await context.close();}
  assert.deepEqual(errors,[]);
  console.log('PASS: call details preserve cached feedback and isolate delayed transcripts; corrections lead with readable contrast; weekly availability, result display and request deduplication follow eligible calls.');
 }

@@ -436,7 +436,7 @@ function openCallDetails({session,analysis,excluded,meta,onReview,requestScope,e
   $('call-detail-title').textContent=name+'와의 통화';$('call-detail-meta').textContent=meta;
   const feedback=document.createElement('button');feedback.className='glass-button call-feedback';
   feedback.textContent=analysis?'피드백 보기':session.status==='ended'?'피드백 만들기':'수신된 기록으로 종료';
-  feedback.onclick=protect(()=>onReview(false));content.append(feedback);
+  feedback.onclick=protect(()=>{if(valid())return onReview(false);});content.append(feedback);
   const transcript=disclosure('대화문 보기','call-transcript');let loaded=false,loading=false;
   transcript.details.ontoggle=protect(async()=>{
     if(!transcript.details.open||loaded||loading||!valid())return;
@@ -455,7 +455,7 @@ function openCallDetails({session,analysis,excluded,meta,onReview,requestScope,e
     const toggle=document.createElement('button');toggle.className='text-button';toggle.textContent=excluded?'기억에 다시 포함':'기억에서 제외';
     toggle.onclick=protect(async()=>{if(!valid())return;selectCompanion(session.companion_id,{refresh:false});toggle.disabled=true;try{await mutateMemory({action:excluded?'restoreSession':'excludeSession',sessionId:session.id});if(valid()){closeDialog('call-detail-dialog');notice(excluded?'기억에 다시 포함했어요.':'이 통화는 기억에서 제외했어요.');}}finally{toggle.disabled=false;}});
     management.body.append(toggle);
-    if(analysis){const retry=document.createElement('button');retry.className='text-button';retry.textContent='피드백 다시 확인';retry.onclick=protect(()=>onReview(true));management.body.append(retry);}
+    if(analysis){const retry=document.createElement('button');retry.className='text-button';retry.textContent='피드백 다시 확인';retry.onclick=protect(()=>{if(valid())return onReview(true);});management.body.append(retry);}
     content.append(management.details);
   }
   openDialog('call-detail-dialog');
@@ -500,7 +500,7 @@ async function loadHistory(){
     const analysis=analyses.find(row=>row.session_id===session.id&&row.kind==='session');
     const openReview=async regenerate=>{
       if(memoryBusy())throw Error('현재 통화를 종료한 뒤 사용하세요.');
-      if(scope!==requestScope||!entry.isConnected)return;
+      if(scope!==requestScope)return;
       selectCompanion(id,{refresh:false});selectedReviewSessionId=session.id;closeDialog('call-detail-dialog');
       setView('review');const actionView=viewEpoch,actionScope=scope;
       const valid=()=>actionScope===scope&&actionView===viewEpoch&&selectedReviewSessionId===session.id&&companionId===id&&!memoryBusy();

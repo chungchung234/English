@@ -815,6 +815,7 @@ export function createPostCallFlow(deps) {
   function interrupted(session, warning) {
     if (!ensureIdentity() || session?.companion_id !== companion) return;
     if (!sessionFor(session.id)) sessions.unshift(session);
+    else sessions = sessions.map(row => row.id === session.id ? { ...row, ...session } : row);
     errors.set(session.id, { message: warning || '서버 저장이 끝나지 않았어요. 수신된 발화만 기기 대기열에 있을 수 있으며, 수신되지 않은 음성은 복구를 보장할 수 없어요.', code: 'record_unconfirmed' });
     render();
   }

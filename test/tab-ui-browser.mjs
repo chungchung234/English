@@ -66,9 +66,9 @@ export async function testTabUI(browser,base){
   await page.locator('#history .history-open').first().click();
   const historyDone=page.waitForResponse(response=>{const url=new URL(response.url());return url.pathname==='/rest/v1/sessions'&&url.searchParams.get('select')==='*';});releaseHistory();await historyDone;
   await page.waitForFunction(row=>!row.isConnected,previousRow);await previousRow.dispose();
-  await page.locator('.call-transcript summary').click();
-  await page.waitForFunction(()=>document.querySelector('.call-transcript pre')?.textContent.includes('Yesterday'));
-  assert.equal(await page.locator('.call-transcript pre').textContent(),'나: '+transcriptText);
+  assert(await page.locator('#call-detail-content .call-transcript').evaluate(node=>node.open),'history detail opens its transcript immediately');
+  await page.waitForFunction(()=>document.querySelector('#call-detail-content .call-transcript pre')?.textContent.includes('Yesterday'));
+  assert.equal(await page.locator('#call-detail-content .call-transcript pre').textContent(),'나: '+transcriptText);
   await page.locator('#call-detail-content').evaluate(node=>node.scrollTop=node.scrollHeight);
   assert(await page.locator('[data-close="call-detail-dialog"]').evaluate(node=>{const box=node.getBoundingClientRect();return box.top>=0&&box.bottom<=innerHeight;}),'the close control remains visible while a long transcript scrolls');
   await page.screenshot({path:'test-results/call-detail-long.png'});
@@ -98,9 +98,9 @@ export async function testTabUI(browser,base){
   await page.reload();await page.locator('#workspace').waitFor({state:'visible'});await page.getByText('준비한 이야기 · '+content.next_scenario,{exact:true}).waitFor();await page.locator('[data-view="review"]').click();
   await page.screenshot({path:'test-results/post-call-practiced.png'});
 
-  await page.locator('[data-view="history"]').click();await page.locator('#history .history-open').first().click();
+  await page.locator('[data-view="history"]').click();
   slowTranscript=true;const transcriptWaiting=new Promise(resolve=>transcriptStarted=resolve);
-  await page.locator('.call-transcript summary').click();await transcriptWaiting;
+  await page.locator('#history .history-open').first().click();await transcriptWaiting;
   await page.locator('[data-close="call-detail-dialog"]').click();await page.locator('#history .history-open').nth(1).click();
   const transcriptDone=page.waitForResponse(response=>new URL(response.url()).pathname==='/rest/v1/transcript_events');releaseTranscript();await transcriptDone;
   assert.equal(await page.locator('#call-detail-title').textContent(),'Juno와의 통화');assert(!(await page.locator('#call-detail-content').textContent()).includes(content.corrections[0].original),'a closed call detail cannot inject a late transcript into another call');

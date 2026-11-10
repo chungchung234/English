@@ -13,7 +13,8 @@
     "deploy:check": "python3 scripts/deploy.py",
     "test:presence": "node test/ai-presence.mjs",
     "eval:memory": "node scripts/evaluate-memory.mjs",
-    "eval:learning": "node --experimental-transform-types scripts/evaluate-learning-enhancements.mjs --synthetic"
+    "eval:learning": "node --experimental-transform-types scripts/evaluate-learning-enhancements.mjs --synthetic",
+    "eval:voice": "node scripts/evaluate-voice-experience.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.15",

@@ -100,6 +100,7 @@ test('unreserved voice job never reaches OpenAI', async () => {
     if (path.includes('api.openai.com')) { openai++; throw new Error('Must not call'); }
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse();
     return response({ reserved: false, state: 'running', reason: 'in_progress' });
   };
@@ -188,6 +189,7 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse();
     if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
     if (path.includes('/realtime/calls')) {
@@ -218,6 +220,7 @@ test('memory retrieves old relevant corrections and practice through all-history
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) {
       search = JSON.parse(options.body);
       return memoryResponse([{ id: eventId, session_id: sessionId, content: content(), source_event_ids: [eventId], created_at: '2020-01-01T00:00:00Z' }]);
@@ -281,6 +284,7 @@ test('upstream failures never expose provider response text or credentials', asy
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse();
     if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
     if (path.includes('api.openai.com')) return new Response('private provider failure test-openai', { status: 500 });
@@ -338,7 +342,8 @@ test('each stored companion controls its voice, persona, and isolated retrieved 
           assert.ok(new URL(path).searchParams.get('select').includes('companion_id'));
           return response([{ id: sessionId, user_id: userId, companion_id: id, status: 'active', scenario: 'Travel' }]);
         }
-        if (path.includes('/memory_context')) {
+        if(path.includes('/learning_context')){assert.equal(JSON.parse(options.body).p_companion_id,id);return response([{expression:name+' self-reported phrase',self_reported:true}]);}
+    if (path.includes('/memory_context')) {
           assert.equal(JSON.parse(options.body).p_companion_id, id); searched = true;
           return memoryResponse([{ id: eventId, session_id: eventId, content: { ...content(), summary: `${name} remembers practicing travel.`, practice: [{ expression: `${name} practice phrase`, evidence_ids: [eventId] }] }, source_event_ids: [eventId], created_at: '2026-01-01T00:00:00Z' }]);
         }
@@ -350,6 +355,9 @@ test('each stored companion controls its voice, persona, and isolated retrieved 
           assert.ok(session.instructions.includes('no chosen topic or roleplay setup is required'));
           assert.equal(session.instructions.includes('welcoming the learner into the scenario'), false);
           assert.ok(session.instructions.includes(`${name} practice phrase`));
+          assert.ok(session.instructions.includes(`${name} self-reported phrase`));
+          assert.ok(session.instructions.includes('never mastery'));
+          for(const [,other] of profiles)if(other!==name)assert.equal(session.instructions.includes(other+' self-reported phrase'),false);
           for (const [, other] of profiles) if (other !== name) assert.equal(session.instructions.includes(`${other} practice phrase`), false);
           return new Response(sdp);
         }
@@ -373,7 +381,8 @@ test('memory derives the stored companion and rejects an explicit mismatch befor
     if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'juno', scenario: 'Travel', status: 'active' }]);
-        if (path.includes('/memory_context')) { searched = true; assert.equal(JSON.parse(options.body).p_companion_id, 'juno'); return memoryResponse(); }
+        if(path.includes('/learning_context'))return response([]);
+    if (path.includes('/memory_context')) { searched = true; assert.equal(JSON.parse(options.body).p_companion_id, 'juno'); return memoryResponse(); }
         throw new Error('Unexpected request');
       };
       const result = await handler(request('memory', { sessionId, ...(companionId === undefined ? {} : { companionId }) }));
@@ -541,7 +550,8 @@ test('checkpoint uses server history, chains prior context and preserves compani
     if(path.includes('/reserve_run')){assert.equal(body.p_kind,'checkpoint');assert.match(body.p_request_key,/^checkpoint:2026-11-10-v2:/);return response({reserved:true,job_id:sessionId,lease_token:eventId});}
     if(path.includes('/responses')){assert.equal(JSON.parse(body.input[1].content[0].text).transcript_events[0].text,event.text);return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(content())}]}]});}
     if(path.includes('/complete_run')){persisted=body.p_result;return response({});}
-    if(path.includes('/memory_context'))return memoryResponse();
+    if(path.includes('/learning_context'))return response([]);
+    if (path.includes('/memory_context'))return memoryResponse();
     throw Error('Unexpected '+path);
   };
   try{const result=await handler(request('checkpoint',{sessionId}));assert.equal(result.status,200);const data=await result.json();assert.match(data.instructions,/Your name is Mia/);assert.match(data.instructions,/Practiced past events/);assert.deepEqual(persisted.covered_ids,[eventId]);
@@ -564,6 +574,7 @@ test('nonempty retrieval caches query embeddings by companion, revision, and mod
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) {
       assert.equal(body.p_user_id, userId);
       if (body.p_embedding) assert.deepEqual(body.p_embedding, vector());
@@ -605,7 +616,8 @@ test('empty retrieval spends nothing; provider errors, malformed vectors and quo
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
-        if (path.includes('/memory_context')) return memoryResponse(mode === 'no-history' ? [] : [memoryRow], [{ key: 'name', value: 'A' }], 1);
+        if(path.includes('/learning_context'))return response([]);
+    if (path.includes('/memory_context')) return memoryResponse(mode === 'no-history' ? [] : [memoryRow], [{ key: 'name', value: 'A' }], 1);
         if (path.includes('/reserve_run')) { assert.ok(!['empty', 'no-history'].includes(mode)); return response(mode === 'quota' ? { reserved: false, reason: 'budget_exceeded' } : { reserved: true, job_id: sessionId, lease_token: eventId }); }
         if (path.includes('/embeddings')) { calls++; return mode === 'provider' ? new Response('private provider secret', { status: 500 }) : mode === 'json' ? new Response('not json') : response({ data: mode === 'null-row' ? [null] : [{ index: 0, embedding: vector(0) }] }); }
         if (path.includes('/fail_run')) { failed = true; return response(true); }
@@ -724,6 +736,7 @@ test('checkpoint ignores previous revisions, routes independently, and voice fac
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
     if (path.includes('/transcript_events?')) return response([event]);
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse([], [{ key: 'name', value: '', forgotten: true, quote: 'OLD PRIVATE NAME', evidence_ids: [eventId] }], 8);
     if (path.includes('/analysis_jobs?')) {
       const params = new URL(path).searchParams; assert.equal(params.get('kind'), 'eq.checkpoint'); assert.ok(params.get('request_key').includes(':8:'));
@@ -760,7 +773,8 @@ test('checkpoint revision races fail closed for newly generated, cached and no-n
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
         if (path.includes('/transcript_events?')) return response([event]);
-        if (path.includes('/memory_context')) return memoryResponse([], [], ++reads === 1 ? 1 : 2);
+        if(path.includes('/learning_context'))return response([]);
+    if (path.includes('/memory_context')) return memoryResponse([], [], ++reads === 1 ? 1 : 2);
         if (path.includes('/analysis_jobs?')) return response(mode === 'covered' ? [{ result: cached }] : []);
         if (path.includes('/reserve_run')) return response(mode === 'cached' ? { reserved: false, state: 'completed', result: cached } : { reserved: true, job_id: sessionId, lease_token: eventId });
         if (path.includes('/responses')) { generated = true; return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(content()) }] }] }); }
@@ -785,7 +799,8 @@ test('voice revision races never return stale SDP or persist a successful connec
     if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
-        if (path.includes('/memory_context')) return memoryResponse([], [], ++reads >= changedAt ? 2 : 1);
+        if(path.includes('/learning_context'))return response([]);
+    if (path.includes('/memory_context')) return memoryResponse([], [], ++reads >= changedAt ? 2 : 1);
         if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
         if (path.includes('/realtime/calls')) { provider++; return new Response(sdp); }
         if (path.includes('/complete_run')) { completed = true; return response(true); }
@@ -807,6 +822,7 @@ test('model configuration exposes separate roles and long model IDs keep cache k
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
+    if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse([memoryRow]);
     if (path.includes('/reserve_run')) { assert.ok(body.p_request_key.length <= 200); requested.push(body.p_kind); return response({ reserved: true, job_id: sessionId, lease_token: eventId }); }
     if (path.includes('/embeddings')) { assert.equal(body.model, config.EMBEDDING_MODEL); return response({ data: [{ index: 0, embedding: vector() }] }); }

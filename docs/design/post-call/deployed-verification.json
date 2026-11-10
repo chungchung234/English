@@ -1,0 +1,21 @@
+{
+  "site": "https://chungchung234.github.io/English/",
+  "release_commit": "2298ccf60b9efe581d1e792298f1be549c7df7da",
+  "workflow": "https://github.com/chungchung234/English/actions/runs/42764206676",
+  "verified_at_utc": "2026-11-10T05:49:53.297485+00:00",
+  "html_bytes": 289450,
+  "html_sha256": "f671371983750b37cd6cd4e1361172f18f43a2af8f29e444592fcaaf004686a0",
+  "matches_local_release_build": true,
+  "managed_schema": {
+    "migration_applied": true,
+    "practice_table": true,
+    "plan_table": true
+  },
+  "protected_api_verification": "CI browser tests use isolated synthetic fixtures; no real user records or live voice were accessed",
+  "anonymous_rpc_rejection": {
+    "learning_review": 401,
+    "learning_plan": 401
+  },
+  "workflow_build": "success",
+  "post_deploy_acceptance": "pending: CI browser and synthetic speech environment preparation"
+}

@@ -1,0 +1,52 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "compact": {
+    "width": 320,
+    "height": 568
+  },
+  "deviceScaleFactor": 1,
+  "backend": "isolated synthetic browser fixtures; no real account or upstream voice calls",
+  "captures": [
+    {
+      "profile": "alex",
+      "file": "home-alex.png"
+    },
+    {
+      "profile": "juno",
+      "file": "home-juno.png"
+    },
+    {
+      "profile": "mia",
+      "file": "home-mia.png"
+    }
+  ],
+  "metrics": {
+    "overflow": false,
+    "callShadow": "none",
+    "callBottom": 434,
+    "dockTop": 486,
+    "buttons": [
+      {
+        "name": "Alex",
+        "pressed": "false",
+        "height": 44
+      },
+      {
+        "name": "Juno",
+        "pressed": "false",
+        "height": 44
+      },
+      {
+        "name": "Mia",
+        "pressed": "true",
+        "height": 44
+      }
+    ],
+    "selectedName": "Mia"
+  },
+  "consoleErrors": [],
+  "verified_at_utc": "2026-11-10T04:31:18.613937+00:00"
+}

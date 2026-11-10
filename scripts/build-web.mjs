@@ -12,9 +12,10 @@ const script=`globalThis.LOOP_PUBLIC_CONFIG=${json};\n${await bundleWeb({minify:
 const style=await read('web/style.css');
 const hash=text=>createHash('sha256').update(text).digest('base64');
 const policy=`default-src 'self'; script-src 'sha256-${hash(script)}'; style-src 'sha256-${hash(style)}'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; media-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'`;
+// Callback replacements preserve dollar sequences in minified code and its CSP hash.
 let html=(await read('web/index.html')).replace(/<meta http-equiv="Content-Security-Policy"[^>]+>/,`<meta http-equiv="Content-Security-Policy" content="${policy}">`)
-.replace('<link rel="stylesheet" href="style.css">',`<style>${style}</style>`)
-.replace('<script src="public-config.js"></script><script type="module" src="app.js"></script>',`<script type="module">${script}</script>`);
+.replace('<link rel="stylesheet" href="style.css">',()=>`<style>${style}</style>`)
+.replace('<script src="public-config.js"></script><script type="module" src="app.js"></script>',()=>`<script type="module">${script}</script>`);
 await mkdir(new URL('dist/assets/',root),{recursive:true});
 const assetPaths=[...new Set([...html.matchAll(/src="(assets\/[^"]+)"/g)].map(match=>match[1]))];
 for(const asset of assetPaths){

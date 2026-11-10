@@ -5,6 +5,7 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { testEmailLogin } from './email-login-browser.mjs';
 import { testSocialLogin } from './social-login-browser.mjs';
+import { testTabUI } from './tab-ui-browser.mjs';
 const port=4187, base=`http://127.0.0.1:${port}`;
 async function assertVisibleImagesLoaded(page){
  await page.waitForFunction(()=>[...document.images].filter(image=>{const box=image.getBoundingClientRect();return box.width>0&&box.height>0&&getComputedStyle(image).visibility!=='hidden';}).every(image=>image.complete&&image.naturalWidth>0));
@@ -17,9 +18,10 @@ const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'
 try{
  await testSocialLogin(browser,base);
  await testEmailLogin(browser,base);
+ await testTabUI(browser,base);
  const context=await browser.newContext({permissions:['microphone']});
- const page=await context.newPage();let offline=true;const saved=new Map();const savedSession=new Map();let reviews=0,checkpoints=0,checkpointFail=false,historyFailure=false,voiceFailure=false;const finishes=new Map();
- const openContact=async id=>{await page.locator('[data-view="contacts"]').click();await page.locator(`[data-companion="${id}"]`).click();await page.locator('#detail-panel').waitFor({state:'visible'});};
+ const page=await context.newPage();let offline=true;const saved=new Map();const savedSession=new Map();let holdReview=false,releaseReview;let reviews=0,checkpoints=0,checkpointFail=false,historyFailure=false,voiceFailure=false;const finishes=new Map();
+ const openContact=async id=>{await page.locator('[data-view="contacts"]').click();await page.locator(`[data-companion="${id}"]`).click();await page.locator(`[data-companion="${id}"][aria-pressed="true"]`).waitFor({state:'visible'});await page.waitForFunction(id=>document.querySelector('#orb').dataset.profile===id&&document.querySelector('#orb').dataset.ready==='true',id);await page.locator('#companion-selector').evaluate(node=>Promise.all(node.getAnimations({subtree:true}).map(animation=>animation.finished)));};
  const memoryAction=action=>page.waitForResponse(response=>response.url().endsWith('/coach/memory-manage')&&response.request().postDataJSON()?.action===action);
  const artRequests=[];page.on('request',request=>{if(/assets\/ai-.*\.webp/.test(request.url()))artRequests.push(request.url());});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -37,7 +39,7 @@ try{
    for(const e of body.p_events){const old=saved.get(e.id);if(old)assert.deepEqual(old,e);saved.set(e.id,e);savedSession.set(e.id,body.p_session_id);}data={inserted:body.p_events.length,event_ids:body.p_events.map(e=>e.id)};
   }else if(url.pathname.endsWith('/rpc/finish_session')){finishes.set(body.p_session_id,(finishes.get(body.p_session_id)||0)+1);data=sessions.find(x=>x.id===body.p_session_id);data.status='ended';data.ended_at=new Date().toISOString();}
   else if(url.pathname==='/rest/v1/sessions'){
-   if(route.request().method()==='POST'){data=[{...body,status:'active',created_at:new Date().toISOString()}];sessions.unshift(data[0]);}else {if(historyFailure){historyFailure=false;return route.fulfill({status:503,json:{message:'History fixture unavailable'}});}const companion=url.searchParams.get('companion_id')?.replace('eq.','');data=companion?sessions.filter(s=>s.companion_id===companion):sessions;}
+   if(route.request().method()==='POST'){data=[{...body,status:'active',created_at:new Date().toISOString()}];sessions.unshift(data[0]);}else {if(historyFailure&&url.searchParams.get('select')==='*'){historyFailure=false;return route.fulfill({status:503,json:{message:'History fixture unavailable'}});}const companion=url.searchParams.get('companion_id')?.replace('eq.','');data=companion?sessions.filter(s=>s.companion_id===companion):sessions;}
   }else if(url.pathname==='/rest/v1/analyses')data=analyses;
   else if(['/rest/v1/memory_state','/rest/v1/memory_fact_overrides','/rest/v1/memory_session_exclusions'].includes(url.pathname)){data=[];}
   else if(url.pathname.endsWith('/coach/config'))data={models:{voice:'gpt-realtime-mini',coach:'gpt-4.1-mini',analysis:'gpt-4.1'}};
@@ -46,8 +48,10 @@ try{
   else if(url.pathname.endsWith('/coach/memory')){memoryQueries.push(body);if(body?.query==='slow'){slowMemorySearchStarted();await new Promise(resolve=>releaseSlowMemorySearch=resolve);slowMemorySearchDone();}const memories=companionMemory[body?.companionId]||[];data={memories:body?.query?memories.filter(m=>m.summary.toLowerCase().includes(body.query.toLowerCase())):memories};}
   else if(url.pathname.endsWith('/coach/voice')){if(voiceFailure){voiceFailure=false;return route.fulfill({status:503,json:{message:'Voice fixture unavailable'}});}data={sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};}
   else if(url.pathname.endsWith('/coach/checkpoint')){checkpoints++;if(checkpointFail)return route.fulfill({status:503,json:{error:{code:'UPSTREAM_UNAVAILABLE',message:'Checkpoint fixture unavailable'}}});data={instructions:'Trusted rolling conversation summary'};}
-  else if(url.pathname.endsWith('/coach/review')){reviews++;const session=sessions.find(item=>item.id===body.sessionId);const analysis={id:crypto.randomUUID(),session_id:body.sessionId,kind:'session',created_at:new Date().toISOString(),content:{summary:session.companion_id+'의 통화 피드백',strengths:[],corrections:[],practice:[],scope:{companionId:session.companion_id,session_count:1,user_event_count:1}}};analyses.unshift(analysis);data={analysis};}
+  else if(url.pathname.endsWith('/coach/review')){reviews++;if(holdReview){holdReview=false;await new Promise(resolve=>releaseReview=resolve);}const session=sessions.find(item=>item.id===body.sessionId);const analysis={id:crypto.randomUUID(),session_id:body.sessionId,kind:'session',created_at:new Date().toISOString(),content:{summary:session.companion_id+'의 통화 피드백',strengths:[],corrections:[],practice:[],scope:{companionId:session.companion_id,session_count:1,user_event_count:1}}};analyses.unshift(analysis);data={analysis};}
   else if(url.pathname==='/rest/v1/transcript_events'){let all=[...saved.values()].map(e=>({...e,timestamp:e.occurred_at,session_id:savedSession.get(e.id)}));const sid=url.searchParams.get('session_id'),ids=url.searchParams.get('id');if(sid?.startsWith('eq.'))all=all.filter(e=>e.session_id===sid.slice(3));if(ids?.startsWith('in.('))all=all.filter(e=>ids.slice(4,-1).split(',').includes(e.id));const offset=Number(url.searchParams.get('offset')||0);return route.fulfill({status:200,json:all.slice(offset,offset+1),headers:{'Content-Range':`${offset}-${offset}/${all.length}`,'Access-Control-Expose-Headers':'Content-Range'}});}
+  else if(url.pathname.endsWith('/rpc/learning_plan'))data={scenario:null};
+  else if(url.pathname.endsWith('/rpc/learning_review'))data=[];
   else throw Error('Unexpected route '+url.pathname);
   await route.fulfill({status:200,json:data,headers:Array.isArray(data)?{'Content-Range':`0-${Math.max(data.length-1,0)}/${data.length}`,'Access-Control-Expose-Headers':'Content-Range'}:{}});
  });
@@ -64,8 +68,16 @@ try{
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.locator('img[src*="companion-"]').count(),0,'AI companions must have no portrait assets');
  assert.equal(await page.locator('#orb').getAttribute('data-ai-profile'),'current');
- assert.equal(await page.locator('#contacts-panel').isVisible(),true);assert.equal(await page.locator('[data-contact]').count(),3);assert.equal(await page.locator('#topic-open,#scenario,[data-cue*="simpler"]').count(),0);
- await page.locator('#contact-search').fill('미아');assert.equal(await page.locator('[data-contact]:visible').count(),1);await page.locator('#contact-search').fill('없는친구');assert.equal(await page.locator('#contacts-empty').isVisible(),true);await page.locator('#contact-search').fill('');await page.getByRole('heading',{name:'연락처',exact:true}).click();
+ assert.equal(await page.locator('#contacts-panel').isVisible(),true);assert.equal(await page.locator('[data-companion]').count(),3);assert.equal(await page.locator('#topic-open,#scenario,[data-cue*="simpler"],#contact-search,.contacts-tab-icon,.duration-note').count(),0);
+ const beforeSelection=sessions.length;
+ await page.locator('[data-companion="juno"]').click();await page.locator('[data-companion="juno"]').press('ArrowRight');
+ assert.equal(await page.locator('[data-companion="mia"]').getAttribute('aria-pressed'),'true');
+ assert.equal(await page.locator('#start-call').getAttribute('aria-label'),'Mia와 통화');
+ await page.locator('[data-companion="mia"]').press('Home');
+ assert.equal(await page.locator('[data-companion="alex"]').getAttribute('aria-pressed'),'true');
+ assert.equal(sessions.length,beforeSelection,'changing companion must never begin a call');
+ await page.locator('#account-open').click();await page.locator('#account-memory').click();await page.locator('#memory-dialog').waitFor({state:'visible'});assert.equal(await page.locator('#account-dialog').isVisible(),false);await page.locator('[data-close="memory-dialog"]').click();
+ await page.waitForFunction(()=>document.querySelector('#orb').dataset.ready==='true');
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await assertVisibleImagesLoaded(page);
  await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/mobile.png',fullPage:true});
@@ -98,7 +110,7 @@ try{
  await page.locator('[data-view="history"]').click();await page.locator('#memory-manage-open').click();await page.locator('[data-close="memory-dialog"]').click();await openContact('mia');await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});await page.evaluate(()=>document.getElementById('memory-dialog').showModal());assert.equal(await page.locator('#memory-index').isDisabled(),true);assert.equal(await page.locator('#memory-facts input').first().isDisabled(),true);await page.evaluate(()=>document.getElementById('memory-dialog').close());
  assert.equal(sessions[0].companion_id,'mia','new sessions must be assigned to the selected companion');
  assert.equal(sessions[0].scenario,'Natural English conversation about everyday life');
- assert.match(await page.locator('#call-timer').textContent(),/^\d{2}:\d{2}$/);assert.match(await page.locator('#call-remaining').textContent(),/남음/);
+ assert.match(await page.locator('#call-timer').textContent(),/^\d{2}:\d{2}$/);assert.equal(await page.locator('#call-remaining').isVisible(),false);
  await page.waitForFunction(()=>window.audioProbe.length>=2&&window.presenceContexts.some(context=>context.state==='running'));
  const beforeReconnect=await page.evaluate(()=>window.audioProbe.length);
  await page.evaluate(()=>{window.testPeer.connectionState='disconnected';window.testPeer.onconnectionstatechange();});
@@ -140,7 +152,7 @@ try{
  await page.waitForFunction(()=>window.testPeer.track.enabled===true);
  assert.equal(checkpoints,2);assert.equal((await page.evaluate(()=>window.testMessages.filter(message=>message.type==='conversation.item.delete'))).length,4,'failed checkpoint must preserve every remaining live item');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.speech_started',item_id:'last-item'})}));
- await page.locator('#end-call').click();await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='통화와 피드백 저장 완료');assert.equal(reviews,1);assert.equal(sessions[0].status,'ended');assert.equal(saved.size,3);
+ holdReview=true;await page.locator('#end-call').click();await page.locator('#review-panel').waitFor({state:'visible'});await page.locator('[data-view="history"]').click();releaseReview();await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='통화와 피드백 저장 완료');assert.equal(await page.locator('#history-panel').isVisible(),true,'late feedback cannot pull the user back into review');await page.locator('[data-view="review"]').click();assert.equal(reviews,1);assert.equal(sessions[0].status,'ended');assert.equal(saved.size,3);
  await assertVisibleImagesLoaded(page);await page.screenshot({path:'test-results/mobile-review.png',fullPage:true});
  await page.locator('[data-view="history"]').click();await page.locator('#memory-query').fill('coffee');await page.locator('#memory-search button').click();await page.waitForFunction(()=>document.querySelector('#memory-results').textContent.includes('관련 학습 기록이 없습니다.'));await assertVisibleImagesLoaded(page);await page.screenshot({path:'test-results/mobile-history.png',fullPage:true});
  const memoryCompanions=new Set(memoryQueries.map(q=>q?.companionId));assert.deepEqual([...memoryCompanions].sort(),['alex','juno','mia']);
@@ -148,7 +160,7 @@ try{
  const goal=page.locator('#memory-facts .memory-fact').filter({has:page.locator('strong', {hasText:'목표'})}).locator('input');await goal.fill('<img src=x onerror=alert(1)>');await page.locator('#memory-facts .memory-fact').filter({has:page.locator('strong', {hasText:'목표'})}).getByRole('button',{name:'저장'}).click();await page.waitForFunction(()=>document.querySelector('#memory-suppressed').hidden===false);assert.equal(await page.locator('#memory-facts img').count(),0);assert.equal([...controlCalls].reverse().find(call=>call.action==='setFact')?.companionId,'mia');assert.equal([...controlCalls].reverse().find(call=>call.action==='setFact')?.value,'<img src=x onerror=alert(1)>');releaseSlowMemorySearch();await slowMemorySearchFinished;assert.equal(await page.locator('#memory-results').textContent(),'','stale search response must not repopulate results after a fact edit');
  await Promise.all([memoryAction('forgetFact'),page.locator('#memory-facts .memory-fact').filter({has:page.locator('strong', {hasText:'목표'})}).getByRole('button',{name:'잊기'}).click()]);assert.equal([...controlCalls].reverse().find(call=>call.action==='forgetFact')?.action,'forgetFact');
  await page.locator('#memory-index').click();await page.waitForFunction(()=>document.querySelector('#memory-index-more').hidden===false);assert.equal(indexCalls.length,1);await Promise.all([page.waitForResponse(response=>response.url().endsWith('/coach/memory-index')),page.locator('#memory-index-more').click()]);assert.equal(indexCalls.length,2,'each click runs exactly one bounded index batch');indexFailure=true;await page.locator('#memory-index').click();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('Index fixture unavailable'));indexFailure=false;
- await page.locator('[data-close="memory-dialog"]').click();const miaSession=sessions.find(s=>s.companion_id==='mia'&&s.status==='ended');assert(miaSession);const miaEntry=page.locator('#history .history-entry').first();await Promise.all([memoryAction('excludeSession'),miaEntry.getByRole('button',{name:'기억에서 제외'}).click()]);assert.equal(controlCalls.at(-1).action,'excludeSession');assert.equal(controlCalls.at(-1).sessionId,miaSession.id);await page.locator('#memory-manage-open').click();await Promise.all([memoryAction('restoreSession'),page.locator('#memory-exclusions').getByRole('button',{name:'기억에 다시 포함'}).click()]);assert.equal(controlCalls.at(-1).action,'restoreSession');
+ await page.locator('[data-close="memory-dialog"]').click();const miaSession=sessions.find(s=>s.companion_id==='mia'&&s.status==='ended');assert(miaSession);const miaEntry=page.locator('#history .history-entry').first();await miaEntry.locator('.history-open').click();await page.locator('.call-management summary').click();await Promise.all([memoryAction('excludeSession'),page.locator('.call-management').getByRole('button',{name:'기억에서 제외'}).click()]);await page.locator('#call-detail-dialog').waitFor({state:'hidden'});const excludedCall=[...controlCalls].reverse().find(call=>call.action==='excludeSession');assert.equal(excludedCall.sessionId,miaSession.id);await page.locator('#memory-manage-open').click();await Promise.all([memoryAction('restoreSession'),page.locator('#memory-exclusions').getByRole('button',{name:'기억에 다시 포함'}).click()]);assert.equal(controlCalls.at(-1).action,'restoreSession');
  await page.locator('[data-close="memory-dialog"]').click();await page.locator('#account-open').click();const downloading=page.waitForEvent('download');await page.locator('#export').click();const download=await downloading.catch(async error=>{throw Error(error.message+'; app notice: '+await page.locator('#notice').textContent());});const file=await download.path();const backup=JSON.parse(await (await import('node:fs/promises')).readFile(file,'utf8'));assert.equal(backup.events.length,3);assert.equal(backup.sessions.length,2);assert.deepEqual(Object.keys(backup.memory_controls).sort(),['exclusions','facts','state']);assert.deepEqual(new Set(backup.sessions.map(s=>s.companion_id)),new Set(['alex','mia']));assert.equal(new Set(backup.events.map(e=>e.id)).size,3);
  await page.locator('[data-close="account-dialog"]').click();
  await openContact('mia');await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -163,7 +175,7 @@ try{
  await page.evaluate(()=>{const old=window.testPeers[0];old.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'stale',transcript:'Must not enter the new call.'})});window.testPeer.connectionState='disconnected';window.testPeer.onconnectionstatechange();});
  await page.clock.fastForward(2*60*1000);await page.evaluate(()=>{window.testPeer.connectionState='connected';window.testPeer.onconnectionstatechange();});
  await page.clock.fastForward(7*60*1000);
- assert.equal(timedSession.status,'active');assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'live');assert.equal(reviews,1);
+ assert.equal(timedSession.status,'active');assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'live');assert.equal(reviews,1);assert.equal(await page.locator('#call-remaining').isVisible(),true);
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.speech_started',item_id:'last-item'})}));
  await page.clock.fastForward(60*1000);
  assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'ended','microphone stops at the 20-minute deadline');
@@ -175,7 +187,7 @@ try{
  console.log('PASS: 20-minute deadline stops microphone, saves the final turn, and creates feedback without automatically restarting.');
  // Direct call, terminal failure, and a post-save refresh failure keep identity
  // and saved status correct. These are distinct from the transient reconnect.
- await page.locator('[data-view="contacts"]').click();await page.locator('[data-call-companion="juno"]').click();await page.locator('#end-call').waitFor({state:'visible'});
+ await openContact('juno');await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});
  const junoSession=sessions[0];assert.equal(junoSession.companion_id,'juno');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'juno-final',transcript:'I enjoyed our conversation.'})}));
  await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');
@@ -184,7 +196,7 @@ try{
  assert.equal(junoSession.status,'ended');assert.equal(finishes.get(junoSession.id),1);assert.match(await page.locator('#review-content').textContent(),/juno의 통화 피드백/);assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'ended');
  // A failed start returns to the selected contact and can retry. Its incomplete
  // attempt stays in history instead of being falsely represented as a call.
- await openContact('alex');voiceFailure=true;await page.locator('#start-call').click();await page.locator('#detail-panel').waitFor({state:'visible'});assert.equal(await page.locator('#start-call').isEnabled(),true);
+ await openContact('alex');voiceFailure=true;await page.locator('#start-call').click();await page.locator('#contacts-panel').waitFor({state:'visible'});assert.equal(await page.locator('#start-call').isEnabled(),true);
  await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});assert.equal(sessions[0].companion_id,'alex');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'alex-turn',transcript:'I am ready to speak again.'})}));await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.locator('#end-call').click();await page.clock.fastForward(2000);await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='통화와 피드백 저장 완료');
  // Redial a Mia row while Alex was selected. The new session and final review
@@ -197,7 +209,9 @@ try{
  assert.deepEqual(errors,[]);
  console.log('PASS: browser reload retains offline records; retry syncs exact IDs; voice-event wiring saves and reviews; mobile layout fits. Full export handles a lower DB page cap. Voice upstream is simulated, not validated.');
  await page.route('**/functions/v1/coach/config', route=>route.fulfill({status:403,json:{error:{code:'ACCOUNT_NOT_ALLOWED',message:'승인된 이메일 계정만 이용할 수 있습니다.'}}}));
+ await page.waitForLoadState('networkidle');
  const deniedRequests=[];page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/rest/v1/'))deniedRequests.push(request.url());});
+ page.once('framenavigated',()=>{deniedRequests.length=0;});
  await page.reload();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('승인된 이메일'));
  assert.equal(await page.locator('#workspace').isVisible(),false);assert.deepEqual(deniedRequests,[]);
  console.log('PASS: unapproved accounts stay on login and never attempt history reads or queued uploads.');

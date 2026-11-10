@@ -103,7 +103,7 @@ document.addEventListener('pointermove',event=>{
     const next=index+(x<0?1:-1);let peek=companionStage.querySelector('.companion-swipe-peek');
     if(atEdge){peek?.remove();}else{
       if(!peek){peek=document.createElement('div');peek.className='companion-swipe-peek';peek.setAttribute('aria-hidden','true');const image=new Image();image.alt='';image.className='ai-presence ai-presence-home';peek.append(image);companionStage.append(peek);}
-      if(peek.dataset.profile!==order[next]){const source=$('ai-art-'+order[next]);peek.querySelector('img').src=source.dataset.src||source.src;peek.dataset.profile=order[next];}
+      if(peek.dataset.profile!==order[next]){const name=order[next];peek.dataset.profile=name;presence.posterSource(name).then(source=>{if(peek.isConnected&&peek.dataset.profile===name)peek.querySelector('img').src=source;});}
       peek.style.transform=`translateX(${offset+(x<0?1:-1)*travel}px)`;
       peek.style.opacity=String(.2+progress*.8);
     }

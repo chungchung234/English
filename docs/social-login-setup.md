@@ -6,7 +6,7 @@
 
 ## 준비된 범위
 
-2026-11-10 KST 설정 확인: 두 제공자가 공개 인증 설정에서 활성화됐고 게시된 앱의 두 버튼도 활성화됐다. 서비스 정책에 맞춰 이메일 필수 설정을 적용했다. 카카오는 정상 로그인 페이지에 도달했다. Google은 실제 인증 요청이 `/signin/oauth/error`로 이동하며 `redirect_uri_mismatch`를 표시한다. Supabase에 등록된 Client ID와 같은 Google 웹 OAuth 클라이언트의 **승인된 리디렉션 URI**에 아래 공통 표의 Supabase callback 주소를 등록해야 한다. 외부 콘솔의 실제 사용자 동의와 인증 코드 교환 성공은 확인하지 않았다.
+2026-11-10 KST 설정 확인: 두 제공자가 공개 인증 설정에서 활성화됐고 게시된 앱의 두 버튼도 활성화됐다. 서비스 정책에 맞춰 이메일 필수 설정을 적용했다. Google의 `redirect_uri_mismatch`는 승인된 리디렉션 URI 수정 후 해소됐다. [최신 연결 검사](auth/provider-verification.json)에서 Google·카카오의 callback 주소가 기대값과 일치하고 두 로그인 페이지가 HTTP 200으로 열리며 알려진 오류 코드가 없음을 확인했다. 외부 콘솔의 실제 사용자 동의와 인증 코드 교환 성공은 확인하지 않았다.
 
 Supabase 공식 `@supabase/auth-js` SDK를 앱에 묶어 외부 JavaScript CDN 없이 실행한다. 기존 `loop.auth:<프로젝트 URL>` 세션을 이어 쓰며 자동 갱신·탭 간 상태 공유를 적용한다. 명시적 로그아웃, 서버 세션 해제, 브라우저 저장 데이터 삭제 후에는 다시 로그인해야 한다.
 

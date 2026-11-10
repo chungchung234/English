@@ -1,0 +1,34 @@
+{
+  "checkedAt": "2026-11-10T10:32:58.121411+09:00",
+  "site": "https://chungchung234.github.io/English/",
+  "publishedHttpStatus": 200,
+  "publishedHtmlSha256": "e55ca93f1edf004958d628d342732c8e258e0153af6710b6660d2d91f000a7b5",
+  "enabledProviders": {
+    "google": true,
+    "kakao": true
+  },
+  "providers": {
+    "google": {
+      "authorizationStatus": 302,
+      "authorizationRedirectHost": "accounts.google.com",
+      "callbackMatchesExpected": true,
+      "providerPageStatus": 200,
+      "providerPageHost": "accounts.google.com",
+      "providerPagePath": "/v3/signin/identifier",
+      "visibleErrorCodes": [],
+      "loginPageReached": true
+    },
+    "kakao": {
+      "authorizationStatus": 302,
+      "authorizationRedirectHost": "kauth.kakao.com",
+      "callbackMatchesExpected": true,
+      "providerPageStatus": 200,
+      "providerPageHost": "accounts.kakao.com",
+      "providerPagePath": "/login",
+      "visibleErrorCodes": [],
+      "loginPageReached": true
+    }
+  },
+  "scope": "Live public settings and unauthenticated authorization/login landing pages; no real account credentials, consent, emails, tokens, or private records were used.",
+  "actualUserConsentAndLoginTested": false
+}

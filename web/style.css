@@ -60,7 +60,7 @@ button:active:not(:disabled){transform:scale(.975)}
 .setup-panel input{margin-bottom:20px}
 .setup-panel>.quiet-button{display:block;margin:24px auto 0}
 .app-header{height:70px;display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:1px solid var(--line)}
-.brand{display:flex;align-items:center;width:148px;height:46px;flex:0 0 auto}
+.brand{display:flex;align-items:center;width:120px;height:46px;flex:0 0 auto}
 .brand-logo{display:block;width:100%;height:auto;max-height:44px;object-fit:contain;object-position:left center}
 .icon-button{display:flex;align-items:center;justify-content:center;width:46px;height:46px;flex:0 0 auto;border-radius:50%;background:#f1f3fb}
 .icon-button img{width:23px;height:23px}

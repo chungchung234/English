@@ -118,6 +118,24 @@ try{
  for(let step=1;step<=5;step++)await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:cx-16*step,y:cy,id:1}]});
  await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
  await page.waitForFunction(()=>document.querySelector('#orb').dataset.profile==='juno'&&!document.querySelector('.companion-slide-out'));
+ const slowTouch=async(points)=>{
+  await touch.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:cx,y:area.y-24,id:1}]});
+  for(const [x,y] of points){
+   await touch.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:cx+x,y:area.y-24+y,id:1}]});
+   await page.waitForTimeout(80);
+  }
+  await page.waitForTimeout(350);
+  await touch.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+ };
+ await slowTouch(Array.from({length:20},(_,i)=>[2*(i+1),0]));
+ await page.waitForFunction(()=>document.querySelector('#orb').dataset.profile==='alex'&&!document.querySelector('.companion-slide-out'));
+ await slowTouch([[-3,2],[-6,5],[-9,10],[-13,11],[-17,11],[-21,10],[-25,9],[-29,8],[-33,8],[-37,9],[-42,10],[-48,11],[-56,11],[-64,10]]);
+ await page.waitForFunction(()=>document.querySelector('#orb').dataset.profile==='juno'&&!document.querySelector('.companion-slide-out'));
+ await page.evaluate(()=>{globalThis.verticalSwipeCancelled=false;document.addEventListener('pointercancel',()=>globalThis.verticalSwipeCancelled=true,{once:true});});
+ await slowTouch(Array.from({length:10},(_,i)=>[i%3,-8*(i+1)]));
+ assert.equal(await page.locator('#orb').getAttribute('data-profile'),'juno','slow vertical scroll must preserve companion');
+ assert.equal(await page.evaluate(()=>globalThis.verticalSwipeCancelled),true,'native vertical scrolling remains available');
+ console.log('PASS: slow 40px touch, pause before release and initial thumb wobble change companions; vertical scroll stays native.');
  await touch.send('Emulation.setTouchEmulationEnabled',{enabled:false});await touch.detach();await page.locator('[data-companion="alex"]').click();
  await page.waitForFunction(()=>document.querySelector('#orb').dataset.profile==='alex'&&!document.querySelector('.companion-slide-out'));
  console.log('PASS: mouse drag and real browser touch swipe change companions; short, vertical and boundary gestures preserve selection.');

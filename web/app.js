@@ -88,8 +88,9 @@ document.addEventListener('pointermove',event=>{
   const drag=companionDrag;if(!drag||drag.id!==event.pointerId)return;
   const x=event.clientX-drag.x,y=event.clientY-drag.y;
   if(!drag.horizontal){
-    if(Math.abs(y)>8&&Math.abs(y)>Math.abs(x)){companionDrag=null;return;}
-    if(Math.abs(x)<8||Math.abs(x)<Math.abs(y)*1.2)return;
+    // Allow the small vertical wobble of a slow thumb drag before choosing an axis.
+    if(Math.abs(y)>16&&Math.abs(y)>Math.abs(x)*1.5){companionDrag=null;return;}
+    if(Math.abs(x)<8||Math.abs(x)<Math.abs(y)*.9)return;
     drag.horizontal=true;companionCapture.setPointerCapture(event.pointerId);
   }
   if(event.cancelable)event.preventDefault();
@@ -117,7 +118,7 @@ function finishCompanionDrag(event,cancelled=false){
   if(drag.horizontal&&drag.button)companionClickGuard={button:drag.button,until:performance.now()+400};
   if(companionCapture.hasPointerCapture(drag.id))companionCapture.releasePointerCapture(drag.id);
   const order=companionButtons.map(button=>button.dataset.companion),index=order.indexOf(companionId);
-  const target=index+(drag.delta<0?1:-1),threshold=Math.max(36,Math.min(72,companionTravel()*.2));
+  const target=index+(drag.delta<0?1:-1),threshold=Math.max(28,Math.min(36,companionTravel()*.12));
   if(!cancelled&&drag.horizontal&&Math.abs(drag.delta)>=threshold&&target>=0&&target<order.length&&!memoryBusy()){
     selectCompanion(order[target]);return;
   }

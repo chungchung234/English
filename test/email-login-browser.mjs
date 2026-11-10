@@ -40,6 +40,7 @@ export async function testEmailLogin(browser, base) {
     if(path.endsWith('/coach/config'))return route.fulfill({status:403,json:{error:{code:'ACCOUNT_NOT_ALLOWED',message:'승인된 이메일 계정만 이용할 수 있습니다.'}}});
     if(path.endsWith('/rpc/learning_snapshot'))return route.fulfill({json:{items:[],feedback:[],recommended_item_ids:[],next_plan:null}});
     if(path.endsWith('/rpc/learning_record_event'))return route.fulfill({json:{saved:true}});
+    if(path.endsWith('/rpc/learning_enhancement_snapshot'))return route.fulfill({json:{reviews:[],schedules:[],recalls:[],usage:[],weekly_goals:[],personalized_item_ids:[],recommendation_reasons:{}}});
     throw Error('Unexpected login fixture request: '+path);
   });
   try{

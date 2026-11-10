@@ -294,6 +294,7 @@ try {
   await clickControl(page, itemCard(page, offlineItem.id).locator('[data-action="exclude"]'));
   await page.getByText(/기기 보관 확인.*서버 반영/).first().waitFor();
   assert.equal((await item(offlineItem.expression)).status, 'active', 'offline choice is not shown as server success');
+  await waitUntil(async () => transport.actionBodies.some(body => body.p_item_id === offlineItem.id), 'durable offline action reaches the explicitly failing server transport');
   const action = transport.actionBodies.find(body => body.p_item_id === offlineItem.id);
   assert(action);
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' });

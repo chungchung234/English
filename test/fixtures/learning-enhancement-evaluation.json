@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "origin": "synthetic_fixture",
+  "cases": [
+    {"id":"exact-user","target":"I went home","events":[{"speaker":"user","text":"Yesterday I went home early."}],"expected_kind":"observed"},
+    {"id":"case-whitespace","target":"I would like coffee","events":[{"speaker":"user","text":"I WOULD  LIKE\ncoffee, please."}],"expected_kind":"observed"},
+    {"id":"word-part","target":"can","events":[{"speaker":"user","text":"This candy is nice."}],"expected_kind":"undetermined"},
+    {"id":"assistant-only","target":"I went home","events":[{"speaker":"assistant","text":"You can say I went home."},{"speaker":"user","text":"Thank you."}],"expected_kind":"undetermined"},
+    {"id":"no-speech","target":"I went home","events":[],"expected_kind":"undetermined"},
+    {"id":"tense-variation","target":"I went home","events":[{"speaker":"user","text":"I go home every day."}],"expected_kind":"undetermined"},
+    {"id":"quoted-phrase-no-mode","target":"I went home","events":[{"speaker":"user","text":"The textbook says 'I went home'."}],"expected_kind":"observed"},
+    {"id":"after-example-no-mode","target":"I would like coffee","events":[{"speaker":"assistant","text":"Try saying I would like coffee."},{"speaker":"user","text":"I would like coffee."}],"expected_kind":"observed"},
+    {"id":"contraction-abstain","target":"I would like coffee","events":[{"speaker":"user","text":"I'd like coffee."}],"expected_kind":"undetermined"},
+    {"id":"unicode-nfc","target":"café","events":[{"speaker":"user","text":"I went to a café."}],"expected_kind":"observed"},
+    {"id":"unicode-word-part","target":"café","events":[{"speaker":"user","text":"We like caféteria food."}],"expected_kind":"undetermined"},
+    {"id":"regex-literal","target":"C++","events":[{"speaker":"user","text":"I study C++ at school."}],"expected_kind":"observed"},
+    {"id":"split-events","target":"I would like coffee","events":[{"speaker":"user","text":"I would like"},{"speaker":"user","text":"coffee please"}],"expected_kind":"undetermined"},
+    {"id":"punctuation-abstain","target":"I went home.","events":[{"speaker":"user","text":"I went home"}],"expected_kind":"undetermined"}
+  ]
+}

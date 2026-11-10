@@ -106,6 +106,8 @@ async function main() {
           'sessions','transcript_events','analyses','memory_state','memory_fact_overrides','memory_session_exclusions',
           'learning_state_items','learning_feedback','learning_sources','learning_source_holds','learning_actions',
           'learning_practice_days','learning_daily','learning_visits','learning_next_plans','learning_events',
+          'learning_reviews','learning_schedules','learning_recalls','learning_usage_targets','learning_usage_observations',
+          'learning_weekly_goals','learning_weekly_versions','learning_enhancement_actions','learning_enhancement_imports',
         ]) {
           ensure((await userRequest(user, '/rest/v1/' + table + '?select=*')).length === 0, 'Unapproved account can read data.');
         }
@@ -115,6 +117,16 @@ async function main() {
           ['/rest/v1/rpc/finish_session', {p_session_id:randomUUID()}],
           ['/rest/v1/rpc/restore_history', {p_backup:{sessions:[],events:[]}}],
           ['/rest/v1/rpc/learning_snapshot', {p_companion_id:'alex'}],
+          ['/rest/v1/rpc/learning_enhancement_snapshot', {p_companion_id:'alex'}],
+          ['/rest/v1/rpc/learning_review_submit', {p_item_id:randomUUID(),p_expected_revision:1,p_action_id:randomUUID(),p_source_analysis_id:randomUUID(),p_explanation:'Must be denied'}],
+          ['/rest/v1/rpc/learning_review_decide', {p_review_id:randomUUID(),p_expected_revision:1,p_action_id:randomUUID(),p_decision:'dismiss'}],
+          ['/rest/v1/rpc/learning_schedule_config', {p_item_id:randomUUID(),p_expected_revision:0,p_action_id:randomUUID(),p_days:1,p_goal:''}],
+          ['/rest/v1/rpc/learning_recall', {p_item_id:randomUUID(),p_expected_revision:1,p_action_id:randomUUID(),p_rating:'hard'}],
+          ['/rest/v1/rpc/learning_usage_review', {p_usage_id:randomUUID(),p_expected_revision:1,p_action_id:randomUUID(),p_status:'unreviewed'}],
+          ['/rest/v1/rpc/learning_weekly_goal_select', {p_analysis_id:randomUUID(),p_kind:'keep',p_expected_revision:0,p_action_id:randomUUID()}],
+          ['/rest/v1/rpc/learning_enhancement_restore', {p_data:{}}],
+          ['/rest/v1/rpc/learning_review_context', {p_user_id:user.user.id,p_review_id:randomUUID()}],
+          ['/rest/v1/rpc/learning_usage_context', {p_user_id:user.user.id,p_session_id:randomUUID()}],
           ['/rest/v1/rpc/learning_recommend_more', {p_companion_id:'alex'}],
           ['/rest/v1/rpc/learning_action', {p_item_id:randomUUID(),p_expected_revision:1,p_action_id:randomUUID(),p_action:'exclude',p_payload:{}}],
           ['/rest/v1/rpc/learning_record_event', {p_event_id:randomUUID(),p_name:'call_connected',p_companion_id:'alex',p_session_id:randomUUID(),p_analysis_id:null,p_item_id:null,p_attempt_id:null,p_payload:{}}],
@@ -123,6 +135,7 @@ async function main() {
           // This RPC is service-only even when the caller is authenticated.
           ['/rest/v1/rpc/learning_voice_context', {p_user_id:user.user.id,p_companion_id:'alex'}],
           ['/functions/v1/coach/config', {}],
+          ['/functions/v1/coach/reconsider', {requestId:randomUUID()}],
           ['/functions/v1/coach/memory', {companionId:'alex',query:'Previous conversation'}],
           ['/functions/v1/coach/memory-manage', {companionId:'alex',action:'list'}],
           ['/functions/v1/coach/memory-manage', {companionId:'alex',action:'setFact',key:'goal',value:'Must be denied'}],

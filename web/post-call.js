@@ -1,4 +1,6 @@
 import { createLearningOutbox } from '../src/learning-outbox.js';
+import { createLearningEnhancements } from './learning-enhancements.js';
+import { telemetryMetadata } from '../src/learning-telemetry.mjs';
 
 const $ = id => document.getElementById(id);
 const uuid = () => crypto.randomUUID();
@@ -38,7 +40,7 @@ export function createPostCallFlow(deps) {
   let identity = '', accountScope = '', companion = '', selected = null;
   let sessions = [], analyses = [], weekly = null, snapshot = null;
   let snapshotError = false, localQueueError = false, queueReady = false;
-  let pending = [], volatile = new Map(), actionStates = new Map(), errors = new Map();
+  let pending = [], volatile = new Map(), actionStates = new Map(), actionResults = new Map(), errors = new Map();
   let attempts = new Map(), activePractice = null, flushing = null, flushAgain = false, pollTimer = null;
   let exposureObserver = null, exposureTimer = null, exposed = new Set();
   let previousFocus = null, previousFocusKey = null, pendingFocusRestore = null, planApplied = '', requests = new Set(), panelOpen = false;
@@ -71,11 +73,16 @@ export function createPostCallFlow(deps) {
   const recordItem = record => record.body?.p_item_id;
   const itemPending = id => [...pending, ...volatile.values()].filter(record => record.kind === 'action' && recordItem(record) === id);
   const suppressed = item => !item || item.has_valid_source === false || item.status === 'excluded' || item.status === 'held' || item.quality_hold || itemPending(item.id).some(record => exclusion(record.body.p_action));
-  const canRecommend = item => !suppressed(item) && !['practiced', 'candidate'].includes(item.status);
+  const canRecommend = item => !suppressed(item) && item.status !== 'candidate' && (item.status !== 'practiced' || enhancements.isDue(item.id));
   const feedback = id => snapshot?.feedback?.find(item => item.session_id === id);
   const analysisFor = id => analyses.find(item => item.kind === 'session' && item.session_id === id && (!feedback(id)?.analysis_id || feedback(id).analysis_id === item.id));
   const sessionFor = id => sessions.find(item => item.id === id);
   const running = job => ['running', 'processing', 'reserved', 'pending'].includes(job?.job_state) && (!job.job_expires_at || Date.parse(job.job_expires_at) > Date.now());
+  const enhancements = createLearningEnhancements({
+    text, button, status, pending: itemPending, suppressed, itemOf, token, same,
+    submit: submitEnhancement, edge: deps.edge, refresh: refreshSnapshot, render,
+    notify, appendEvidence, prepare: prepareNext, startRecall
+  });
 
   function stopExposure() {
     exposureObserver?.disconnect(); exposureObserver = null;
@@ -120,9 +127,10 @@ export function createPostCallFlow(deps) {
     clearTimeout(pollTimer); pollTimer = null; stopExposure(); closePractice();
     identity = ''; accountScope = ''; companion = ''; selected = null;
     sessions = []; analyses = []; weekly = null; snapshot = null;
-    pending = []; volatile = new Map(); actionStates = new Map(); errors = new Map(); attempts = new Map(); exposed = new Set();
+    pending = []; volatile = new Map(); actionStates = new Map(); actionResults = new Map(); errors = new Map(); attempts = new Map(); exposed = new Set();
     snapshotError = false; localQueueError = false; queueReady = false;
     planApplied = ''; panelOpen = false; requests = new Set();pendingFocusRestore=null;
+    enhancements.clear();
     for (const id of ['learning-queue', 'learning-session']) $(id)?.replaceChildren();
     if ($('practice-preview')) $('practice-preview').disabled = true;
     if ($('practice-preview-text')) $('practice-preview-text').textContent = '첫 통화 후에 만나요';
@@ -172,6 +180,15 @@ export function createPostCallFlow(deps) {
       const previous = new Map((snapshot?.items || []).map(item => [item.id, item]));
       result.items = result.items.map(item => Number(previous.get(item.id)?.revision) > Number(item.revision) ? previous.get(item.id) : item);
       snapshot = result; snapshotError = false;
+      try {
+        const extended = unwrap(await deps.rpc('learning_enhancement_snapshot', { p_companion_id: t.companion }));
+        if (!same(t) || version !== snapshotVersion) return false;
+        if (!extended || !['reviews', 'schedules', 'recalls', 'usage', 'weekly_goals'].every(key => Array.isArray(extended[key]))) throw Error('enhancement snapshot unavailable');
+        enhancements.setSnapshot(extended);
+      } catch {
+        if (!same(t) || version !== snapshotVersion) return false;
+        enhancements.setSnapshot(null, true);
+      }
       for (const job of result.feedback) {
         const previousError = errors.get(job.session_id);
         if (previousError?.code === 'quota' && previousError.until && previousError.until <= Date.now()) errors.delete(job.session_id);
@@ -231,7 +248,7 @@ export function createPostCallFlow(deps) {
       if (before.some(id => feedback(id)?.current && !analysisFor(id))) await deps.refresh();
     }, 5000);
   }
-  async function queue(record, t) {
+  async function queue(record, t, { quiet = false } = {}) {
     if (!same(t)) return false;
     if (record.kind === 'action' && exclusion(record.body.p_action)) {
       volatile.set(record.id, record); render();
@@ -248,22 +265,30 @@ export function createPostCallFlow(deps) {
       if (same(t)) {
         actionStates.set(record.id, '저장하지 못했어요 · 기기 보관도 확인되지 않았어요');
         localQueueError = true;
-        notify('저장하지 못했어요. 기기 보관도 확인되지 않았으므로 이 화면에서 다시 선택해 주세요.');
+        if (!quiet) notify('저장하지 못했어요. 기기 보관도 확인되지 않았으므로 이 화면에서 다시 선택해 주세요.');
         render();
       }
       return false;
     }
   }
-  async function event(name, fields = {}, payload = {}, t = token()) {
-    const id = uuid();
-    const record = { id, kind: 'event', created_at: now(), body: {
+  function telemetryStage(record, stage) {
+    if (record.body?.p_name !== 'call_connected') return;
+    try { deps.onTelemetryStage?.({ eventId: record.id, sessionId: record.body.p_session_id,
+      occurredAt: record.created_at, metadata: telemetryMetadata(record.body.p_payload), stage }); } catch { /* Diagnostics are best effort. */ }
+  }
+  async function event(name, fields = {}, payload = {}, t = token(), receipt = null) {
+    if (receipt && (!validId(receipt.eventId) || typeof receipt.occurredAt !== 'string' || !Number.isFinite(Date.parse(receipt.occurredAt)))) return false;
+    const id = receipt?.eventId || uuid(), occurredAt = receipt?.occurredAt || now();
+    const metadata = telemetryMetadata(receipt?.metadata || deps.getEventMetadata?.());
+    const record = { id, kind: 'event', created_at: occurredAt, body: {
       p_event_id: id, p_name: name, p_companion_id: t.companion,
       p_session_id: fields.sessionId || null, p_analysis_id: fields.analysisId || null,
       p_item_id: fields.itemId || null, p_attempt_id: fields.attemptId || null,
-      p_payload: { occurred_at: now(), ...payload }
+      p_payload: { occurred_at: occurredAt, ...payload, ...metadata }
     } };
-    const stored = await queue(record, t);
-    if (stored) void flush();
+    telemetryStage(record, 'created');
+    const stored = await queue(record, t, { quiet: name === 'call_connected' });
+    if (stored) { telemetryStage(record, 'device_persisted'); void flush(); }
     return stored;
   }
   async function act(item, action, payload = {}, oldRecord = null) {
@@ -287,6 +312,26 @@ export function createPostCallFlow(deps) {
     await flush();
     return same(t) && actionStates.get(id) === '서버 저장 확인';
   }
+  async function submitEnhancement(rpc, item, args, metadata = {}, oldRecord = null) {
+    if (!ensureIdentity() || !item || item.companion_id !== companion) return null;
+    if (!oldRecord && itemPending(item.id).length) { notify('이 표현의 이전 선택을 먼저 서버에서 확인해 주세요.'); return null; }
+    const t = token(), id = uuid();
+    const record = { id, kind: 'action', created_at: now(), body: {
+      companion_id: t.companion, p_item_id: item.id, p_action: 'enhancement', p_payload: {},
+      _enhancement: { rpc, args: { ...args, p_action_id: id }, item_id: item.id, attemptId: metadata.attemptId || null }
+    } };
+    if (!await queue(record, t)) return null;
+    if (oldRecord) {
+      await outbox.remove(t.scope, oldRecord.id);
+      if (!same(t)) return null;
+      pending = pending.filter(row => row.id !== oldRecord.id);
+    }
+    await flush();
+    if (!same(t)) return null;
+    const result = actionResults.get(id) || null;
+    if (result?.outcome === 'applied') notify('선택을 서버에 저장했어요.');
+    return result;
+  }
   async function flush() {
     if (!ensureIdentity() || !accountScope) return;
     if (flushing) { flushAgain = true; return flushing; }
@@ -294,6 +339,7 @@ export function createPostCallFlow(deps) {
     const job = (async () => {
       let rows;
       try { rows = await outbox.list(t.scope); } catch { if (same(t)) { queueReady = false; localQueueError = true; render(); } return; }
+      let enhancementChanged = false;
       for (const record of rows) {
         if (!same(t)) return;
         // Keep actions for a different companion durable until that scope is opened.
@@ -301,8 +347,15 @@ export function createPostCallFlow(deps) {
         try {
           let result;
           if (record.kind === 'action') {
-            const { companion_id: ignored, ...body } = record.body;
-            result = unwrap(await deps.rpc('learning_action', body));
+            const extension = record.body._enhancement;
+            if (extension) {
+              if (!['learning_review_submit', 'learning_review_decide', 'learning_schedule_config', 'learning_recall', 'learning_usage_review', 'learning_weekly_goal_select'].includes(extension.rpc)) throw Object.assign(Error('Unknown learning action'), { code: '22023' });
+              result = unwrap(await deps.rpc(extension.rpc, extension.args));
+              enhancementChanged = true;
+            } else {
+              const { companion_id: ignored, ...body } = record.body;
+              result = unwrap(await deps.rpc('learning_action', body));
+            }
             if (!same(t)) return;
             if (snapshot && result?.item && (!itemOf(result.item.id) || Number(result.item.revision) >= Number(itemOf(result.item.id).revision))) {
               snapshot.items = [...snapshot.items.filter(item => item.id !== result.item.id), result.item];
@@ -316,12 +369,16 @@ export function createPostCallFlow(deps) {
               render(); continue;
             }
             if (result?.outcome !== 'applied') throw Error('acknowledgement unavailable');
+            actionResults.set(record.id, result);
             if (snapshot && result.next_plan !== undefined) snapshot.next_plan = result.next_plan;
             if (record.body.p_action === 'practice') confirmPractice(record);
+            if (extension?.rpc === 'learning_recall') confirmRecall(record);
             actionStates.set(record.id, '서버 저장 확인');
           } else if (record.kind === 'event') {
-            await deps.rpc('learning_record_event', record.body);
+            const acknowledgement = unwrap(await deps.rpc('learning_record_event', record.body));
             if (!same(t)) return;
+            if (acknowledgement?.saved !== true) throw Error('event acknowledgement unavailable');
+            telemetryStage(record, 'server_ack');
           } else continue;
           await outbox.remove(t.scope, record.id);
           if (!same(t)) return;
@@ -346,7 +403,11 @@ export function createPostCallFlow(deps) {
           render(); break;
         }
       }
-      if (same(t)) { await readQueue(t); applyPlan(); render(); }
+      if (same(t)) {
+        await readQueue(t);
+        if (enhancementChanged) await refreshSnapshot(t);
+        if (same(t)) { applyPlan(); render(); }
+      }
     })();
     flushing = job;
     try { await job; } finally {
@@ -391,7 +452,9 @@ export function createPostCallFlow(deps) {
   }
   function itemCard(item, attribution = null, candidate = false, controlsOnly = false) {
     const article = document.createElement('article'); article.className = 'feedback-item'; article.dataset.itemId = item.id;
-    if (!controlsOnly) {
+    const delayed = ((!attribution && !candidate) || activePractice?.mode === 'delayed' && activePractice.itemId === item.id) && enhancements.isDue(item.id) && !suppressed(item);
+    if (delayed) article.append(text('h4', '예약한 표현 · 가리고 회상'));
+    else if (!controlsOnly) {
     article.append(text('small', item.category === 'error' ? '의미·문법 오류' : '선택 가능한 대안'));
     if (item.original) article.append(text('p', item.original, 'original'));
     article.append(text('p', item.expression, 'improved'));
@@ -403,7 +466,7 @@ export function createPostCallFlow(deps) {
     const advanced=document.createElement('details');advanced.className='feedback-context';advanced.append(text('summary','표현 관리'));const management=document.createElement('div');management.className='learning-actions';advanced.append(management);
     if (!suppressed(item)) {
       if (candidate || item.status === 'candidate' || !item.enrolled) actions.append(actionButton('이 표현도 등록', item, 'enroll'));
-      const start = button('표현 하나 연습', () => startPractice(item.id, attribution, start)); start.dataset.action = 'practice';
+      const start = button(delayed ? '가리고 회상하기' : '표현 하나 연습', () => delayed ? startRecall(item.id, start) : startPractice(item.id, attribution, start)); start.dataset.action = delayed ? 'start-delayed-recall' : 'practice';
       start.disabled = itemPending(item.id).length > 0 || snapshotError || candidate || item.status === 'candidate' || !item.enrolled;
       actions.append(start, actionButton('나중에 하기', item, 'defer'));management.append(actionButton('이미 아는 표현이에요', item, 'known'), actionButton('그만 보기', item, 'exclude'));
       if (item.status === 'practiced' || item.status === 'deferred') management.append(actionButton('다시 보고 싶어요', item, 'review_again'));
@@ -418,7 +481,9 @@ export function createPostCallFlow(deps) {
     const records = itemPending(item.id);
     if (records.length) article.append(status(records.some(record => record.state === 'conflict') ? '최신 상태가 달라 선택을 보류했어요. 위의 동기화 안내에서 다시 선택해 주세요.' : records.some(record => volatile.has(record.id)) ? '기기 저장을 확인하지 못했어요 · 서버에 반영되지 않았어요' : '기기 보관 확인 · 서버 반영 대기'));
     if (item.defer_count >= 2) article.append(text('p', '계속 미루고 싶다면 그만 보기를 선택해도 괜찮아요. 연습 이력은 남습니다.', 'help'));
-    article.append(actions);if(management.childElementCount)article.append(advanced); return article;
+    article.append(actions);if(management.childElementCount)article.append(advanced);
+    enhancements.renderItem(article, item, attribution);
+    return article;
   }
   function renderQueue(target) {
     const actions = pending.filter(record => record.kind === 'action');
@@ -437,7 +502,11 @@ export function createPostCallFlow(deps) {
           const t = token();
           if (!await refreshSnapshot(t) || !same(t)) return;
           const current = itemOf(recordItem(record));
-          if (current) await act(current, record.body.p_action, record.body.p_payload, record);
+          if (current) {
+            const extension = record.body._enhancement;
+            if (extension) await submitEnhancement(extension.rpc, current, enhancements.rebase(extension.rpc, extension.args, current), extension, record);
+            else await act(current, record.body.p_action, record.body.p_payload, record);
+          }
         }); retry.dataset.action = 'retry-conflict';
         const discard = button('이전 선택 취소', async () => {
           const t = token(); await outbox.remove(t.scope, record.id);
@@ -475,12 +544,16 @@ export function createPostCallFlow(deps) {
     }
     if (!snapshot) return;
     if(Number.isInteger(snapshot.daily_practice_count))target.append(text('p',`오늘 직접 연습한 표현 ${snapshot.daily_practice_count}개 · 서버 확인 기준`,'help'));
-    const recommended = (snapshot.recommended_item_ids || []).map(itemOf).filter(canRecommend);
+    const recommended = enhancements.recommendedIds(snapshot.recommended_item_ids || []).slice(0, (snapshot.recommended_item_ids || []).length).map(itemOf).filter(canRecommend);
     const collection=document.createElement('details');collection.className='feedback-context';collection.append(text('summary','남겨둔 복습 · '+recommended.length+'개'));target.append(collection);
     const content=document.createElement('div');collection.append(content);
     const heading = text('h4', '오늘 추천 표현'); content.append(heading);
     if (!recommended.length) content.append(text('p', '지금 권할 표현이 없어요. 원하면 보관함에서 직접 연습하거나 다음에 대화해요.', 'help'));
-    for (const item of recommended.slice(0, 3)) content.append(itemCard(item));
+    for (const item of recommended.slice(0, 3)) {
+      const reason = enhancements.reason(item);
+      if (reason) content.append(text('p', `추천 이유: ${reason}`, 'help'));
+      content.append(itemCard(item));
+    }
     const more = button('오늘 더 연습하기 · 최대 3개', async () => {
       const t = token();
       await deps.rpc('learning_recommend_more', { p_companion_id: t.companion });
@@ -499,7 +572,13 @@ export function createPostCallFlow(deps) {
       if (!snapshot.items.length) library.append(text('p', '보관된 표현이 아직 없어요.', 'help'));
     });
     content.append(library);
-    if(activePractice && !activePractice.source) target.append(activePractice.box);
+    if(activePractice && !activePractice.source) {
+      target.append(activePractice.box);
+      if (activePractice.mode === 'delayed' && suppressed(itemOf(activePractice.itemId))) {
+        for (const node of activePractice.gradeButtons) node.disabled = true;
+        activePractice.state.textContent = '이 표현은 현재 추천 제외 또는 품질 보류 상태예요. 회상 기록을 새로 저장하지 않았어요.';
+      }
+    }
   }
   function renderTranscript(target, id) {
     const details = document.createElement('details'); details.append(text('summary', '저장된 대화 기록 보기'));
@@ -543,9 +622,13 @@ export function createPostCallFlow(deps) {
     const source = item.sources?.find(source => source.session_id === analysis.session_id && source.analysis_id === analysis.id);
     const correction = analysis.content?.corrections?.find(candidate => expressionKey(candidate.improved) === expressionKey(item.expression));
     const practice = analysis.content?.practice?.find(candidate => expressionKey(candidate.expression || candidate.text) === expressionKey(item.expression));
+    const reconsidered = enhancements.acceptedProjection(item, analysis);
+    const ownProjection = item.source_session_id === analysis.session_id && item.source_analysis_id === analysis.id;
     return { ...item, source_session_id: analysis.session_id, source_analysis_id: analysis.id,
-      original: correction?.original || '', reason: correction?.reason || '', category: correction?.category || 'alternative',
-      evidence_ids: correction?.evidence_ids || practice?.evidence_ids || [],
+      original: correction?.original || (ownProjection ? item.original : '') || '',
+      reason: reconsidered?.reason || correction?.reason || (ownProjection ? item.reason : '') || '',
+      category: reconsidered?.category || correction?.category || (ownProjection ? item.category : '') || 'alternative',
+      evidence_ids: reconsidered?.evidence_ids || correction?.evidence_ids || practice?.evidence_ids || (ownProjection ? item.evidence_ids : []) || [],
       has_valid_source: source ? source.valid : item.has_valid_source };
   }
   function renderSession() {
@@ -567,7 +650,9 @@ export function createPostCallFlow(deps) {
       // controls available on this feedback screen.
       for(const row of document.querySelectorAll('#review-content [data-correction-expression]')) {
         const item=sourceItems.find(item=>expressionKey(item.expression)===expressionKey(row.dataset.correctionExpression));
-        const held=item && suppressed(item);row.hidden=Boolean(held);
+        const held=item && suppressed(item);
+        const hiddenRecall=activePractice?.mode==='delayed'&&!activePractice.saved&&expressionKey(itemOf(activePractice.itemId)?.expression)===expressionKey(row.dataset.correctionExpression);
+        row.hidden=Boolean(held||hiddenRecall);
       }
       const primary=sourceItems.find(item=>item.enrolled && item.status!=='candidate' && !suppressed(item));
       if(primary) {
@@ -588,6 +673,7 @@ export function createPostCallFlow(deps) {
       if(candidates.length){const choices=document.createElement('details');choices.className='feedback-context';choices.append(text('summary','원하면 추가 표현 선택 · 후보 최대 3개'));for(const item of candidates.slice(0,3))choices.append(itemCard(item,{sessionId:selected,analysisId:analysis.id},true));target.append(choices);}
       const withheld=sourceItems.filter(suppressed);if(withheld.length){const details=document.createElement('details');details.className='feedback-context';details.append(text('summary','제외·보류한 표현'));for(const item of withheld)details.append(itemCard(item,{sessionId:selected,analysisId:analysis.id}));target.append(details);}
       const core=$('review-content')?.querySelector('.analysis');if(core)core.dataset.feedbackCore='';if(core&&!job.exposed_at)observeExposure(core,selected,analysis.id);
+      enhancements.renderUsage(target, selected);
       return;
     }
     if(analysis) target.append(status('원문이 바뀌었거나 최신 여부를 확인하지 못한 피드백이에요. 새 피드백을 확인하기 전에는 연습을 권하지 않아요.'));
@@ -599,13 +685,16 @@ export function createPostCallFlow(deps) {
     if(job?.has_user_speech!==false&&!running(job)&&!requests.has(selected)){const request=button('피드백 만들기 · 재시도는 생성 한도를 사용할 수 있어요',()=>requestReview(selected));request.dataset.action='request-feedback';request.disabled=Boolean(error?.blocked&&(!error.until||Date.now()<error.until));target.append(request);}
     const home=button('홈으로',()=>deps.setView('contacts'));home.dataset.action='home';target.append(home);
   }
-  function renderWeekly() {}
+  function renderWeekly() {
+    const target = $('learning-queue');
+    if (target && snapshot && !snapshotError) enhancements.renderWeekly(target, weekly);
+  }
   function renderPreview() {
     const home=$('learning-home');if(!home)return;
     const unseen=snapshot?.feedback?.find(job=>job.current&&!job.exposed_at&&sessionFor(job.session_id));
-    const recommended=(snapshot?.recommended_item_ids||[]).map(itemOf).find(canRecommend);
+    const recommended=enhancements.recommendedIds(snapshot?.recommended_item_ids||[]).slice(0,(snapshot?.recommended_item_ids||[]).length).map(itemOf).find(canRecommend);
     home.hidden=!unseen&&!recommended;home.disabled=snapshotError;
-    home.textContent=unseen?ctx().name+'의 새 피드백 · 지난 통화 피드백이 준비됐어요':recommended?'남겨둔 복습 · '+recommended.expression:'';
+    home.textContent=unseen?ctx().name+'의 새 피드백 · 지난 통화 피드백이 준비됐어요':recommended?'남겨둔 복습 · '+(enhancements.isDue(recommended.id)?'예약한 표현 가리고 회상':recommended.expression):'';
     home.onclick=openPreview;
   }
   function render() {
@@ -614,6 +703,7 @@ export function createPostCallFlow(deps) {
     // response chooses a new session, opens a dialog, or enters the review tab.
     const focused = document.activeElement;
     const focusAction = focused?.dataset?.action;
+    const focusSelection = typeof focused?.selectionStart === 'number' ? [focused.selectionStart, focused.selectionEnd] : null;
     const focusItem = focused?.closest?.('[data-item-id]')?.dataset.itemId;
     const focusConflict = focused?.closest?.('[data-conflict-id]')?.dataset.conflictId;
     const focusSession = focused?.closest?.('[data-feedback-session]')?.dataset.feedbackSession;
@@ -624,9 +714,12 @@ export function createPostCallFlow(deps) {
       if (expanded.includes(`${detail.closest('[id]')?.id}|${detail.querySelector('summary')?.textContent}`)) detail.open = true;
     }
     if (inReview && focusAction && (!document.activeElement || document.activeElement === document.body)) {
-      const candidates = [...document.querySelectorAll('#learning-queue button[data-action], #review-content button[data-action], #learning-session button[data-action]')];
+      const candidates = [...document.querySelectorAll('#learning-queue [data-action], #review-content [data-action], #learning-session [data-action]')];
       const replacement = candidates.find(node => node.dataset.action === focusAction && (!focusItem || node.closest('[data-item-id]')?.dataset.itemId === focusItem) && (!focusConflict || node.closest('[data-conflict-id]')?.dataset.conflictId === focusConflict) && (!focusSession || node.closest('[data-feedback-session]')?.dataset.feedbackSession === focusSession));
-      if (replacement && !replacement.disabled) replacement.focus({ preventScroll: true });
+      if (replacement && !replacement.disabled) {
+        replacement.focus({ preventScroll: true });
+        if (focusSelection && typeof replacement.setSelectionRange === 'function') replacement.setSelectionRange(...focusSelection);
+      }
     }
     if(pendingFocusRestore)setTimeout(pendingFocusRestore,0);
   }
@@ -668,8 +761,8 @@ export function createPostCallFlow(deps) {
     if (!ensureIdentity() || busy()) return;
     const unseen = snapshot?.feedback?.find(job => job.current && !job.exposed_at && sessionFor(job.session_id));
     if (unseen) { await openSession(unseen.session_id); return; }
-    const item = (snapshot?.recommended_item_ids || []).map(itemOf).find(canRecommend);
-    if (item) { deps.setView('review');await startPractice(item.id, null); }
+    const item = enhancements.recommendedIds(snapshot?.recommended_item_ids || []).slice(0,(snapshot?.recommended_item_ids || []).length).map(itemOf).find(canRecommend);
+    if (item) { deps.setView('review');if(enhancements.isDue(item.id))startRecall(item.id);else await startPractice(item.id, null); }
     else { deps.setView('review'); viewed(); }
   }
   async function requestReview(id) {
@@ -726,6 +819,33 @@ export function createPostCallFlow(deps) {
     render();
   }
 
+  function startRecall(id, trigger = null) {
+    if (!ensureIdentity() || busy() || snapshotError) return;
+    const item = itemOf(id);
+    if (!item || suppressed(item) || itemPending(id).length || !enhancements.isDue(id)) return;
+    const t = token(), attemptId = uuid();
+    const attempt = { id: attemptId, itemId: id, source: null, t, saved: false, mode: 'delayed' };
+    attempts.set(attemptId, attempt); activePractice = attempt; pendingFocusRestore = null;
+    previousFocus = trigger || document.activeElement;
+    previousFocusKey = { action: 'start-delayed-recall', itemId: id, container: 'learning-queue' };
+    Object.assign(attempt, enhancements.buildRecall(item, {
+      attemptId, close: closePractice,
+      current: () => same(t) && activePractice === attempt,
+      saved: () => attempt.saved,
+      confirm: () => confirmRecall({ body: { _enhancement: { attemptId } } })
+    }));
+    deps.setView('review'); render(); attempt.toggle.focus();
+  }
+  function confirmRecall(record) {
+    const attempt = activePractice;
+    if (!attempt || attempt.mode !== 'delayed' || attempt.saved || record.body?._enhancement?.attemptId !== attempt.id || !same(attempt.t)) return;
+    attempt.saved = true;
+    attempt.state.textContent = '시간을 둔 회상 자기보고를 서버에 저장했어요. 즉시 따라 말하기와 별도 기록이에요.';
+    for (const node of attempt.gradeButtons) node.hidden = true;
+    attempt.toggle.hidden = true; attempt.finish.replaceChildren();
+    const prepare = button('다음 통화 준비', () => prepareNext(attempt.itemId)); prepare.dataset.action = 'prepare-next';
+    attempt.finish.append(prepare);
+  }
   async function startPractice(id, attribution, trigger=null) {
     if (!ensureIdentity() || busy() || snapshotError) return;
     const canonical = itemOf(id);
@@ -807,9 +927,9 @@ export function createPostCallFlow(deps) {
     const prepare = button('다음 통화 준비', () => prepareNext(attempt.itemId)); prepare.dataset.action = 'prepare-next';
     attempt.finish.append(home, prepare);
   }
-  async function recordConnected(sessionId) {
-    if (!ensureIdentity() || !validId(sessionId)) return;
-    await event('call_connected', { sessionId }, { attribution: 'session', new_session_id: sessionId, status: 'success' });
+  async function recordConnected(sessionId, receipt = null) {
+    if (!ensureIdentity() || !validId(sessionId)) return false;
+    return await event('call_connected', { sessionId }, { attribution: 'session', new_session_id: sessionId, status: 'success' }, token(), receipt);
   }
   async function prepareNext(id) {
     const item = itemOf(id);
@@ -833,6 +953,12 @@ export function createPostCallFlow(deps) {
     if (!same(t)) throw Error('백업 중 계정이나 상대가 바뀌었어요. 다시 선택해 주세요.');
     const holds = await deps.allRows('learning_source_holds', 'order=created_at.asc,id.asc');
     if (!same(t)) throw Error('백업 중 계정이나 상대가 바뀌었어요. 다시 선택해 주세요.');
+    const extended = await Promise.all([...new Set(items.map(item => item.companion_id))].map(async companionId => {
+      const value = unwrap(await deps.rpc('learning_enhancement_snapshot', { p_companion_id: companionId }));
+      if (!value || !['reviews', 'schedules', 'recalls', 'usage', 'weekly_goals'].every(key => Array.isArray(value[key]))) throw Error('회상·재검토 이력을 확인하지 못해 불완전한 백업을 만들지 않았어요.');
+      return value;
+    }));
+    if (!same(t)) throw Error('백업 중 계정이나 상대가 바뀌었어요. 다시 선택해 주세요.');
     return items.map(item => {
       const { user_id: ignored, ...safe } = item;
       const ownedSources = sources.filter(source => source.item_id === item.id);
@@ -840,7 +966,11 @@ export function createPostCallFlow(deps) {
       if (!sessionId) throw Error('표현과 원본 회차의 연결을 확인하지 못했어요. 불완전한 복습 백업은 만들지 않았어요.');
       const held = holds.filter(hold => ownedSources.some(source => source.session_id === hold.session_id && (hold.reason === 'intent' ? hold.item_id === item.id : !hold.evidence_ids?.length || hold.evidence_ids.some(id => source.evidence_ids?.includes(id)))) || hold.session_id === item.restored_session_id && (hold.reason === 'wrong_transcript' || hold.item_id === item.id));
       const held_sources = [...new Map(held.map(hold => [`${hold.session_id}|${hold.reason}`, { session_id: hold.session_id, reason: hold.reason }])).values()];
-      return { ...safe, source_session_id: sessionId, held_sources };
+      const enhancements = Object.fromEntries(['reviews', 'schedules', 'recalls', 'usage', 'weekly_goals', 'imports'].map(key => [key, extended.flatMap(value => value[key] || []).filter(row => row.item_id === item.id).map(row => {
+        const { user_id: ignored, ...portable } = row;
+        return { ...portable, item_expression: item.expression, source_session_id: row.source_session_id || sessionId };
+      })]));
+      return { ...safe, source_session_id: sessionId, held_sources, enhancements };
     });
   }
   async function restoreBackup(items = []) {
@@ -851,6 +981,18 @@ export function createPostCallFlow(deps) {
       if (!same(t)) throw Error(`계정이나 상대가 바뀌었어요. 앞선 ${restored}개 요청만 전송했어요.`);
       try { await deps.rpc('learning_restore', { p_items: items.slice(offset, offset + 50) }); restored += Math.min(50, items.length - offset); }
       catch { throw Error(`복습 이력 ${restored}개 항목의 복원 요청을 전송했어요. ${offset + 1}번째 이후 배치를 확인하지 못했어요. 같은 백업으로 다시 시도할 수 있어요.`); }
+    }
+    for (let offset = 0; offset < items.length; offset += 50) {
+      if (!same(t)) throw Error('복습 이력 요청은 전송했어요. 회상·재검토 이력 복원 중 계정이나 상대가 바뀌어 중단했어요. 같은 백업으로 다시 시도할 수 있어요.');
+      const batch = items.slice(offset, offset + 50);
+      const p_data = Object.fromEntries(['reviews', 'schedules', 'recalls', 'usage', 'weekly_goals', 'imports'].map(key => [key, batch.flatMap(item => {
+        const values = item.enhancements?.[key] || [];
+        if (!Array.isArray(values)) throw Error('회상·재검토 백업 형식을 확인해 주세요.');
+        return values;
+      })]));
+      if (!Object.values(p_data).some(rows => rows.length)) continue;
+      try { await deps.rpc('learning_enhancement_restore', { p_data }); }
+      catch { throw Error('기본 복습 이력 요청은 전송했어요. 회상·재검토·활용 이력의 일부 복원은 확인하지 못했어요. 기존 서버 기록은 유지되며 같은 백업으로 다시 시도할 수 있어요.'); }
     }
     if (same(t)) await refreshSnapshot(t);
     return { restored };

@@ -1,0 +1,17 @@
+{
+  "release": "e28d843fc1ef449350d029a215e81dcf22ca1ac8",
+  "site": "https://chungchung234.github.io/English/",
+  "htmlSha256": "fb5f090473826f5c8265b3620623f27fb255c22eb99de50091681428df05050c",
+  "browserScope": "account_email",
+  "pkceEnabled": true,
+  "browserErrors": [],
+  "actualUserConsentAndLoginTested": false,
+  "scope": "Published HTML rendered under the original CSP with current public provider settings. Only the generated anonymous authorization URL was captured; no real account credentials or private data used.",
+  "checkedAt": "2026-11-10T11:38:55.214402+09:00",
+  "liveAuthorizationStatus": 302,
+  "providerHost": "kauth.kakao.com",
+  "liveProviderScopes": [
+    "account_email"
+  ],
+  "callbackMatchesExpected": true
+}

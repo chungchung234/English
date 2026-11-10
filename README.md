@@ -6,7 +6,7 @@
 
 [이전 공개 모드 검증](https://github.com/chungchung234/English/actions/runs/42639444223)에서는 세 캐릭터의 실제 WebRTC·전사·응답·기억 분리가 통과했습니다. 이는 현재 승인 계정의 실제 기기 재검증과는 별도 기록입니다. 현재의 비승인 테스트 계정은 접근 차단을 확인하며, 검증 목적으로 승인 목록을 바꾸지 않습니다. 이메일 전달과 DB 재해 복구는 아래 운영 과제로 남습니다.
 
-Google·카카오 로그인과 기존 계정 연결 코드를 [배포](https://github.com/chungchung234/English/actions/runs/42676645925)했습니다. Google의 리디렉션 주소 불일치와 실제 소유자 Google 계정의 승인 누락을 수정했습니다. 카카오는 필요한 이메일만 요청하도록 정리했으며, 앞선 `KOE010` 시크릿 불일치 진단은 관리 API 조회값을 잘못 재사용한 검사여서 철회했습니다. [페이지 연결 검사](docs/auth/provider-verification.json)와 [최신 진단·설정값](docs/social-login-setup.md)을 참고하세요. 페이지 도달과 최종 앱 로그인 성공을 구분해 검증합니다.
+Google·카카오 로그인과 기존 계정 연결 코드를 [배포](https://github.com/chungchung234/English/actions/runs/42743788796)했습니다. Google의 리디렉션 주소 불일치와 실제 소유자 Google 계정의 승인 누락을 수정했습니다. 카카오는 필요한 이메일만 요청하도록 정리했으며, 앞선 `KOE010` 시크릿 불일치 진단은 관리 API 조회값을 잘못 재사용한 검사여서 철회했습니다. [게시된 카카오 요청 검사](docs/auth/kakao-email-scope-verification.json)와 [최신 진단·설정값](docs/social-login-setup.md)을 참고하세요. 페이지 도달과 최종 앱 로그인 성공을 구분해 검증합니다.
 
 ## 구성
 

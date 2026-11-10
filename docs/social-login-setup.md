@@ -73,6 +73,8 @@ node scripts/configure-social-login.mjs --prepare --enable-configured
 
 게시 HTML은 약282KB다. 실제 HTTPS로 가져온 파일을 서비스 origin과 원래 CSP에서 렌더링하고, 인증 응답만 합성해 PKCE 코드 교환과 승인 차단을 재확인했다. [검증 기록](auth/published-verification.json), [실제 준비 상태 화면](auth/published-current-state.png), [합성 callback 검사 화면](auth/published-callback-check.png)을 보존한다. 공개 인증 설정에서도 Google·카카오 비활성을 확인했으므로, 이 결과는 실제 제공자 로그인 완료를 뜻하지 않는다.
 
+후속 `e28d843fc1ef449350d029a215e81dcf22ca1ac8` [수정 배포](https://github.com/chungchung234/English/actions/runs/42743788796)에서는 테스트 82개와 전체 브라우저·배포 검사가 통과했다. 게시 HTML의 실제 카카오 버튼이 생성하는 PKCE 요청을 원래 CSP에서 확인하고, 해당 요청을 실제 Supabase authorize에 전달해 카카오로 전달되는 scope가 `account_email` 하나임을 검증했다. [요청 범위 검사 기록](auth/kakao-email-scope-verification.json)을 보존한다. 이 검사는 실제 사용자 동의·최종 로그인 완료를 포함하지 않는다.
+
 참고: [Google 설정](https://supabase.com/docs/guides/auth/social-login/auth-google), [카카오와 이메일 동의 조건](https://supabase.com/docs/guides/auth/social-login/auth-kakao), [계정 연결](https://supabase.com/docs/guides/auth/auth-identity-linking), [세션 유지](https://supabase.com/docs/guides/auth/sessions).
 
 버튼은 Google FirebaseUI의 [공식 로고](https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg)와 Kakao Developers의 [공식 한국어 버튼](https://developers.kakao.com/tool/images/resource/preview/login-complete-ko.svg)을 그대로 사용한다. 로고·상표는 각 제공자에 속한다. [Google 브랜딩](https://developers.google.com/identity/branding-guidelines), [카카오 디자인 가이드](https://developers.kakao.com/docs/ko/kakaologin/design-guide)를 따른다.

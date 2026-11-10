@@ -23,3 +23,7 @@
 [원시 측정](verification.json). 이 수치는 픽셀 수준의 잔여 무늬 확인이며 실제 iPhone 디스플레이 측정이 아니다. `test/ai-presence.mjs`에서 외곽 파편 없음, premultiplied 출력의 RGB≤alpha 조건, 대체 이미지의 투명 외곽, 대기 호흡, 실제 합성 음성에 따른 윤곽/내부 변화, 오디오 자원 해제를 검사한다. 전체 브라우저 회귀 검사는 로그인·스와이프·통화·복습과 배포 CSP를 확인한다.
 
 홈 코드에는 주변 UI를 어둡게 하는 초점/비네팅 효과가 없다. 주변 어두워짐까지 같은 원인인지, iPhone의 실제 표시 경로에서 해결됐는지는 실기기 확인 전 확정하지 않는다. 사용자의 밝기 설정이나 스마트 반전을 원인으로 단정하지 않는다.
+
+## 게시 확인
+
+앱 릴리스 `6a68f30c22c56ab472bf2631748cc29a4f2bb315`의 [배포 검사](https://github.com/chungchung234/English/actions/runs/42803405772)가 성공했다. 검증된 HTTPS로 받은 공개 HTML과 콘텐츠 해시 모듈 `assets/app.50ba7e01b52e.js`가 동일 공개 설정으로 만든 릴리스 빌드와 바이트 단위로 일치하며 모듈의 SRI 해시도 유효하다. [게시 검증](deployed-verification.json). [수정본 확인 링크](https://chungchung234.github.io/English/?v=6a68f30).

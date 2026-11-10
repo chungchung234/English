@@ -77,7 +77,25 @@ try{
  assert.equal(await page.locator('[data-companion="alex"]').getAttribute('aria-pressed'),'true');
  assert.equal(sessions.length,beforeSelection,'changing companion must never begin a call');
  await page.locator('#account-open').click();await page.locator('#account-memory').click();await page.locator('#memory-dialog').waitFor({state:'visible'});assert.equal(await page.locator('#account-dialog').isVisible(),false);await page.locator('[data-close="memory-dialog"]').click();
- await page.waitForFunction(()=>document.querySelector('#orb').dataset.ready==='true');
+ await page.waitForFunction(()=>document.querySelector('#orb').dataset.ready==='true'&&document.querySelector('#orb').dataset.profile==='alex');
+ const slide=await page.evaluate(()=>{
+  document.querySelector('[data-companion="juno"]').click();
+  const outgoing=document.querySelector('.companion-slide-out'),data=outgoing?.getContext('2d').getImageData(0,0,outgoing.width,outgoing.height).data;
+  return {first:document.querySelector('#companion-art').getAnimations()[0]?.effect.getKeyframes()[0].transform,hasArtwork:data&&data.some((value,index)=>index%4===3&&value>0)};
+ });
+ assert.equal(slide.first,'translateX(100%)');assert.equal(slide.hasArtwork,true,'outgoing slide must retain actual WebGL artwork');
+ const reversed=await page.evaluate(()=>{
+  document.querySelector('[data-companion="mia"]').click();document.querySelector('[data-companion="alex"]').click();
+  return {first:document.querySelector('#companion-art').getAnimations()[0]?.effect.getKeyframes()[0].transform,outgoing:document.querySelectorAll('.companion-slide-out').length};
+ });
+ assert.equal(reversed.first,'translateX(-100%)');assert.equal(reversed.outgoing,1,'rapid selection must discard older slides');
+ await page.waitForFunction(()=>!document.querySelector('.companion-slide-out')&&!document.querySelector('#companion-art').getAnimations().length&&document.querySelector('#orb').dataset.profile==='alex');
+ assert.equal(await page.locator('#start-call').getAttribute('aria-label'),'Alex와 통화');
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.evaluate(()=>document.querySelector('[data-companion="juno"]').click());
+ assert.equal(await page.locator('.companion-slide-out').count(),0);assert.equal(await page.locator('#companion-art').evaluate(node=>node.getAnimations().length),0);
+ await page.evaluate(()=>document.querySelector('[data-companion="alex"]').click());await page.emulateMedia({reducedMotion:'no-preference'});
+ console.log('PASS: character slides follow tab direction, retain real outgoing artwork, settle on the last rapid selection, and respect reduced motion.');
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await assertVisibleImagesLoaded(page);
  await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/mobile.png',fullPage:true});

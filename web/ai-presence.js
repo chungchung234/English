@@ -172,6 +172,17 @@ export function createAIPresence(root = document) {
     }).catch(()=>{for(const s of surfaces)if(nameFor(s.canvas)===name)showPoster(s,true);}));
     return pendingArtwork.get(name);
   }
+  function snapshot(canvas){
+    const surface=surfaces.find(value=>value.canvas===canvas);if(!surface)return null;
+    try{
+      const source=canvas.hidden?surface.poster:canvas;
+      if(!source||source instanceof HTMLImageElement&&!source.complete)return null;
+      // Redraw before copying: WebGL does not retain its previous drawing buffer.
+      if(source===canvas&&surface.gl&&!surface.lost)surface.gl.drawArrays(surface.gl.TRIANGLES,0,6);
+      const copy=document.createElement('canvas');copy.width=canvas.width||240;copy.height=canvas.height||240;
+      copy.getContext('2d').drawImage(source,0,0,copy.width,copy.height);return copy;
+    }catch{return null;}
+  }
   function setProfile(value){profile=Object.hasOwn(profiles,value)?value:'alex';refresh();}
   function setState(value){state=stateNames.includes(value)?value:'idle';refresh();}
   async function attachAudio(stream,kind){
@@ -195,7 +206,7 @@ export function createAIPresence(root = document) {
   const visibility=()=>{for(const s of surfaces)if(s.poster)s.poster.style.animationPlayState=document.hidden?'paused':'running';if(document.hidden){cancelAnimationFrame(raf);raf=0;last=0;}else refresh();};
   const changed=()=>{cancelAnimationFrame(raf);raf=0;last=0;refresh();};
   document.addEventListener('visibilitychange',visibility);motion.addEventListener('change',changed);refresh();
-  return {get ready(){return ensureArtwork(profile);},setProfile,setState,attachAudio,detachAudio,refresh,destroy(){
+  return {get ready(){return ensureArtwork(profile);},snapshot,setProfile,setState,attachAudio,detachAudio,refresh,destroy(){
     destroyed=true;cancelAnimationFrame(raf);detachAudio();document.removeEventListener('visibilitychange',visibility);motion.removeEventListener('change',changed);
     for(const s of surfaces){s.canvas.removeEventListener('webglcontextlost',s.lostHandler);s.poster?.remove();if(s.gl){s.gl.deleteTexture(s.texture);s.gl.deleteBuffer(s.buffer);s.gl.deleteProgram(s.program);}}
   }};

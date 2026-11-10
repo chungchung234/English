@@ -10,6 +10,8 @@ const presence = createAIPresence();
 const config = globalThis.LOOP_PUBLIC_CONFIG ? validatePublicConfig(globalThis.LOOP_PUBLIC_CONFIG.url,globalThis.LOOP_PUBLIC_CONFIG.key) : null;
 const authSession=config?createAuthSession(config):null;
 let readyEpoch=0,providersLoaded=false;
+let companionSlideAnimations=[];
+const companionMotion=matchMedia('(prefers-reduced-motion: reduce)');
 let auth=null,loginReady=false,socialBusy=false,providers={google:false,kakao:false};
 let flushing, call, scope, saving = Promise.resolve(), historyEpoch = 0, memoryEpoch = 0, cloudVerified = false;
 const companions = {mia:{name:'Mia',trait:'다정하고 사려 깊은 대화'},alex:{name:'Alex',trait:'차분하고 명료한 대화'},juno:{name:'Juno',trait:'경쾌하고 호기심 많은 대화'}};
@@ -33,6 +35,7 @@ const companionStorageKey = () => 'loop.companion:' + config.url + '|' + auth.us
 function setView(view) {
   if(memoryBusy() || !['contacts','call','history','review'].includes(view)) return false;
   if(view!==currentView)window.scrollTo({top:0,behavior:'instant'});
+  if(view!=='contacts')stopCompanionSlide();
   currentView=view;viewEpoch++;
   document.querySelectorAll('[data-panel]').forEach(panel => panel.hidden = panel.dataset.panel !== view);
   document.querySelectorAll('[data-view]').forEach(button => {
@@ -47,15 +50,41 @@ function navigationControls() {
   renderWeeklyAction();
   memoryControlsDisabled(false);
 }
+function stopCompanionSlide(){
+  for(const animation of companionSlideAnimations)animation.cancel();
+  companionSlideAnimations=[];$('companion-stage').querySelectorAll('.companion-slide-out').forEach(node=>node.remove());
+}
+companionMotion.addEventListener('change',()=>{if(companionMotion.matches)stopCompanionSlide();});
+function prepareCompanionSlide(next){
+  const stage=$('companion-stage'),art=$('companion-art');
+  const canSlide=currentView==='contacts'&&!$('workspace').hidden&&!companionMotion.matches&&typeof art.animate==='function';
+  const position=canSlide?getComputedStyle(art).transform:'none';
+  const outgoing=canSlide?presence.snapshot($('orb')):null;
+  const order=[...document.querySelectorAll('[data-companion]')].map(button=>button.dataset.companion);
+  const direction=order.indexOf(next)>order.indexOf(companionId)?1:-1;
+  stopCompanionSlide();
+  return ()=>{
+    if(!canSlide)return;
+    const options={duration:280,easing:'cubic-bezier(.22,.68,.16,1)'};
+    if(outgoing){
+      outgoing.className='companion-slide-out';outgoing.setAttribute('aria-hidden','true');stage.append(outgoing);
+      companionSlideAnimations.push(outgoing.animate([{transform:position},{transform:`translateX(${-direction*100}%)`}],options));
+    }
+    companionSlideAnimations.push(art.animate([{transform:`translateX(${direction*100}%)`},{transform:'translateX(0)'}],options));
+    const active=companionSlideAnimations;
+    Promise.allSettled(active.map(animation=>animation.finished)).then(()=>{if(companionSlideAnimations===active)stopCompanionSlide();});
+  };
+}
 function selectCompanion(next, {refresh=true}={}) {
   if(memoryBusy())throw Error('통화를 마친 뒤 대화 상대를 바꿀 수 있어요.');
   if(!Object.hasOwn(companions,next))throw Error('대화 상대를 선택하세요.');
   if(next===companionId)return;
+  const slide=prepareCompanionSlide(next);
   historyEpoch++;memoryEpoch++;viewEpoch++;
   closeDialog('memory-dialog');$('memory-facts').replaceChildren();$('memory-exclusions').replaceChildren();excludedMemorySessions=new Set();
   companionId=next;practiceMemory=null;selectedReviewSessionId=null;learning.reset();$('next-plan').hidden=true;
   if(auth&&config)localStorage.setItem(companionStorageKey(),companionId);
-  updateCompanion();$('memory-results').replaceChildren();$('memory-query').value='';emptyReview();
+  updateCompanion();slide();$('memory-results').replaceChildren();$('memory-query').value='';emptyReview();
   if($('practice-preview-text'))$('practice-preview-text').textContent='지난 대화에서 표현을 찾고 있어요…';
   if($('practice-preview'))$('practice-preview').disabled=true;
   if(refresh&&auth){loadPlan().catch(error=>notice(error.message));learning.load();loadMemory().catch(e=>notice(e.message));loadHistory().catch(e=>notice(e.message));}
@@ -594,6 +623,7 @@ async function startSocialLogin(provider,link=false){
   catch{socialBusy=false;renderAuthControls();notice('로그인 연결을 시작하지 못했어요. 잠시 뒤 다시 선택해 주세요.');}
 }
 function resetSignedOutUI(){
+  stopCompanionSlide();
   readyEpoch++;$('auth-transition').hidden=true;
   learning.reset();auth=null;scope=null;historyEpoch++;memoryEpoch++;selectedReviewSessionId=null;
   weeklyCompanions.clear();weeklyRequest=null;renderWeeklyAction();

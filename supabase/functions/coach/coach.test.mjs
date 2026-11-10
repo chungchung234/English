@@ -100,6 +100,7 @@ test('unreserved voice job never reaches OpenAI', async () => {
     if (path.includes('api.openai.com')) { openai++; throw new Error('Must not call'); }
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+    if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
     if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse();
@@ -187,13 +188,14 @@ test('all pages are read despite a lower database page cap, then stored atomical
 });
 
 test('voice uses server multipart exchange and persists no SDP or secret', async () => {
-  const original = globalThis.fetch; let completed, expectedSpeed=1;
+  const original = globalThis.fetch; let completed, expectedSpeed = 1;
   globalThis.fetch = async (url, options) => {
     const path = String(url);
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+    if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
     if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse();
@@ -214,24 +216,25 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
     throw new Error('Unexpected request');
   };
   try {
-    for(const speechSpeed of [undefined, .5, .85, 1.5]) {
-      expectedSpeed=speechSpeed??1;
-      const result = await handler(request('voice', { sessionId, sdp, ...(speechSpeed===undefined?{}:{speechSpeed}) }));
+    for (const speechSpeed of [undefined, .5, .85, 1.5]) {
+      expectedSpeed = speechSpeed ?? 1;
+      const result = await handler(request('voice', { sessionId, sdp, ...(speechSpeed === undefined ? {} : { speechSpeed }) }));
       assert.equal(result.status, 200); assert.deepEqual(await result.json(), { sdp });
     }
     assert.deepEqual(completed.p_result, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',policy_version:'2026-11-10-v2' });
   } finally { globalThis.fetch = original; }
 });
 
-test('voice rejects invalid speed before reading history or spending a request',async()=>{
-  const original=globalThis.fetch;
-  try{
-    for(const speechSpeed of [null,'0.85',0,.45,1.55,.851,{instructions:'override'}]){
-      let calls=0;globalThis.fetch=async url=>{calls++;assert.ok(String(url).includes('/auth/'));return response(authUser);};
-      const result=await handler(request('voice',{sessionId,sdp,speechSpeed}));
-      assert.equal(result.status,400);assert.equal((await result.json()).error.code,'INVALID_SPEECH_SPEED');assert.equal(calls,1);
+test('voice rejects invalid speed before reading history or spending a request', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const omitLearningContext of [false, true]) for (const speechSpeed of [null, '0.85', 0, .45, 1.55, .851, { instructions: 'override' }]) {
+      let calls = 0;
+      globalThis.fetch = async url => { calls++; assert.ok(String(url).includes('/auth/')); return response(authUser); };
+      const result = await handler(request('voice', { sessionId, sdp, speechSpeed, omitLearningContext }));
+      assert.equal(result.status, 400); assert.equal((await result.json()).error.code, 'INVALID_SPEECH_SPEED'); assert.equal(calls, 1);
     }
-  }finally{globalThis.fetch=original;}
+  } finally { globalThis.fetch = original; }
 });
 
 test('memory retrieves old relevant corrections and practice through all-history search', async () => {
@@ -241,6 +244,7 @@ test('memory retrieves old relevant corrections and practice through all-history
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
+    if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
     if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) {
@@ -306,6 +310,7 @@ test('upstream failures never expose provider response text or credentials', asy
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+    if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
     if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse();
@@ -365,7 +370,8 @@ test('each stored companion controls its voice, persona, and isolated retrieved 
           assert.ok(new URL(path).searchParams.get('select').includes('companion_id'));
           return response([{ id: sessionId, user_id: userId, companion_id: id, status: 'active', scenario: 'Travel' }]);
         }
-        if(path.includes('/learning_voice_context')){assert.equal(JSON.parse(options.body).p_companion_id,id);return response({focus:[{expression:name+' approved focus',evidence_ids:[eventId],source_session_id:eventId}],suppress_memory:false});}
+        if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
+    if(path.includes('/learning_voice_context')){assert.equal(JSON.parse(options.body).p_companion_id,id);return response({focus:[{expression:name+' approved focus',evidence_ids:[eventId],source_session_id:eventId}],suppress_memory:false});}
     if(path.includes('/learning_context')){assert.equal(JSON.parse(options.body).p_companion_id,id);return response([{expression:name+' self-reported phrase',self_reported:true}]);}
     if (path.includes('/memory_context')) {
           assert.equal(JSON.parse(options.body).p_companion_id, id); searched = true;
@@ -406,7 +412,8 @@ test('memory derives the stored companion and rejects an explicit mismatch befor
     if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'juno', scenario: 'Travel', status: 'active' }]);
-        if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
+        if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) { searched = true; assert.equal(JSON.parse(options.body).p_companion_id, 'juno'); return memoryResponse(); }
         throw new Error('Unexpected request');
@@ -576,6 +583,7 @@ test('checkpoint uses server history, chains prior context and preserves compani
     if(path.includes('/reserve_run')){assert.equal(body.p_kind,'checkpoint');assert.match(body.p_request_key,/^checkpoint:2026-11-10-v2:/);return response({reserved:true,job_id:sessionId,lease_token:eventId});}
     if(path.includes('/responses')){assert.equal(JSON.parse(body.input[1].content[0].text).transcript_events[0].text,event.text);return response({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(content())}]}]});}
     if(path.includes('/complete_run')){persisted=body.p_result;return response({});}
+    if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
     if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context'))return memoryResponse();
@@ -601,6 +609,7 @@ test('nonempty retrieval caches query embeddings by companion, revision, and mod
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
+    if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
     if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) {
@@ -644,7 +653,8 @@ test('empty retrieval spends nothing; provider errors, malformed vectors and quo
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
-        if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
+        if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse(mode === 'no-history' ? [] : [memoryRow], [{ key: 'name', value: 'A' }], 1);
         if (path.includes('/reserve_run')) { assert.ok(!['empty', 'no-history'].includes(mode)); return response(mode === 'quota' ? { reserved: false, reason: 'budget_exceeded' } : { reserved: true, job_id: sessionId, lease_token: eventId }); }
@@ -766,6 +776,7 @@ test('checkpoint ignores previous revisions, routes independently, and voice fac
     if (path.includes('/auth/')) return response(authUser);
     if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
     if (path.includes('/transcript_events?')) return response([event]);
+    if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
     if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse([], [{ key: 'name', value: '', forgotten: true, quote: 'OLD PRIVATE NAME', evidence_ids: [eventId] }], 8);
@@ -804,7 +815,8 @@ test('checkpoint revision races fail closed for newly generated, cached and no-n
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
         if (path.includes('/transcript_events?')) return response([event]);
-        if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
+        if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse([], [], ++reads === 1 ? 1 : 2);
         if (path.includes('/analysis_jobs?')) return response(mode === 'covered' ? [{ result: cached }] : []);
@@ -831,7 +843,8 @@ test('voice revision races never return stale SDP or persist a successful connec
     if(path.includes('/record_model_spend'))return response(null);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', scenario: 'Weekend', status: 'active' }]);
-        if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
+        if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
+    if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse([], [], ++reads >= changedAt ? 2 : 1);
         if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
@@ -855,6 +868,7 @@ test('model configuration exposes separate roles and long model IDs keep cache k
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if (path.includes('/auth/')) return response(authUser);
+    if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
     if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
     if (path.includes('/memory_context')) return memoryResponse([memoryRow]);
@@ -948,7 +962,7 @@ test('local exclusions omit every history and fact lookup in voice and continued
       globalThis.fetch = async (url, options) => {
         const path = String(url), body = typeof options?.body === 'string' ? JSON.parse(options.body) : null;
         if (path.includes('/auth/')) return response(authUser);
-        if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', status: 'active', scenario: 'Travel' }]);
+        if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', status: 'active', scenario: 'User-prepared conversation: PRIVATE OMITTED SCENARIO' }]);
         if (path.includes('/transcript_events?')) return response([event]);
         if (path.includes('/analysis_jobs?')) {
           assert.ok(new URL(path).searchParams.get('request_key').includes(':omitted:'));
@@ -966,6 +980,7 @@ test('local exclusions omit every history and fact lookup in voice and continued
           const input = JSON.parse(body.input[1].content[0].text);
           assert.equal(input.context.previous_checkpoint, null);
           assert.equal(options.body.includes('OLD PRIVATE HISTORY'), false);
+          assert.equal(options.body.includes('PRIVATE OMITTED SCENARIO'), false);
           return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(content()) }] }] });
         }
         if (path.includes('/realtime/calls')) {
@@ -973,12 +988,13 @@ test('local exclusions omit every history and fact lookup in voice and continued
           instructions = session.instructions;
           assert.equal(session.model, 'gpt-realtime-2.1-mini');
           assert.equal(session.audio.input.transcription.model, 'gpt-realtime-whisper');
+          assert.equal(session.audio.output.speed, .85);
           return new Response(sdp);
         }
         if (path.includes('/complete_run')) { completed = body.p_result; return response(true); }
         throw new Error('Omitted calls must not read memory, facts, or either learning context RPC');
       };
-      const result = await handler(request(endpoint, { sessionId, ...(endpoint === 'voice' ? { sdp } : {}), omitLearningContext: true }));
+      const result = await handler(request(endpoint, { sessionId, ...(endpoint === 'voice' ? { sdp, speechSpeed: .85 } : {}), omitLearningContext: true }));
       assert.equal(result.status, 200);
       if (endpoint === 'checkpoint') {
         instructions = (await result.json()).instructions;
@@ -992,6 +1008,8 @@ test('local exclusions omit every history and fact lookup in voice and continued
       assert.deepEqual(context.memory.focus, []);
       assert.deepEqual(context.memory.practiced, []);
       assert.equal(instructions.includes('OLD PRIVATE HISTORY'), false);
+      assert.equal(instructions.includes('PRIVATE OMITTED SCENARIO'), false);
+      assert.equal(context.scenario, '');
     }
   } finally { globalThis.fetch = original; }
 });
@@ -1006,6 +1024,7 @@ test('server suppression removes historical learning and embedding spend while r
         const path = String(url);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'juno', status: 'active', scenario: 'Travel' }]);
+        if (path.includes('/learning_usage_prepare')) return response({targets:[],source_version:'session-v1'});
         if (path.includes('/learning_voice_context')) {
           assert.deepEqual(JSON.parse(options.body), { p_user_id: userId, p_companion_id: 'juno' });
           assert.equal(options.headers.Authorization, 'Bearer test-service');
@@ -1046,6 +1065,7 @@ test('failed or malformed service eligibility never falls back to unfiltered his
         const path = String(url);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', scenario: 'Travel' }]);
+        if (path.includes('/learning_usage_prepare')) return response({targets:[],source_version:'session-v1'});
         if (path.includes('/learning_voice_context')) return eligibility === 'failure' ? new Response('private database detail', { status: 500 }) : response(eligibility);
         throw new Error('Unverified eligibility must stop before history or spending');
       };
@@ -1065,6 +1085,7 @@ test('canonical exclusion races fail closed even when the separate memory profil
         const path = String(url);
         if (path.includes('/auth/')) return response(authUser);
         if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'mia', status: 'active', scenario: 'Travel' }]);
+        if (path.includes('/learning_usage_prepare')) return response({targets:[],source_version:'session-v1'});
         if (path.includes('/learning_voice_context')) return response({ focus: [], suppress_memory: ++reads >= changedAt });
         if (path.includes('/memory_context')) return memoryResponse([], [], 1);
         if (path.includes('/transcript_events?')) return response([event]);
@@ -1117,7 +1138,8 @@ test('memory uses service-approved focus aliases and conservatively classifies u
   globalThis.fetch = async url => {
     const path = String(url);
     if (path.includes('/auth/')) return response(authUser);
-    if (path.includes('/learning_voice_context')) return response({ focus: [{ expression: 'One approved expression.', evidence_ids: [eventId], session_id: sessionId }], suppress_memory: false });
+    if (path.includes('/learning_usage_prepare')) return response({targets:[],source_version:'session-v1'});
+        if (path.includes('/learning_voice_context')) return response({ focus: [{ expression: 'One approved expression.', evidence_ids: [eventId], session_id: sessionId }], suppress_memory: false });
     if (path.includes('/memory_context')) {
       const legacy = { ...correction }; delete legacy.category;
       return memoryResponse([{ ...memoryRow, content: { ...content(), corrections: [legacy, { ...correction, category: 'alternative' }, { ...correction, category: 'invalid' }] } }]);

@@ -10,6 +10,7 @@ on:
       - package-lock.json
       - test/**
       - scripts/evaluate-memory.mjs
+      - scripts/evaluate-learning-enhancements.mjs
       - scripts/build-web.mjs
       - scripts/deploy.py
       - scripts/prepare-hosting.mjs
@@ -40,6 +41,7 @@ jobs:
           npm run check
           npm test
           npm run eval:memory
+          npm run eval:learning
       - name: Validate character rendering, memory controls and mobile browser
         run: |
           npm run test:presence

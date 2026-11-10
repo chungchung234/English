@@ -7,6 +7,7 @@ export function createLearningReview(options) {
   context:()=>{const scope=options.getScope();if(!scope)return null;const [service,userId]=scope.key.split('|');return {service,userId,companionId:scope.companionId,name:scope.name||scope.companionId,busy:options.isBusy,sync:options.sync};},
   rpc:options.rpc,edge:options.edge,allRows:options.allRows,refresh:options.refresh,
   notice:options.onNotice,setView:options.setView,
+  getEventMetadata:options.getEventMetadata,onTelemetryStage:options.onTelemetryStage,
   chooseScenario:()=>options.onPlan?.(),
   onAnalysis:options.onAnalysis,openSession:options.onSession
  });

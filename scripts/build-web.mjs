@@ -8,13 +8,18 @@ const config=url&&key?validatePublicConfig(url,key):null;
 if((url||key)&&!config)throw Error('Set both PUBLIC_SUPABASE_URL and PUBLIC_SUPABASE_KEY.');
 if(process.argv.includes('--require-config')&&!config)throw Error('Public hosting build requires Supabase public URL and key.');
 const json=JSON.stringify(config).replaceAll('<','\\u003c');
-const script=`globalThis.LOOP_PUBLIC_CONFIG=${json};\n${await bundleWeb({minify:true})}`;
-const style=await read('web/style.css');
+const bundled=await bundleWeb({minify:true}),style=await read('web/style.css'),sourceHtml=await read('web/index.html');
+const ciCommit=[process.env.GITHUB_SHA,process.env.CI_COMMIT_SHA,process.env.VERCEL_GIT_COMMIT_SHA,process.env.BUILD_SOURCEVERSION].find(value=>value?.trim());
+if(ciCommit&&!/^[0-9a-f]{7,64}$/i.test(ciCommit.trim()))throw Error('CI commit must be a Git SHA.');
+// Without CI provenance, identify the actual bundled source and public config.
+// No timestamp, workspace path, or secret is included in the release version.
+const clientBuild=ciCommit?'git:'+ciCommit.trim().toLowerCase():'source:'+createHash('sha256').update(JSON.stringify([bundled,style,sourceHtml,json])).digest('hex').slice(0,24);
+const script=`globalThis.LOOP_PUBLIC_CONFIG=${json};\nglobalThis.LOOP_CLIENT_BUILD=${JSON.stringify(clientBuild)};\n${bundled}`;
 const hash=text=>createHash('sha256').update(text).digest('base64');
 const scriptAsset=`assets/app.${createHash('sha256').update(script).digest('hex').slice(0,12)}.js`;
 const policy=`default-src 'self'; script-src 'sha256-${hash(script)}'; style-src 'sha256-${hash(style)}'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; media-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'`;
 // Callback replacements preserve dollar sequences in minified code and its CSP hash.
-let html=(await read('web/index.html')).replace(/<meta http-equiv="Content-Security-Policy"[^>]+>/,`<meta http-equiv="Content-Security-Policy" content="${policy}">`)
+let html=sourceHtml.replace(/<meta http-equiv="Content-Security-Policy"[^>]+>/,`<meta http-equiv="Content-Security-Policy" content="${policy}">`)
 .replace('<link rel="stylesheet" href="style.css">',()=>`<style>${style}</style>`)
 .replace('<script src="public-config.js"></script><script type="module" src="app.js"></script>',()=>`<script type="module" src="${scriptAsset}" integrity="sha256-${hash(script)}" crossorigin="anonymous"></script>`);
 await mkdir(new URL('dist/assets/',root),{recursive:true});

@@ -5,6 +5,7 @@ import { createOutbox, flushOutbox } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
 import { mountEmailLogin } from '../src/email-login.mjs';
 import { createAuthSession, LoginFlowError } from '../src/auth-session.mjs';
+import { clientBuild, telemetryMetadata, createConnectedTelemetry, createTelemetryDiagnostics } from '../src/learning-telemetry.mjs';
 const $ = id => document.getElementById(id);
 $('privacy-dialog').querySelector('.privacy-copy').append(' 복습 수행·미루기·제외·보류 선택과 피드백 확인·연습 등 사용 이력도 내 계정에 저장됩니다.');
 const outbox = createOutbox();
@@ -18,11 +19,14 @@ let companionSlideAnimations=[],companionDrag=null,companionClickGuard=null;
 const companionMotion=matchMedia('(prefers-reduced-motion: reduce)');
 let auth=null,loginReady=false,socialBusy=false,providers={google:false,kakao:false};
 let flushing, call, scope, saving = Promise.resolve(), historyEpoch = 0, memoryEpoch = 0, cloudVerified = false;
+const releaseMetadata = telemetryMetadata({client_build:clientBuild()});
+const telemetryDiagnostics = createTelemetryDiagnostics({getScope:()=>auth&&scope?scope:null});
 const companions = {mia:{name:'Mia',trait:'다정하고 사려 깊은 대화'},alex:{name:'Alex',trait:'차분하고 명료한 대화'},juno:{name:'Juno',trait:'경쾌하고 호기심 많은 대화'}};
 let companionId = 'alex', callStarting = false, callEnding = false, selectedReviewSessionId = null, practiceMemory = null;
 let currentView = 'contacts', viewEpoch = 0, historyFilter = null;
 let callDetailEpoch=0, weeklyCompanions=new Set(), weeklyRequest=null;
 const learning=createLearningReview({document,rpc,edge,allRows,sync,isBusy:()=>memoryBusy(),
+ getEventMetadata:()=>releaseMetadata,onTelemetryStage:event=>telemetryDiagnostics.record(event),
  getScope:()=>auth&&scope?{key:scope+'|'+companionId,companionId,name:companionName()}:null,
  onNotice:message=>notice(message),setView,onPlan:()=>loadPlan().catch(error=>notice(error.message)),
  refresh:()=>loadHistory(),onAnalysis:analysis=>{
@@ -417,7 +421,7 @@ async function startCall() {
   $('transcript').replaceChildren();$('turn-count').textContent='0개 발화';$('empty-transcript').hidden=false;
   if($('call-timer'))$('call-timer').textContent='00:00';if($('call-remaining'))$('call-remaining').hidden=true;
   $('call-status').textContent=companionName()+'와 연결하고 있어요…';presence.setState('connecting');
-  const callScope=scope, selectedCompanion=companionId;
+  const callScope=scope, callUserId=auth.user.id, selectedCompanion=companionId;
   let stream,current;
   try {
     await sync();
@@ -426,11 +430,15 @@ async function startCall() {
     const prepared=learning.getPlan();
     stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
     if(!callStarting||scope!==callScope||companionId!==selectedCompanion)throw Error('통화 연결이 취소되었습니다.');
-    const [session]=await api('/rest/v1/sessions',{method:'POST',headers:{Prefer:'return=representation'},body:{id:crypto.randomUUID(),user_id:auth.user.id,scenario:!omitLearningContext&&prepared?.scenario?'User-prepared conversation: '+prepared.scenario:NATURAL_CONVERSATION,companion_id:selectedCompanion}});
+    const [session]=await api('/rest/v1/sessions',{method:'POST',headers:{Prefer:'return=representation'},body:{id:crypto.randomUUID(),user_id:auth.user.id,scenario:!omitLearningContext&&prepared?.scenario?'User-prepared conversation: '+prepared.scenario:NATURAL_CONVERSATION,companion_id:selectedCompanion,client_build:releaseMetadata.client_build}});
     if(!callStarting||scope!==callScope||companionId!==selectedCompanion)throw Error('통화 연결이 취소되었습니다.');
     const pc=new RTCPeerConnection();
     current={omitLearningContext,id:session.id,companionId:selectedCompanion,scope:callScope,pc,stream,remoteStream:null,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,acceptingFinalEvents:false,speaking:false,responding:false,aiSpeaking:false,muted:false,awaitingCommit:false,items:[],lastCompact:Date.now(),lastCompactAttempt:0,needsCompact:false,compacting:false,compactFailures:0,startedAt:null,startedMono:null,deadline:null,durationTimer:null,clockInterval:null};
     call=current;
+    current.connectedTelemetry=createConnectedTelemetry({sessionId:current.id,metadata:releaseMetadata,
+      isCurrent:()=>call===current&&!current.ending&&scope===callScope&&auth?.user?.id===callUserId&&companionId===selectedCompanion&&pc.connectionState!=='closed',
+      enqueue:receipt=>learning.recordConnected(current.id,receipt),
+      onStage:event=>telemetryDiagnostics.record(event),onPersisted:()=>{current.connectedRecorded=true;}});
     const initialSpeed=savedSpeechSpeed();current.initialSpeed=initialSpeed;
     current.speed=createSpeechSpeed({initial:initialSpeed,send:event=>dc.send(JSON.stringify(event)),
       changed:state=>{if(call===current)renderSpeechSpeed(state);},
@@ -480,7 +488,7 @@ async function startCall() {
       if(call!==current||current.ending)return;
       if(pc.connectionState==='connected') {
         startCallClock(current);if(current.ending)return;
-        if(!current.connectedRecorded){current.connectedRecorded=true;void learning.recordConnected(current.id);}
+        void current.connectedTelemetry.observe(pc.connectionState);
         if(current.compactionInput&&!current.compacting){current.stream.getAudioTracks().forEach((track,i)=>track.enabled=!current.muted&&current.compactionInput[i]);current.compactionInput=null;}
         attachCallAudio(current);notice('');presence.setState(current.aiSpeaking?'speaking':current.responding?'thinking':'listening');$('call-status').textContent=companionName()+'와 통화 중 · 편하게 말씀하세요';
       }
@@ -496,7 +504,7 @@ async function startCall() {
     await pc.setRemoteDescription({type:'answer',sdp:answer.sdp});
   } catch(e) {
     stream?.getTracks().forEach(track=>track.stop());
-    if(current){current.speed?.dispose();clearCallClock(current);current.pc.close();}
+    if(current){current.connectedTelemetry?.stop();current.speed?.dispose();clearCallClock(current);current.pc.close();}
     if(!current||call===current){call=null;presence.detachAudio();$('remote-audio').srcObject=null;$('call-status').textContent='연결하지 못했어요. 다시 시도해 주세요.';}
     throw e;
   } finally {callStarting=false;setCallLayout(Boolean(call));if(!call&&!callEnding)setView(current?.nextView||'contacts');}
@@ -506,7 +514,7 @@ function endCall() {
   if(!current)return Promise.resolve();
   if(current.ending)return current.endingPromise||Promise.resolve();
   // Reserve the end synchronously before any transcription/network awaits.
-  current.ending=true;current.acceptingFinalEvents=true;callEnding=true;clearCallClock(current);navigationControls();updateCallControls();$('end-call').disabled=true;
+  current.ending=true;current.connectedTelemetry?.stop();current.acceptingFinalEvents=true;callEnding=true;clearCallClock(current);navigationControls();updateCallControls();$('end-call').disabled=true;
   current.speed?.dispose();closeDialog('speed-dialog');
   const wrapupTimer=setTimeout(()=>{
     if(!current.ending||!callEnding)return;
@@ -722,6 +730,14 @@ function renderAuthControls(){
   $('social-status').textContent=!loginReady?'로그인 연결을 확인하고 있어요.':providers.google||providers.kakao?'':'간편 로그인을 준비하고 있어요. 이메일로 시작할 수 있어요.';
   $('identity-note').textContent=providers.google||providers.kakao?'다른 이메일을 쓰는 계정도 여기서 연결하면 대화 기록이 그대로 이어져요.':'간편 로그인 연결을 준비하고 있어요.';
 }
+function renderTelemetrySupport(){
+  let details=$('account-connection-info');
+  if(!details){details=document.createElement('details');details.id='account-connection-info';details.className='dialog-footnote';const summary=document.createElement('summary');summary.textContent='앱·연결 정보';details.append(summary);$('account-dialog').append(details);}
+  details.querySelectorAll('p').forEach(node=>node.remove());
+  const version=document.createElement('p');version.textContent='앱 버전: '+releaseMetadata.client_build;details.append(version);
+  const latest=telemetryDiagnostics.list().at(-1);
+  if(latest){const status=document.createElement('p');status.textContent='최근 통화 연결 기록: '+({created:'기기 저장 확인 전',device_persisted:'기기 보관 확인 · 서버 확인 대기',server_ack:'서버 수신 확인'})[latest.stage];const reference=document.createElement('p');reference.textContent='지원 참조: '+latest.eventId;details.append(status,reference);}
+}
 async function loadAuthProviders(){
   try{const {data}=await request('/auth/v1/settings');providers={google:data.external?.google===true,kakao:data.external?.kakao===true};}
   catch{providers={google:false,kakao:false};}
@@ -862,7 +878,7 @@ companionButtons.forEach(button=>{
   };
 });
 document.querySelectorAll('[data-open]').forEach(button=>button.onclick=()=>{if(call || callStarting || callEnding)return;openDialog(button.dataset.open);});
-if($('account-open'))$('account-open').onclick=()=>{if(!memoryBusy())openDialog('account-dialog');};
+if($('account-open'))$('account-open').onclick=()=>{if(!memoryBusy()){renderTelemetrySupport();openDialog('account-dialog');}};
 const openMemory=protect(async()=>{if(memoryBusy())return notice('통화를 마친 뒤 기억을 관리할 수 있어요.');closeDialog('account-dialog');openDialog('memory-dialog');$('memory-index-status').textContent='';$('memory-index-more').hidden=true;await loadMemoryControls();});
 if($('memory-manage-open'))$('memory-manage-open').onclick=openMemory;if($('account-memory'))$('account-memory').onclick=openMemory;
 if($('memory-index'))$('memory-index').onclick=protect(indexMemory);if($('memory-index-more'))$('memory-index-more').onclick=protect(indexMemory);

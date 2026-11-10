@@ -41,6 +41,7 @@ export async function testTabUI(browser,base){
   else if(url.pathname.endsWith('/coach/review')){reviewCalls++;data={analysis};}
   else if(url.pathname.endsWith('/rpc/learning_snapshot')||url.pathname.endsWith('/rpc/learning_recommend_more'))data={items:mode==='populated'&&body.p_companion_id==='alex'?[learningItem]:[],recommended_item_ids:mode==='populated'&&learningItem.status==='active'?[learningItem.id]:[],feedback:mode==='populated'&&body.p_companion_id==='alex'?[{session_id:sid,analysis_id:analysis.id,current:true,job_state:'completed',has_user_speech:true,exposed_at:null}]:[],next_plan:plans[body.p_companion_id]?{id:'77777777-7777-4777-8777-777777777777',item_id:learningItem.id,source_session_id:sid,source_analysis_id:analysis.id,scenario:plans[body.p_companion_id]}:null};
   else if(url.pathname.endsWith('/rpc/learning_record_event'))data={saved:true};
+  else if(url.pathname.endsWith('/rpc/learning_enhancement_snapshot'))data={reviews:[],schedules:[],recalls:[],usage:[],weekly_goals:[],personalized_item_ids:[],recommendation_reasons:{}};
   else if(url.pathname.endsWith('/rpc/learning_action')){
    if(learningFailure)return route.fulfill({status:503,json:{message:'Practice save unavailable'}});
    learningItem.revision++;

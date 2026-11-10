@@ -44,6 +44,7 @@ async function fixture(browser,{approved=true,gates={},started={}}={}){
   if(path.endsWith('/coach/memory'))return route.fulfill({json:{memories:[]}});
   if(path.endsWith('/rpc/learning_snapshot'))return route.fulfill({json:{items:[],feedback:[],recommended_item_ids:[],next_plan:null}});
   if(path.endsWith('/rpc/learning_record_event'))return route.fulfill({json:{saved:true}});
+  if(path.endsWith('/rpc/learning_enhancement_snapshot'))return route.fulfill({json:{reviews:[],schedules:[],recalls:[],usage:[],weekly_goals:[],personalized_item_ids:[],recommendation_reasons:{}}});
   if(path.endsWith('/rpc/learning_plan'))return route.fulfill({json:{scenario:null}});
   if(path.endsWith('/rpc/learning_review'))return route.fulfill({json:[]});
   throw Error('Unexpected social fixture path: '+path);

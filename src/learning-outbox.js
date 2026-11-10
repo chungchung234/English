@@ -64,6 +64,7 @@ export function createLearningOutbox(dbName = 'loop-learning-outbox-v1', { index
       const fail = error => {
         if (!settled) {
           settled = true;
+          try { tx.abort(); } catch { /* already completed or aborted */ }
           reject(error || new Error('Local save aborted'));
         }
       };
@@ -108,12 +109,10 @@ export function createLearningOutbox(dbName = 'loop-learning-outbox-v1', { index
             store.add(entry);
             done(record.id);
           } catch (error) {
-            try { tx.abort(); } catch { /* transaction may already be inactive */ }
             fail(error);
           }
         };
         request.onerror = () => {
-          try { tx.abort(); } catch { /* transaction may already be inactive */ }
           fail(request.error);
         };
       });

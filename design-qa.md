@@ -2,6 +2,10 @@
 
 final result: passed
 
+## 통화 이후 기능 추가 · 2026-11-10
+
+기존 디자인 패턴에 표현 하나 연습·가리기·미루기·직접 연습 표시·다음 통화 준비를 연결했다. [화면 및 구현·검증 범위](docs/post-call-flow.md)를 기록했다. 390px/320px 합성 데이터 브라우저 검사에서 클라우드 저장 실패·재시도·새로고침 복원·주제 준비 후 마이크 미연결을 확인했다. [게시 파일·DB 검증](docs/design/post-call/deployed-verification.json)을 함께 보존한다.
+
 ## 최근 통화·복습 추가 검수 · 2026-11-10
 
 기준은 직전 검수에서 제시한 [최근 통화](docs/design/tabs-refinement/before-history.png)·[복습](docs/design/tabs-refinement/before-review.png), 승인된 통화 홈의 디자인 패턴, 사용자가 진행을 요청한 네 보완 항목이다. 새 브랜드나 새 시각 방향으로 교체하지 않았다.

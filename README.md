@@ -2,7 +2,7 @@
 
 모바일 브라우저에서 링크로 접속하는 가벼운 영어 말하기 서비스입니다. 이메일 로그인, 자연스러운 영어 통화, 대화 자동 저장, 개인별 장기 이력, 통화·주간 분석을 제공합니다. 특정 AI 채팅 앱 설치나 사용자별 API 설정은 필요하지 않습니다. 정적 웹 호스팅과 관리형 Supabase를 사용하므로 상시 서버를 직접 운영하지 않습니다.
 
-**현재 상태:** [서비스 링크](https://chungchung234.github.io/English/)에서 로그인 화면에 접근할 수 있으며, 보호된 데이터·AI 기능은 승인된 계정만 이용합니다. 승인된 캐릭터·단계별 모션과 [연구·디자인 결정](docs/design/research-and-decisions.md)을 유지하고, 플랫 발신 버튼의 통화 홈에 이어 최근 통화·복습 개선도 배포했습니다. [최신 배포 검사](https://github.com/chungchung234/English/actions/runs/42761308461)가 통과했으며 [최근 통화·복습 게시 화면과 검증 범위](docs/design/tabs-refinement/README.md), [통화 홈·글래스 검수](docs/design/call-glass/README.md)를 기록했습니다. [이전 캐릭터 배포 기록](docs/design/research-and-decisions.md#배포와-검증-기록)도 보존합니다.
+**현재 상태:** [서비스 링크](https://chungchung234.github.io/English/)에서 로그인 화면에 접근할 수 있으며, 보호된 데이터·AI 기능은 승인된 계정만 이용합니다. 승인된 캐릭터·단계별 모션과 [연구·디자인 결정](docs/design/research-and-decisions.md)을 유지하고, 플랫 발신 버튼의 통화 홈에 이어 최근 통화·복습 개선과 통화 후 표현 연습·이어보기까지 배포했습니다. [최신 배포 검사](https://github.com/chungchung234/English/actions/runs/42764206676)에서 빌드·모바일 검사가 통과했으며 [최근 통화·복습 게시 화면과 검증 범위](docs/design/tabs-refinement/README.md), [통화 홈·글래스 검수](docs/design/call-glass/README.md)를 기록했습니다. [이전 캐릭터 배포 기록](docs/design/research-and-decisions.md#배포와-검증-기록)도 보존합니다.
 
 [이전 공개 모드 검증](https://github.com/chungchung234/English/actions/runs/42639444223)에서는 세 캐릭터의 실제 WebRTC·전사·응답·기억 분리가 통과했습니다. 이는 현재 승인 계정의 실제 기기 재검증과는 별도 기록입니다. 현재의 비승인 테스트 계정은 접근 차단을 확인하며, 검증 목적으로 승인 목록을 바꾸지 않습니다. 이메일 전달과 DB 재해 복구는 아래 운영 과제로 남습니다.
 
@@ -10,7 +10,7 @@ Google·카카오 로그인과 기존 계정 연결 코드를 [배포](https://g
 
 ## 구성
 
-- `dist/index.html` + `dist/assets/`: 약281KB HTML에 CSS·JavaScript·공식 인증 SDK·작은 아이콘을 포함하고, 세 캐릭터는 합계 약1.47MB의 별도 무손실 WebP로 제공합니다. 방문자에게 연결 설정을 요구하지 않으며 운영자가 빌드 시 공개 연결 정보를 한 번 설정합니다.
+- `dist/index.html` + `dist/assets/`: 약289KB HTML에 CSS·JavaScript·공식 인증 SDK·작은 아이콘을 포함하고, 세 캐릭터는 합계 약1.47MB의 별도 무손실 WebP로 제공합니다. 방문자에게 연결 설정을 요구하지 않으며 운영자가 빌드 시 공개 연결 정보를 한 번 설정합니다.
 - `web/`: 모바일 통화 홈·실시간 통화 화면, 통화·최근 통화·복습 탭, 이메일 코드 로그인, WebRTC 통화, 피드백, 전체 JSON 백업/복원.
 - `src/outbox.js`: IndexedDB 복구 대기열. 클라우드 확인 전 삭제하지 않으며 동일 UUID로 재전송.
 - `src/auth-session.mjs`: 공식 SDK를 사용한 PKCE 소셜 인증, 세션 유지, 기존 사용자 ID를 보존하는 계정 연결. 브라우저에 개발자 시크릿을 포함하지 않습니다.

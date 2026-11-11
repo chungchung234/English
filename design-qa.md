@@ -154,3 +154,28 @@ final result: passed
 사용자가 선택한 `학습 노트`를 제목/진입/준비/오류/복귀/보관함에 적용했다. 기존 레이아웃과 정보 구조를 유지하며 제목은 더 짧게 정리했다. [실제 390px 화면](docs/design/learning-note-copy-20261111/note-390.png), [320px·200% 큰 글자](docs/design/learning-note-copy-20261111/note-320-large.png), [긴 복귀 버튼](docs/design/learning-note-copy-20261111/source-return-320-large.png)을 열어 확인했다. 큰 글자에서 복귀 버튼의 ‘돌아가기’가 중간에서 나뉘는 문제를 단어 줄바꿈으로 수정하고 같은 조건으로 재캡처했다. [측정값](docs/design/learning-note-copy-20261111/long-copy-check.json): 276px 버튼 폭, 320×568 CSS px, 200% 글자, deviceScaleFactor1, 잘림/넘침/페이지 오류 없음. 기존 상태·통화 후 수용 검증 통과. 남은 P0/P1/P2 없음.
 
 final result: passed
+# First-use guidance and recovery — 2026-11-11
+
+final result: passed
+
+Scope: incremental first-visit improvements on the deployed `6c49728` design, following the reviewed recommendation to make guidance optional. The welcome sheet is intentionally replaced with inline first-call copy and an explicit two-step guide; it is not a pixel clone of all three exploration images.
+
+- Visual sources: `docs/design/first-use-20261111/reference-home.png`, `reference-guide.png`, `reference-loading.png`.
+- Implementation: `02-first-home.png`, `03-friend-guide.png`, `04-call-guide.png`, `01-history-loading.png` in the same directory. Full paired evidence: `qa-comparison.png`; focused typography/control comparison: `qa-guide-detail.png`.
+- Viewport/density: implementation 390×844 CSS/pixels, deviceScaleFactor 1. Current home source is 390×844. Generated guide/loading sources were 852×1846 and normalized to 390×844; generated concepts establish hierarchy and tokens rather than measured browser geometry. Compact captures are 320×568 CSS/pixels.
+- Fonts/typography: preserve system Korean sans, navy hierarchy and readable 14–15px guidance. The implementation uses larger accessible close controls than the exploration image; this is intentional.
+- Spacing/layout: preserve the current header, character, segmented selector and dock. Guidance adds a short first-use line. Coachmarks remain associated with their actual target and clear the primary call action. Compact layout keeps the primary call action above the dock.
+- Colors/tokens: reuse brand blue, navy, lavender skeleton/selection and flat green call action. Error recovery uses the existing soft surface; no new brand palette.
+- Images: existing logo and WebGL character assets are retained. Existing close/phone/settings icons are reused. No replacement character assets were generated.
+- Copy: first-use, microphone, permission recovery, invite access, first-note and optional help copy are production Korean. Guide completion never initiates a call or microphone request.
+
+Comparison history:
+
+1. Initial browser inspection found a P2 recovery layout issue: the full character pushed microphone instructions/retry beneath the fixed dock. The error state now hides the decorative identity and places persistent instructions and the retry action near the selector. Post-fix evidence: `06-microphone-recovery.png`; browser assertions confirm the retry remains above the dock.
+2. Compact home inspection found permission copy could sit behind the dock. On short viewports the microphone note precedes the call button and first-use spacing is reduced. Post-fix evidence: `10-first-home-compact.png`; assertions confirm the call button remains above navigation.
+3. Full and focused comparisons show no remaining actionable P0/P1/P2 visual issues. The tooltip omits the generated arrow and uses an exact target spotlight, a larger close action and native dialog focus behavior. Static skeletons intentionally avoid shimmer. These differences preserve the current design and motion/accessibility constraints.
+
+Primary browser verification: optional guide/skip/replay, Escape/focus return, account-specific browser persistence, initial loading/confirmed empty/error recovery, retained history during refresh, permission denial/retry, cancellation during a pending microphone grant and voice response, immediate retry isolation, and first-learning-note acknowledgement. Actual voice providers and auth are fixtures; no claim of real-device microphone or AI voice quality verification is made.
+
+Release limitation: Google-hosted OAuth app/domain branding requires the provider console and is not changed by this frontend release. Invite/approval policy and backend authorization remain intact. Guidance preferences are scoped per account in this browser and do not claim cross-device sync.
+

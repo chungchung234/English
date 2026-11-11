@@ -178,7 +178,7 @@ try {
   await eventually(() => page.evaluate(() => window.audioContexts.every(audio => audio.state === 'closed')), 'all cue and presence contexts close');
   assert(await page.evaluate(() => window.testTracks.every(track => track.readyState === 'ended')), 'failed connections release all microphone tracks');
   failVoice = false; await page.evaluate(() => { window.blockAudio = true; window.autoReady = true; });
-  await page.locator('#start-call').click(); await page.waitForFunction(() => document.body.dataset.callPhase === 'connected');
+  await page.locator('#call-help-retry').click(); await page.waitForFunction(() => document.body.dataset.callPhase === 'connected');
   assert(await page.locator('#end-call').isEnabled(), 'unavailable cue audio never blocks the call');
   const beforeClosed = finishes.length;
   await page.evaluate(() => { window.testPeer.dc.readyState = 'closed'; window.testPeer.dc.onclose(); window.testPeer.dc.onclose(); });

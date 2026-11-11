@@ -1,0 +1,523 @@
+Local validation evidence; synthetic auth/data/voice. Not production learner quality.
+
+[check]
+
+> loop-english@0.1.0 check
+> node --check web/first-use.js && node --check web/ai-presence.js && node --check web/app.js && node --check web/call-cues.js && node --check web/call-completion.js && node --check web/conversation-time.js && node --check web/voice-turn-controls.js && node --check web/post-call.js && node --check web/post-call-transcript.js && node --check web/session-review.js && node --check web/review-journal.js && node --check web/session-feedback.js && node --check web/learning-enhancements.js && node --check src/learning-telemetry.mjs && node --check src/conversation-memory.js && node --check src/learning-outbox.js && node --check src/outbox.js && node --check src/learning-review.mjs && node --check src/auth-session.mjs && node --check scripts/configure-social-login.mjs && deno check supabase/functions/coach/index.ts
+
+Check supabase/functions/coach/index.ts
+
+
+[unit-282]
+
+> loop-english@0.1.0 test
+> node --experimental-transform-types --test test/*.test.mjs supabase/functions/coach/*.test.mjs
+
+(node:50174) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ background route requires the existing server credential and rejects browser origins and ordinary user tokens (32.272509ms)
+✔ a service-role claim is not authorization; alternate issued keys require provider proof (1.717704ms)
+✔ failure policy keeps continuation, busy leases, budgets, invalid evidence and provider configuration distinct (0.363878ms)
+✔ one invocation processes only its server-claimed task and reports no learner data (1.717724ms)
+✔ partial analysis resumes without being counted as a failed generation; memory uses its existing retry deadline (0.870059ms)
+✔ unapproved or absent worker credentials cannot read the queue or call AI through the real handler (4.435704ms)
+✔ the handler verifies a different issued server token with the project provider before accessing queue state (3.470891ms)
+(node:50175) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ origin allowlist is exact and disallows wildcard, paths, insecure remote origins (1.77469ms)
+✔ SDP and full serialized analysis input have byte limits (0.718851ms)
+✔ valid citations are retained and invented citations, assistant sources, fabricated quotes fail (1.171813ms)
+✔ transcript fingerprint ignores ordering and changes with restored or edited evidence (35.133764ms)
+✔ review meanings preserve evidence validation and accept historical notes without generated translations (1.10331ms)
+✔ preflight rejects untrusted origins without reflecting them (28.420905ms)
+✔ missing bearer fails before any remote request (1.855391ms)
+✔ unapproved and unverified emails cannot reach the database or OpenAI (3.400435ms)
+✔ invite mode requires an email allowlist before authentication or spending (0.599872ms)
+✔ unowned session cannot reserve or start voice (1.93451ms)
+✔ review rejects active sessions before generating feedback (1.622681ms)
+✔ unreserved voice job never reaches OpenAI (2.603747ms)
+✔ invalid generated evidence fails the reserved run and never stores analysis (7.942027ms)
+✔ oversized transcript pagination fails explicitly without reserving a job (1.633577ms)
+✔ all pages are read despite a lower database page cap, then stored atomically (12.059081ms)
+✔ voice uses server multipart exchange and persists no SDP or secret (14.445616ms)
+✔ voice rejects invalid speed before reading history or spending a request (5.353314ms)
+✔ memory retrieves old relevant corrections and practice through all-history search (5.773866ms)
+✔ weekly review selects ended sessions in a seven-day window and records its scope (8.189861ms)
+✔ upstream failures never expose provider response text or credentials (2.491518ms)
+✔ default public mode accepts a new verified email without an operator allowlist (0.60481ms)
+✔ public mode rejects unverified accounts before DB access or model spending (0.53849ms)
+✔ config exposes exactly the three companion profiles and their voices (0.623108ms)
+✔ each stored companion controls its voice, persona, and isolated retrieved practice (10.812456ms)
+✔ memory derives the stored companion and rejects an explicit mismatch before retrieval (1.550653ms)
+✔ invalid companion enums and voice/review client overrides fail before history retrieval (2.221782ms)
+✔ weekly history, model context, scope, and cache key are isolated to the selected companion (4.268351ms)
+✔ weekly rejects any unexpected cross-companion database rows before model spending (0.573082ms)
+✔ session review derives its companion identity without a client override (2.903898ms)
+✔ large analyses preserve complete events, byte bounds, citations and latest factual slots (7.523829ms)
+✔ factual memory rejects invented quotes, assistant evidence, duplicate slots and oversized values (0.42522ms)
+✔ large review resumes cached parts and never generates more than two per request (16.81117ms)
+✔ checkpoint uses server history, chains prior context and preserves companion identity (11.073358ms)
+✔ embedding vectors reject wrong dimensions, zero, and nonfinite entries (0.601585ms)
+✔ nonempty retrieval caches query embeddings by companion, revision, and model without storing text (5.373894ms)
+✔ empty retrieval spends nothing; provider errors, malformed vectors and quota degrade to keyword (11.326394ms)
+✔ memory database failures fail closed and never disclose raw database text (0.690419ms)
+✔ memory management enforces action-specific bodies and uses only authenticated identity (3.644814ms)
+✔ memory active-session conflicts are readable and foreign session failures disclose no details (0.882337ms)
+✔ bounded indexing honors provider ordering and stores only source-verified candidates (2.46579ms)
+✔ indexing invalid vectors never reach storage and oversized documents never spend (2.199719ms)
+✔ checkpoint ignores previous revisions, routes independently, and forget markers omit old provenance (4.374701ms)
+✔ checkpoint revision races fail closed for newly generated, cached and no-new-speech paths (4.746746ms)
+✔ voice revision races never return stale SDP or persist a successful connection (2.116524ms)
+✔ model configuration exposes separate roles and long model IDs keep cache keys bounded (7.622797ms)
+✔ review cache varies by policy, spends only on misses, and records incomplete usage (10.956202ms)
+✔ new correction schemas require categories and legacy reviews default to alternatives (0.468174ms)
+✔ voice and checkpoint omission accept only booleans and reject client context overrides (1.657433ms)
+✔ local exclusions omit every history and fact lookup in voice and continued checkpoints (17.673678ms)
+✔ server suppression removes historical learning and embedding spend while retaining authoritative fact controls (8.752537ms)
+✔ failed or malformed service eligibility never falls back to unfiltered history or voice spending (11.717197ms)
+✔ canonical exclusion races fail closed even when the separate memory profile revision does not change (7.801096ms)
+✔ daily call and model cost budgets expose the safe UTC reset time corresponding to 09:00 KST (2.759231ms)
+✔ memory uses service-approved focus aliases and conservatively classifies uncategorized history (0.674675ms)
+(node:50176) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ conversation threads require exact learner evidence and source time phrases independently of feedback fields (3.012021ms)
+✔ bounded voice context preserves plan state and selected originals while removing duplicate feedback and handoffs (38.443182ms)
+✔ memory generation uses the whole source call, saves independently, and returns no private text (50.21395ms)
+▶ 429 honors server delay while configuration failures and invalid evidence get different recovery classes
+  ✔ rate limit (4.203623ms)
+  ✔ provider auth (4.697787ms)
+  ✔ unsupported quote (10.465203ms)
+✔ 429 honors server delay while configuration failures and invalid evidence get different recovery classes (20.423393ms)
+▶ budget, cached results, active leases and changed sources never trigger duplicate or stale commits
+  ✔ budget (2.542695ms)
+  ✔ cached (2.862086ms)
+  ✔ active lease (2.490917ms)
+  ✔ source changed (2.570738ms)
+✔ budget, cached results, active leases and changed sources never trigger duplicate or stale commits (11.45953ms)
+(node:50206) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ reconsideration keeps explanation separate, uses existing policy/spend, and never accepts or rewrites speech (51.275446ms)
+✔ reconsideration accepts only authenticated request IDs and never caller supplied explanation or evidence (2.903888ms)
+✔ cross-owner, cutoff and privacy-denied review sources fail before quota or OpenAI and disclose no details (2.005908ms)
+✔ malformed, fabricated and cross-session original evidence never reserves a model job (4.667872ms)
+✔ reconsideration rejects assistant/invented citations, extra fields and malformed model text before proposal write (17.088317ms)
+✔ reconsideration cannot spend beyond either reservation budget (3.418473ms)
+✔ transport-unknown model spend is recorded and provider errors never leak content (8.573577ms)
+✔ proposal source/revision races fail closed at completion without accepting the source (1.96726ms)
+✔ reconsideration cache binds source and request revisions and proposed retries spend nothing (6.117993ms)
+✔ observational phrase evidence never infers opportunity, independent use, hint proof or mastery (2.021311ms)
+✔ usage context validates prepared targets and rejects cross-call, duplicate or malformed evidence (1.080075ms)
+✔ usage capture is server-owned observational evidence with no model calls or learner verdicts (1.491064ms)
+✔ usage capture rejects client evidence and cross-owner sessions, and preserves source races safely (2.142844ms)
+✔ prepared target exclusions racing voice never return stale instructions or a successful connection (8.078352ms)
+✔ weekly proposals preserve exact requested scope and use no extra model call (19.37011ms)
+✔ weekly optional goal failures and source privacy races preserve the saved review without stale proposals (17.923363ms)
+✔ a saved session review remains available if optional observational evidence cannot be loaded (3.326955ms)
+✔ cached weekly review rechecks source privacy and withholds stale personalization without another model call (7.030106ms)
+(node:50212) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ authored persona examples demonstrate distinct reactions that can end without a question (1.073085ms)
+✔ authored bilingual help examples preserve the requested expression across companion styles (0.266681ms)
+✔ shared phone-conversation policy preserves learner initiative, requested help and language boundaries (0.261544ms)
+(node:50221) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ review learning keeps exact requested source and authored examples separate; legacy and checkpoint schemas remain readable (6.91972ms)
+✔ review learning rejects unknown types, invented questions, assistant-source attribution and unbounded or incomplete examples (1.199835ms)
+✔ well-used expressions must be actual unchanged learner quotations, not AI improvements (0.53215ms)
+(node:50231) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a failed analysis still supplies the last original exchange, while suppression and bounded provenance remain authoritative (16.580463ms)
+✔ server time distinguishes the user calendar date, DST and unknown legacy timezone (1.908541ms)
+✔ fact provenance stays bounded and manual edits and forgotten values cannot become spoken quotations (0.407684ms)
+✔ continuity and visible receipt describe the actual bounded prompt and source call date (1.467197ms)
+✔ generic opening spends no query embedding and continued retrieval uses only bounded recent learner speech (0.175043ms)
+✔ voice sends dated grounding and isolated clock then returns only a context receipt, never private memory text (56.9488ms)
+(node:50239) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ weekly goals use exact scope and separate source, delayed recall and reviewed usage metadata (2.653602ms)
+✔ weekly proposals need current-period eligible user sources and never add a later call (0.815918ms)
+✔ maximum-length expressions retain full sources and produce selectable bounded goals (0.264067ms)
+✔ weekly source ids from another call or assistant speech fail closed (0.339611ms)
+✔ unreviewed usage and unsupported interpretation are never promoted into weekly goals (0.71792ms)
+✔ weekly observations require actual in-period same-call evidence ids (0.393402ms)
+✔ reviewed modes require preceding assistant evidence and repetition needs the actual target (1.780419ms)
+✔ only delayed in-period self-report ratings influence deterministic ordering (0.592342ms)
+✔ weekly period, duplicates and malformed bounded service context are validated (0.9637ms)
+✔ ineligible removed item recalls and usage are not copied into weekly metadata (0.362926ms)
+✔ OAuth callbacks require the initiating tab intent and use its PKCE flow before any session is adopted (3.614698ms)
+✔ unsolicited and implicit-token callbacks never exchange or replace a session and are scrubbed from the URL (0.462345ms)
+✔ cancelled, expired and wrong-path login requests fail before exchanging a code (0.832403ms)
+✔ linking requires the same existing account before and after consent, preserving the existing user id (1.285794ms)
+✔ unsupported providers and unexpected authorization hosts cannot initiate redirects (0.4984ms)
+✔ an expired access token is refreshed through the official client without requesting an email (0.276736ms)
+✔ Kakao sign-in and linking request only email without adding default photo or nickname consent (0.512371ms)
+✔ scheduled runner reuses server authorization only for its project, bounds work and never prints credentials (56.338152ms)
+✔ rollout preflight never claims work or reads server keys when the queue schema is absent (65.381457ms)
+✔ phone build caches content-hashed application and AI assets with verified CSP and subpath URLs (162.580497ms)
+✔ release provenance uses CI SHA or deterministic source hash and remains covered by content hashes, CSP, and SRI (1185.479749ms)
+✔ received text opens after the cue while save acknowledgement remains independent (1.925086ms)
+✔ an unusually fast acknowledgement preserves the end cue minimum without inflating measured storage time (0.902768ms)
+✔ an explicit hangup timestamp includes synchronous shutdown and anchors the minimum end cue (0.321313ms)
+✔ slow saving opens text once and never repeats navigation on acknowledgement (0.190667ms)
+✔ a failed or incomplete close is partial and cannot be changed by a duplicate late success (0.288233ms)
+✔ disposal settles navigation waiters and invalidates pending or already queued callbacks (0.227162ms)
+✔ connecting creates and resumes audio synchronously, and actual connection immediately silences and closes it (1.624874ms)
+✔ connecting repeats with one timer and a bounded audio graph even when onended is omitted (1.489751ms)
+✔ late resume cannot resurrect a connected or disposed attempt or interfere with a new end cue (0.316506ms)
+✔ ending cancels connection pulses, plays one short descending cue and releases every resource (0.240011ms)
+✔ a suspended end sound expires without waiting for browser audio permission (0.280332ms)
+✔ missing audio, constructor, playback and node failures remain silent and never escape into call flow (0.65754ms)
+✔ independent memory survives failed feedback for all companions and stores only selected supporting quotations (4936.131187ms)
+✔ source versions reject delayed uploads and policy changes without overwriting committed memory (2298.003651ms)
+✔ exclusions, explicit forget, holds, partial calls and revoked approval remain authoritative during generation (2730.560385ms)
+✔ recovery persists backoff, stops after three attempts and never replays an active or completed lease (3603.956531ms)
+✔ budgets defer work until UTC reset without consuming a generation attempt; provider configuration failures stop (2608.703847ms)
+✔ source evidence and operations are service-only; stale workers cannot publish after lease recovery (3300.427075ms)
+✔ older independent memories remain retrievable without feedback, and fallback excludes conversational padding (3056.189094ms)
+✔ memory retries consume their own quota and share the existing account text-spend limit (3124.578112ms)
+✔ background preparation yields to live calls, serializes companions and coalesces repeated history loads (7.876929ms)
+✔ persisted server backoff survives repeated wakeups and controls the next attempt (1.155519ms)
+✔ sign-out and account changes discard pending responses and cannot schedule work for the old account (0.647504ms)
+✔ delivery bounds transport retries and never automatically retries forbidden access (8.731715ms)
+✔ server clock advances monotonically across Korean midnight despite a wrong or changed device clock (18.083323ms)
+✔ UTC instants display with IANA DST rules, including repeated local times (5.770521ms)
+✔ legacy time zone is unknown while the chosen display zone stays explicit (4.711439ms)
+✔ old voice replies and invalid clock values explicitly fall back to device time (1.19621ms)
+✔ memory receipt is about supplied context, never an assertion that the AI recalled it (0.271668ms)
+✔ migration applies to the Supabase auth and role contract (4518.569215ms)
+✔ events are idempotent by event key and conflicting batches roll back atomically (2316.081797ms)
+✔ users can read only their own sessions and events; delayed events remain accepted after ending (2593.146396ms)
+✔ job reservations are server-only, deduplicated, budgeted, and lease protected (2789.13602ms)
+✔ history restore is idempotent, rejects foreign data, and rolls back a conflicting batch (2791.085387ms)
+✔ analysis completion accepts only same-user same-session sources and caches the committed result (2457.062425ms)
+✔ memory search includes older matches, uses the latest analysis per session, and enforces service ownership (2816.519891ms)
+✔ companion memory stays scoped, legacy sessions default to Alex, and restore preserves companion identity (3308.84957ms)
+✔ factual profile survives search eviction, follows speech date, isolates companions and honors forget (3105.649684ms)
+✔ analysis continuations retain one parent budget while ordinary failures consume retries (2925.984481ms)
+✔ approval revocation blocks own data and every security-definer write path (2400.468301ms)
+✔ hybrid mechanics recover an older paraphrase with cosine; keyword, model and latest-version fallbacks remain bounded (1909.140143ms)
+✔ manual facts work with no hits, changes increment revision and cutoff retains other structured slots (1845.806215ms)
+✔ exclusions gate facts, hits and indexing; restore cannot clear current restrictions (1813.695623ms)
+✔ index writes reject stale revision, hash, analysis, scope and invalid vectors; UTF8 documents are bounded (2417.341346ms)
+✔ memory RPC grants and backup RLS preserve approval and ownership; stage budgets are independent (1707.94074ms)
+✔ restore restrictions commit atomically with active backup sessions and repeated controls retain revision and cutoff (1761.478602ms)
+✔ retrieval scan and exclusion response caps are explicit (7080.677456ms)
+✔ fact mutations never decrease a later cutoff restored from backup (2031.22131ms)
+✔ text spend budget is shared across jobs, counts uncertain calls and is service-only (2053.315391ms)
+✔ practice is cloud-confirmed, scoped, idempotent and separate from later user reuse (2081.453484ms)
+✔ HTTPS coach deployment includes each local TypeScript dependency (130.592276ms)
+✔ HTTPS deploy payload is idempotent, refuses changed checksum, and blocks missing-token deployment (6430.36045ms)
+✔ CI resolves public config without fetching when already configured (2.476295ms)
+✔ CI retrieves only a public project key and never leaks management credentials (68.448797ms)
+✔ CI refuses to publish unconfigured site or export a private key (2.14743ms)
+✔ isolated deployment packages the transitive coach modules and cleans only its test scope (80.037671ms)
+✔ learning ownership: RLS prevents reads across accounts, all direct writes, and service voice RPC from client (3898.285026ms)
+✔ canonical words merge only within companion; all source versions survive while current transcript gates validity (2480.072047ms)
+✔ CAS idempotency preserves original response and same-KST-day attempts count once (2604.692817ms)
+✔ defer dates use KST midnight, review preserves history, and source holds survive reanalysis but valid alternate source sustains item (3514.019988ms)
+✔ practice events fix one attribution, pair delayed starts, enforce exposure and reject content analytics (3195.601377ms)
+✔ daily recommendation cap is one distinct item, explicit more allows three; library and candidates remain available (3315.400539ms)
+✔ next preparation persists without voice activity; exclusion or stale transcript suppresses memory and focus (2724.263068ms)
+✔ restore keeps selfreports untrusted, maps regenerated exact expression, and never overwrites existing state (2655.090132ms)
+✔ old analysis seeding and transcript-race rejection preserve evidence trust; long return starts with one recent item (1693.72646ms)
+✔ clean restore preserves source quality holds and seeds last practice KST day without trusting imported analyses (1836.235378ms)
+✔ voice suppresses stale latest analyses even with a valid alternate source or zero extracted items (1787.986771ms)
+✔ feedback blockers persist across snapshots, follow transcript versions, and quota respects UTC reset and cached results (1682.888889ms)
+✔ explicit received-record-only finish persists a partial marker and is ownership checked (1643.635474ms)
+✔ published account approval guards all canonical RPCs, RLS reads, cached action replay, and service voice (1672.318149ms)
+✔ published memory exclusions and history cutoff revoke source eligibility and voice focus without deleting self reports (1652.52383ms)
+✔ additive canonical migration preserves legacy APIs, normalizes legacy self reports, counts only known distinct KST days, and is idempotent (2230.994263ms)
+✔ ingestion accepts correction and expression-only practice citations with shared maximum three, legacy alternative category, and invalid citations rejected (1749.552183ms)
+✔ migration applies to populated deployed legacy schema and imports unsupported historical practice without trusting it (1829.27762ms)
+✔ reconsideration remains held until explicit CAS accept; original speech and analysis never change (3685.475697ms)
+✔ review evidence is user speech only; stale source and excluded account cannot publish or replay (2572.319428ms)
+✔ opt-in KST delayed recall is distinct from practice, ratings change delay and due practiced items stay inside daily cap (1702.969122ms)
+✔ usage requires prepared connected actual call with verified same-session speech, defaults unreviewed, and late edits revoke evidence (1703.174339ms)
+✔ weekly explicit selection preserves exact immutable168h scope and links prepare, actual call and delayed recall (1741.900175ms)
+✔ enhancement restore retains all imported states as untrusted archive and cannot invent source validity or overwrite existing choices (1739.926924ms)
+✔ omitted learning context never fabricates a usage opportunity; held actual-call speech is not reused (1667.77859ms)
+✔ accepted proposal cannot reuse a different existing canonical source from the same analysis (1738.512949ms)
+✔ automatic memory facts reject held/excluded source calls while cutoff policy and unrelated/manual facts persist (1702.925387ms)
+(node:51023) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ synthetic phrase fixtures exercise abstention and never count as a real user study (11.021538ms)
+✔ human evidence preserves unknown mode instead of turning phrase presence into mastery (0.523297ms)
+✔ missing labels, unknown opportunities and uncertain references do not become failures or successes (0.242124ms)
+✔ duplicate, foreign and stale-version review rows fail instead of inflating metrics (0.559101ms)
+✔ conversion maturity uses16days plus72h while return uses7days plus72h (0.340943ms)
+✔ persists records by account and returns created_at then id order (29.585732ms)
+✔ same scoped id is idempotent only for identical record content (10.595617ms)
+✔ conflict state survives idempotent retries and reopening without changing the body (16.03551ms)
+✔ records remain until explicit scoped removal (17.215364ms)
+✔ rejects malformed scopes and records (0.929588ms)
+✔ RTC observation alone creates one immutable receipt; local failure retries without a second connected event (5.063347ms)
+✔ storage retries are bounded and stale calls/accounts cannot record success or schedule another write (1.452245ms)
+✔ metadata allowlist and account-scoped diagnostic journal never retain caller content or downgrade acknowledgements (1.445545ms)
+✔ failed cloud write retains local data and retry uses identical IDs (2.024024ms)
+✔ acknowledged batch only is removed; different account and unsent batch remain (1.355729ms)
+✔ outbox is partitioned by session as well as account (0.252219ms)
+✔ saved and delayed transcripts durably enqueue separate tasks; idempotent discovery does not multiply them (2405.817285ms)
+✔ retries persist across workers, honor backoff and stop after three failures while continuations and budgets do not consume failures (1774.699243ms)
+✔ valid cached feedback completes queue work without reanalysis; successful worker leases stay out of public content (1783.831772ms)
+✔ a changed source or replaced lease cannot publish an old feedback result or falsely report completion (2169.300951ms)
+✔ partial, held, excluded and revoked sources cannot be claimed; ordinary users cannot read or invoke the queue (2039.629995ms)
+✔ expired workers can be replaced, while in-progress calls defer automatic work (2023.236632ms)
+✔ manual requests cannot bypass the same-input cooldown or exhaustion, while a changed policy can recover (2239.200872ms)
+✔ hosted app accepts only public Supabase configuration (3.591693ms)
+✔ reconsider jobs require an approved owner, ended source and service role (2255.668122ms)
+✔ reconsider retries consume their own daily quota while completed requests replay without spending (1877.114035ms)
+✔ reconsider cannot turn ANALYSIS_CONTINUE into unlimited retries (1910.70122ms)
+✔ reconsider text reservations share the existing dollar budget and keep lease protection (2115.712767ms)
+✔ review groups calls by their saved local start date and labels dates without relative-day duplication (24.995206ms)
+✔ review uses every evidenced expression, with zero/many kinds and no recommendation cap or duplicate (3164.355755ms)
+✔ new learning details and well-used quotations project safely without changing legacy notes or practice state (3492.562807ms)
+✔ all companions and older calls paginate by stable call time, including equal timestamps and local midnight (2698.887641ms)
+✔ explicit bookmarks persist for every expression without enrolling, practicing or changing memory; stale writes conflict (2129.715697ms)
+✔ late transcript, holds, exclusions and other-account evidence cannot appear as current review or be bookmarked (2580.291047ms)
+✔ bookmark RLS and RPC approval checks reject direct writes, anonymous users and revoked accounts (2300.286562ms)
+✔ social auth preparation preserves SMTP, limits, existing redirects and disabled unconfigured providers (32.010149ms)
+✔ only configured Google and Kakao providers can be enabled, without publishing credentials (1.711455ms)
+✔ configuration errors never echo raw provider validation that may contain a secret (0.874155ms)
+✔ configuration verifies hashed secret readback without treating it as a reusable credential (0.823078ms)
+✔ speed waits for generation and playback to finish, coalesces drafts, and requires matching acknowledgement (13.185439ms)
+✔ late settings errors and timeout never consume unrelated errors or keep a stale call alive (26.099839ms)
+✔ rejected speed can be retried, and disconnected/ended calls do not send queued updates (0.588365ms)
+✔ release provenance remains nullable for legacy calls, immutable for new calls, and strictly allowlisted in owned idempotent events (4104.28835ms)
+✔ call time zone is validated and immutable while legacy UTC instants and unknown zones stay intact (4058.348378ms)
+✔ backup restoration preserves explicit zones, old backups, strict replay conflicts and memory exclusions atomically (2141.594604ms)
+✔ retrieved memories retain original call dates and bounded same-source user evidence without crossing scopes (2179.528896ms)
+✔ recent and fallback retrieval use conversation dates even when an old call is reanalysed later (2374.20276ms)
+✔ last conversation survives failed analysis, skips empty calls, and cannot cross account, companion, exclusion or approval boundaries (2411.255093ms)
+✔ partial call and wrong-transcript hold never become a raw-memory bypass (2073.707629ms)
+✔ three isolated authored studies default to no observations and null performance (15.360815ms)
+✔ a candidate can change only the declared study variable (1.880829ms)
+✔ duplicate, foreign, stale source, input, output and undeclared config are rejected (5.482847ms)
+✔ full manifest hash prevents replay after requirements or population change (2.892411ms)
+✔ human labels bind output, input, source and pseudocode without discarding uncertainty (15.042596ms)
+✔ word counts and Hangul are diagnostics, not automatic language or adequacy decisions (0.963089ms)
+✔ cancellation, token exhaustion, transport errors and missing cells remain separate (1.664434ms)
+✔ frozen WER/CER preserve grammar, case, punctuation and empty-reference undefined rates (0.464008ms)
+✔ ASR metrics require a provided adjudicated verbatim reference, not an authored script (8.902131ms)
+✔ provider acoustic speech-stop is never ground truth for turn taking (0.954917ms)
+✔ paired ASR rates and human timing require shared references or agreed end labels (2.596066ms)
+✔ explicit missing outputs and non-speech insertions do not become successful pairs (2.450246ms)
+✔ provider observations cannot masquerade as script-only recordings (1.05042ms)
+✔ spoken provider judgments bind the reviewed assistant audio and attestation (1.793147ms)
+✔ paired differences stay separated by supplied origins and unmatched pairs stay explicit (1.494868ms)
+✔ input files have finite byte bounds and CLI failures do not disclose source text (101.197748ms)
+✔ hold preserves effective VAD and requests cancellation followed by playback clearing (9.658127ms)
+✔ unrelated speed/checkpoint acks cannot confirm hold or overwrite VAD restore policy (0.619292ms)
+✔ resume waits for every held user utterance to commit and requests exactly one reply (2.088972ms)
+✔ a response racing resume is cancelled and must finish clearing before playback or replacement reply (4.12869ms)
+✔ new user speech during resume defers to automatic completion and never races a manual reply (0.840524ms)
+✔ hold timeout stays blocked, allows retry, and only matching late ack resolves uncertainty (75.999236ms)
+✔ settings and clear errors are handled as control errors and retain blocked output (0.860184ms)
+✔ disposal prevents late updates, replies and timeouts and shutdown retains policy type (30.160397ms)
+✔ unsupported or absent effective configuration never enables a fabricated policy (0.579862ms)
+✔ a server VAD effective configuration is restored exactly rather than changed to semantic defaults (0.813413ms)
+ℹ tests 282
+ℹ suites 0
+ℹ pass 282
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 75721.425121
+
+
+[browser-full]
+
+> loop-english@0.1.0 test:browser
+> node test/browser.mjs && node test/post-call.browser.mjs && node test/enhancements.browser.mjs && node test/end-transcript.browser.mjs && node test/voice-turn-controls.browser.mjs && node test/research-recall.browser.mjs && node test/temporal-memory.browser.mjs && node test/call-transition.browser.mjs && node test/post-call-experience.browser.mjs && node test/save-completion.browser.mjs && node test/post-call-transcript-view.browser.mjs && node test/session-review-state.browser.mjs && node test/first-use.browser.mjs && node test/review-journal.browser.mjs
+
+PASS: slow provider settings do not block entry; user/approval checks run concurrently with a visible transition and no private reads before approval.
+PASS: official SDK OAuth uses matching PKCE proof, scrubs callback URLs/provider tokens, keeps login across reloads/tabs/refresh, links Kakao to the same user, and propagates logout. Providers are simulated.
+PASS: unapproved OAuth accounts cannot read history; unsolicited and cancelled callbacks do not exchange codes or leak provider errors.
+PASS: login deduplicates sends/verifications, persists cooldowns without codes, respects Retry-After, permits existing codes, never retries automatically, and retains account approval.
+PASS: call details preserve cached feedback and isolate delayed transcripts; separate feedback has readable contrast; weekly availability, result display and request deduplication follow eligible calls.
+PASS: character slides follow tab direction, retain real outgoing artwork, settle on the last rapid selection, and respect reduced motion.
+PASS: slow 40px touch, pause before release and initial thumb wobble change companions; vertical scroll stays native.
+PASS: mouse drag and real browser touch swipe change companions; short, vertical and boundary gestures preserve selection.
+PASS: swipes on description and blank page space work beyond the artwork, with full-width fades and unchanged artwork size.
+PASS: a swipe can start on the call button without activating it; normal button taps remain available.
+PASS: three speed options, native radio keyboard selection, cancel, deferred playback-safe update, acknowledged persistence, settings failure/retry and compact sheet.
+PASS: 20-minute deadline stops microphone, saves the final turn, and creates feedback without automatically restarting.
+PASS: direct contact calls, failed starts/retry, terminal failures, refresh failures, row-bound redial and idempotent end preserve saved state and companion identity.
+PASS: browser reload retains offline records; retry syncs exact IDs; voice-event wiring saves and reviews; mobile layout fits. Full export handles a lower DB page cap. Voice upstream is simulated, not validated.
+PASS: unapproved accounts stay on login and never attempt history reads or queued uploads.
+PASS: visitors see a ready-to-use email login, no backend setup or API key fields; unconfigured deployment shows preparation status.
+PASS: production HTML runs under hashed CSP; visitors can start without configuring a backend.
+PASS: separate source-backed feedback, explicit source navigation, real visibility exposure and preserved historical attempt linkage.
+PASS T04/T05/T08: explicit candidate enrollment and extra recommendation cap, defer date, source hold without editing transcript.
+PASS T10/T11/T29: offline exclusion retained across reload, no premature server success, exact-ID retry and next-call context suppression (voice transport simulated).
+PASS: concurrent historical clients receive CAS conflicts and cannot resurrect excluded expressions.
+PASS T19/T22: late transcript invalidates old feedback, same-expression reanalysis keeps history and changed expression gets no inherited practice.
+PASS T12/T13: running server job survives reload, blocks duplicate generation and completes without forced navigation.
+PASS T16/T18: quota shows KST reset and prevents repeated requests; oversized analysis preserves full source and hides raw errors.
+PASS T03: no-user-speech record offers home without invented corrections or analysis request.
+PASS T15: explicit partial finalization persists a missing-audio warning through reload and analysis.
+PASS: long feedback fits 320/390/desktop, merged sources and historical library attribution remain intact.
+PASS T28: stored weekly result displays exact 168-hour period and generation time without including later calls.
+PASS T20: companion switch closes practice and scopes visible feedback; authenticated SQL excludes another account.
+PASS T21: v2 export includes source and learning history; interrupted learning batch is retryable, v1 remains accepted, older backup preserves latest state.
+PASS T14: pending finish reveals transcript and allows explicit home exit, keeps save state honest, blocks overlap, releases start and avoids forced navigation.
+PASS: production bundle runs post-call feedback under hashed CSP without JavaScript errors.
+PASS E01: real RTC boundary, one failed IndexedDB write, autonomous retry, offline reload and exact server acknowledgement preserve one connection receipt.
+PASS E02: held intent → separate explanation → proposal → explicit acceptance/dismissal survives reload, preserves originals and never reuses held content automatically.
+PASS E03: optional 1/3/7-day KST schedules, concealed delayed recall and three self-report choices remain separate from immediate practice and preserve the default cap.
+PASS E04: a service-prepared actual connection binds original user evidence; observation requires explicit self-review, leaves context/opportunity unknown and never labels success/mastery.
+PASS E05: exact saved 168-hour period and generation disclosure remain fixed through goal selection → preparation → actual connection → delayed recall.
+PASS Privacy: authenticated roles isolate accounts/companions, excluded sources revoke derivative evidence/plans, and approval guards both client and service RPCs.
+PASS: 6 enhancement acceptance scenarios; live voice and human quality gates remain external.
+PASS: automatic transcript reveal exposes received and late-final speech during held append/finish; failed feedback keeps the full transcript.
+PASS: reload restores exact server transcript rows and the generated/heard warning before optional time metadata; ended-call history opens its actual transcript directly.
+PASS: zero-turn transcript states that no speech is available and never invents a successful review.
+PASS: transcription failure preserves received speech and visible partial/save recovery without claiming completion.
+PASS: explicit received-only recovery updates partial status while preserving the missing-audio limitation.
+PASS: device-save failure still exposes received text with explicit unconfirmed storage and no false completed call.
+4 voice browser groups PASS: removed manual wait/time clutter and 390/320 enlarged-text layout; microphone and spoken wait/continue capture; hint/cancelled-output safety; final/delayed/duplicate commits on hangup. Provider behavior is fixture-only; manual engine races remain covered by voice-turn-controls.test.mjs.
+PASS: labelled, target-safe semantic cues; optional help; sticky assisted classification; pending, replay, stale scope and source guards.
+4 temporal-memory browser groups PASS: server clock/midnight/timezone with device skew; durable per-turn and session timestamps/reload; legacy-zone honesty; isolated new-call fallback and compact live layout without clock/memory clutter. Provider/DB are fixtures.
+PASS: real pending connection cues, two-part readiness, no artificial connect delay, and one greeting.
+PASS: immediate microphone/audio/control/avatar stop, short ended frame, automatic transcript reading and parallel late-transcript preservation.
+PASS: failed connection cleanup/retry, silent AudioContext fallback, and idempotent data-channel closure.
+PASS: transcript before save ACK; stable late ASR/save/feedback reading; 320/390/large text; full sourced feedback; source/back scroll; finish without learning actions; exclusion/account/companion protection; revisit, background, empty, retry and weekly race.
+9 save-completion browser cases PASS: measured ACK excludes cue/feedback; source opens before object/single-row ACK; slow storage keeps transcript and exit available; feedback readiness preserves scroll/footer and opens separately; transport failure and invalid session/status/time/multiple-row ACK remain incomplete. Fixture timings are not production averages.
+Transcript reading surface: stable rows, selection, late-event scroll anchor, source navigation and scope isolation passed.
+3 session-review browser regression groups PASS: stale/failed feedback hides old corrections without navigation; per-session retry ownership; stale source promise and queued navigation isolation. Real shipped HTML/CSS/modules; controlled local inputs.
+PASS: delayed loading/empty/retry states; optional guide has no mic side effects, ESC/focus, compact layout and account-scoped persistence; permission recovery; late microphone and voice responses after cancel cannot revive a call; immediate retry remains isolated.
+Review journal browser PASS: date/call groups, all expressions and uneven kinds, single-expression detail, source and back restoration, acknowledged bookmarks, saved tab, old-page/date navigation, 320px/large type, desktop, stale-account isolation; actual shipped HTML/CSS/module with synthetic inputs.
+
+
+[browser-latest-50-minute]
+PASS: slow provider settings do not block entry; user/approval checks run concurrently with a visible transition and no private reads before approval.
+PASS: official SDK OAuth uses matching PKCE proof, scrubs callback URLs/provider tokens, keeps login across reloads/tabs/refresh, links Kakao to the same user, and propagates logout. Providers are simulated.
+PASS: unapproved OAuth accounts cannot read history; unsolicited and cancelled callbacks do not exchange codes or leak provider errors.
+PASS: login deduplicates sends/verifications, persists cooldowns without codes, respects Retry-After, permits existing codes, never retries automatically, and retains account approval.
+PASS: call details preserve cached feedback and isolate delayed transcripts; separate feedback has readable contrast; weekly availability, result display and request deduplication follow eligible calls.
+PASS: character slides follow tab direction, retain real outgoing artwork, settle on the last rapid selection, and respect reduced motion.
+PASS: slow 40px touch, pause before release and initial thumb wobble change companions; vertical scroll stays native.
+PASS: mouse drag and real browser touch swipe change companions; short, vertical and boundary gestures preserve selection.
+PASS: swipes on description and blank page space work beyond the artwork, with full-width fades and unchanged artwork size.
+PASS: a swipe can start on the call button without activating it; normal button taps remain available.
+PASS: three speed options, native radio keyboard selection, cancel, deferred playback-safe update, acknowledged persistence, settings failure/retry and compact sheet.
+PASS: 50-minute deadline stops microphone, saves the final turn, and creates feedback without automatically restarting.
+PASS: direct contact calls, failed starts/retry, terminal failures, refresh failures, row-bound redial and idempotent end preserve saved state and companion identity.
+PASS: browser reload retains offline records; retry syncs exact IDs; voice-event wiring saves and reviews; mobile layout fits. Full export handles a lower DB page cap. Voice upstream is simulated, not validated.
+PASS: unapproved accounts stay on login and never attempt history reads or queued uploads.
+PASS: visitors see a ready-to-use email login, no backend setup or API key fields; unconfigured deployment shows preparation status.
+PASS: production HTML runs under hashed CSP; visitors can start without configuring a backend.
+
+
+[presence]
+
+> loop-english@0.1.0 test:presence
+> node test/ai-presence.mjs
+
+PASS: three shaders render distinctly; reduced motion stays still; real audio analysers resume, reconnect, and release contexts without stopping call tracks.
+PASS: mobile-scale GPU pixels use premultiplied alpha; all three characters and shared fallback/swipe posters have no detached export debris.
+PASS: all three idle characters gently breathe and drift without audio.
+PASS: a real generated audio track visibly modulates the approved artwork; speech state alone does not fake an audio signal.
+PASS: missing WebGL keeps the same-artwork fallback.
+
+
+[memory-eval]
+
+> loop-english@0.1.0 eval:memory
+> node scripts/evaluate-memory.mjs
+
+{
+  "mode": "synthetic_vectors_actual_sql",
+  "semantic_model_quality_measured": false,
+  "scope": "isolated local PostgreSQL fixtures; no production user data or API calls",
+  "indexed_fixtures": 19,
+  "synthetic_recall_at_12": 1,
+  "synthetic_target_rank": 1,
+  "passed": 10,
+  "total": 10,
+  "checks": [
+    {
+      "name": "old_paraphrase_absent_from_keyword_recent_baseline",
+      "passed": true
+    },
+    {
+      "name": "synthetic_paraphrase_recalled_at_12",
+      "passed": true
+    },
+    {
+      "name": "hybrid_preserves_companion_and_account_isolation",
+      "passed": true
+    },
+    {
+      "name": "exact_keyword_survives_without_embeddings",
+      "passed": true
+    },
+    {
+      "name": "different_embedding_model_not_reused",
+      "passed": true
+    },
+    {
+      "name": "excluded_session_removed_from_hits_and_profile",
+      "passed": true
+    },
+    {
+      "name": "policy_mutation_advances_revision",
+      "passed": true
+    },
+    {
+      "name": "explicit_session_restore_reenables_search",
+      "passed": true
+    },
+    {
+      "name": "manual_fact_survives_zero_eligible_hits",
+      "passed": true
+    },
+    {
+      "name": "forget_tombstone_prevents_old_fact_and_text_recall",
+      "passed": true
+    }
+  ]
+}
+
+
+[learning-eval]
+
+> loop-english@0.1.0 eval:learning
+> node --experimental-transform-types scripts/evaluate-learning-enhancements.mjs --synthetic
+
+(node:51443) ExperimentalWarning: Transform Types is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+{
+  "mode": "synthetic_phrase_observation",
+  "fixture_count": 14,
+  "passed": 14,
+  "failed": 0,
+  "prediction_count": 14,
+  "reviewed_count": 14,
+  "unreviewed_count": 0,
+  "lexical_presence_accuracy": 1,
+  "lexical_presence_precision": 1,
+  "lexical_presence_recall": 1,
+  "lexical_true_positives": 6,
+  "lexical_false_positives": 0,
+  "lexical_false_negatives": 0,
+  "mode_known_label_count": 0,
+  "mode_match_rate": null,
+  "opportunity_known_appropriate_denominator": 0,
+  "opportunity_unknown_count": 14,
+  "human_appropriate_usage_rate": null,
+  "human_quality_measured": false,
+  "learning_effect_measured": false,
+  "live_source_eligibility_rechecked": false,
+  "production_gate": "observational_only",
+  "participant_count": null,
+  "actual_user_study_completed": false
+}
+
+
+[build]
+
+> loop-english@0.1.0 build
+> node scripts/build-web.mjs
+
+Built public website: dist/index.html (148016 bytes; connection configured)

@@ -36,13 +36,18 @@ try {
    }
    throw Error('Unexpected RPC '+name);
   };
-  f.modeTo=value=>{f.mode=value;$('review-panel').dataset.mode=value;$('review-back').hidden=value==='hub';};
+  f.modeTo=(value,{backLabel='복습 목록'}={})=>{$('review-back-label').textContent=backLabel;f.mode=value;$('review-panel').dataset.mode=value;$('review-back').hidden=value==='hub';};
   f.controller=createReviewJournal({root:$('review-journal'),context:()=>({scope:f.scope,active:f.active,mode:f.mode,busy:false}),rpc:f.rpc,edge:async()=>{throw Error('No generation expected');},allRows:async()=>f.transcript||[{id:'event-0',session_id:ids[0],speaker:'user',text:'Give me a moment.'}],setMode:f.modeTo,openView:()=>{f.active=true;},notice:text=>f.notices.push(text)});
   $('review-back').onclick=()=>f.controller.back();await f.controller.show();
  });
  const root=page.locator('#review-journal');
  assert.equal(await root.locator('.journal-expression').count(),3);assert.match(await root.innerText(),/11월 10일/);assert.equal(await root.locator('details').count(),0);assert.equal(await root.locator('.journal-day>h2').count(),1);assert.equal(await root.locator('.journal-day>h2').innerText(),'11월 10일');
  await page.screenshot({path:'test-results/review-journal/01-date-list.png'});
+ assert.equal(await root.locator('.journal-expression').first().getByRole('button').count(),2,'one detail target and one separate bookmark');
+ await root.getByRole('tab',{name:'날짜별',exact:true}).focus();await page.keyboard.press('End');
+ await page.waitForFunction(()=>document.activeElement.id==='journal-tab-saved'&&document.querySelector('#journal-tab-saved').tabIndex===0);
+ assert.equal(await root.locator('[role=tab][tabindex="0"]').count(),1);
+ await page.keyboard.press('Home');await page.waitForFunction(()=>document.activeElement.id==='journal-tab-dates'&&document.querySelectorAll('.journal-expression').length===3);
  await root.locator('[data-expression-key]').nth(1).click();
  await root.locator('[data-note-expression="b"]').waitFor();
  assert.equal(await root.locator('[data-note-expression]').count(),1,'opening B shows only the selected expression');
@@ -54,7 +59,9 @@ try {
  assert.equal(await root.locator('[data-note-expression="b"] .journal-save').getAttribute('aria-pressed'),'true');
  await root.locator('[data-note-expression="b"]').getByRole('button',{name:'대화에서 보기',exact:true}).click();await root.locator('[data-source-highlight]').waitFor();
  assert.equal(await root.locator('[data-source-highlight]').innerText(),'나\n\nGive me a moment.');
- await root.getByRole('button',{name:'표현으로 돌아가기'}).click();assert.equal(await root.locator('[data-note-expression]').count(),1);
+ assert.equal(await page.locator('#review-back').innerText(),'표현 상세');
+ assert.equal(await root.getByRole('button',{name:/돌아가기|복습 목록/}).count(),0,'source has one return action with its real destination');
+ await page.getByRole('button',{name:'표현 상세',exact:true}).click();assert.equal(await root.locator('[data-note-expression]').count(),1);
  await page.waitForFunction(()=>document.activeElement.dataset.noteExpression==='b');
  await page.locator('#review-back').click();assert.equal(await root.locator('.journal-expression').count(),3);
  await page.waitForFunction(()=>document.activeElement.dataset.expressionKey==='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa|b');
@@ -102,7 +109,7 @@ try {
  await page.screenshot({path:'test-results/review-journal/08-single-expression-tall.png'});
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'test-results/review-journal/09-single-expression.png',fullPage:true});
  await root.getByRole('button',{name:'대화에서 보기',exact:true}).click();await root.locator('[data-source-highlight]').waitFor();
- await root.getByRole('button',{name:'표현으로 돌아가기'}).click();await root.locator('[data-note-expression="colloquial"]').waitFor();assert.equal(await root.locator('[data-note-expression]').count(),1);
+ await page.getByRole('button',{name:'표현 상세',exact:true}).click();await root.locator('[data-note-expression="colloquial"]').waitFor();assert.equal(await root.locator('[data-note-expression]').count(),1);
  await page.setViewportSize({width:320,height:740});await page.evaluate(()=>document.documentElement.style.fontSize='32px');assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  await root.locator('.journal-note-actions').scrollIntoViewIfNeeded();assert(await root.locator('.journal-note-actions').evaluate(el=>el.getBoundingClientRect().bottom<document.querySelector('.glass-dock').getBoundingClientRect().top));
  await page.screenshot({path:'test-results/review-journal/10-single-large-text.png',fullPage:true});

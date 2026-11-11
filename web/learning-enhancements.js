@@ -148,9 +148,7 @@ export function createLearningEnhancements(host) {
   }
   function renderWeekly(target, analysis) {
     if (!analysis?.id || !analysis.content?.learning_plan) return;
-    const scope = analysis.content.scope || {};
     const section = detail('다음 통화 목표'); section.dataset.weeklyAnalysisId = analysis.id;
-    section.append(text('p', `${stamp(scope.period_start)} ~ ${stamp(scope.period_end)} · 최근 7일`, 'help'), text('p', `생성 ${stamp(analysis.generated_at || analysis.created_at)}`, 'help'));
     section.append(text('p', '이번 주 대화를 바탕으로 제안한 목표예요. 다음 통화에서 해볼 것을 골라 보세요.', 'help'));
     const selected = data.weekly_goals.slice().sort((a, b) => String(b.selected_at).localeCompare(String(a.selected_at)))[0];
     for (const [kind, title] of [['keep', '계속 연습할 한 가지'], ['try', '다음 주 시도할 한 가지']]) {
@@ -177,7 +175,7 @@ export function createLearningEnhancements(host) {
     const state = status(''); state.dataset.practiceStatus = '';
     const intro = text('p', '같은 뜻을 영어로 말해보고, 어땠는지 선택해요.', 'help');
     const note = text('p', '소리 내어 말한 뒤, 얼마나 기억났는지 선택해 주세요.', 'help');
-    const finish = document.createElement('div'), actions = text('div', '', 'learning-actions');
+    const finish = document.createElement('div'), actions = text('div', '', 'learning-actions recall-ratings');
     const gradeButtons = [];
     let revealed = false, submitting = false;
     const available = () => handlers.current() && !handlers.saved() && !host.suppressed(host.itemOf(item.id)) && !pending(item);

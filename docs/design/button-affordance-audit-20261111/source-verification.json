@@ -1,0 +1,13 @@
+{
+  "observed_at_utc": "2026-11-11T12:56:12.873023+00:00",
+  "public_url": "https://chungchung234.github.io/English/",
+  "public_asset": "assets/app.af850d82cbd4.js",
+  "public_app_js_sha256": "af850d82cbd4a2416be2fbf88937c36f049122c4a63bf5eb110accc930a9435f",
+  "public_build_ids": [
+    "git:d998452baac429fbff5f4fdd7eac03a046402a96"
+  ],
+  "local_head": "d41b871e2811fc6196ba60b06cb5175eb1469e74",
+  "local_branch": "work",
+  "remote_main": "d41b871e2811fc6196ba60b06cb5175eb1469e74",
+  "authenticated_evidence": "Local current-source Chromium with synthetic auth, data, backend, microphone and WebRTC; no approved-account production calls or private learner data."
+}

@@ -353,7 +353,8 @@ try {
   transport.weekly = async () => ({ json: { analysis: (await query('select * from public.analyses where id=$1', [weeklyId])).rows[0] } });
   await refresh(page); await page.locator('[data-view="history"]').click();
   await page.locator('#weekly').click();
-  await page.waitForFunction(() => document.querySelector('#review-content h3')?.textContent === 'Alex · 최근 7일 분석');
+  await page.waitForFunction(() => document.querySelector('#review-content [data-analysis-kind=weekly]')&&document.querySelector('#review-context').textContent==='Alex와의 대화');
+  assert.equal(await page.locator('#notice').innerText(),'','success feedback from a previous screen clears on navigation');
   const expectedPeriod = await page.evaluate(({ start, end }) => [start, end].map(value => new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date(value))), { start: periodStart, end: periodEnd });
   for (const expected of expectedPeriod) assert((await page.locator('#review-content').innerText()).includes(expected));
   assert.match(await page.locator('#review-content').innerText(), /최근 7일/);

@@ -282,7 +282,7 @@ try{
  await openContact('mia');await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  const navTargets=await page.locator('.glass-dock button').evaluateAll(buttons=>buttons.map(b=>({width:b.getBoundingClientRect().width,height:b.getBoundingClientRect().height})));assert(navTargets.every(box=>box.width>=44&&box.height>=44));
  assert.doesNotMatch(await page.locator('#call-home').innerText(),/lorem|todo|placeholder/i,'home must not show placeholder copy');
- // Advance browser time: the call stays open at 19 minutes, then reaches the
+ // Advance browser time: the call stays open past 20 minutes and through 49 minutes, then reaches the
  // real duration deadline and follows the normal final-transcription/save path.
  await page.clock.install();
  await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});
@@ -296,16 +296,25 @@ try{
  await page.evaluate(()=>{const old=window.testPeers[0];old.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'stale',transcript:'Must not enter the new call.'})});window.testPeer.connectionState='disconnected';window.testPeer.onconnectionstatechange();});
  await page.clock.fastForward(2*60*1000);await page.evaluate(()=>{window.testPeer.connectionState='connected';window.testPeer.onconnectionstatechange();});
  await page.clock.fastForward(7*60*1000);
- assert.equal(timedSession.status,'active');assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'live');assert.equal(reviews,1);assert.equal(await page.locator('#call-remaining').isVisible(),true);
+ assert.equal(timedSession.status,'active');assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'live');assert.equal(reviews,1);assert.equal(await page.locator('#call-remaining').isVisible(),false);
+ await page.clock.fastForward(60*1000);
+ assert.equal(timedSession.status,'active','the previous 20-minute limit must not end the call');
+ assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'live');assert.equal(await page.locator('#call-remaining').isVisible(),false);
+ await page.clock.fastForward(29*60*1000);
+ assert.equal(timedSession.status,'active');assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'live');
+ assert.equal(await page.locator('#call-remaining').isVisible(),true,'only the final minute shows remaining time');
+ assert.match(await page.locator('#call-timer').textContent(),/^49:/);
+ await page.screenshot({path:'test-results/call-50-minute-warning.png',fullPage:true});
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.speech_started',item_id:'last-item'})}));
  await page.clock.fastForward(60*1000);
- assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'ended','microphone stops at the 20-minute deadline');
+ assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'ended','microphone stops at the 50-minute deadline');
  await page.clock.fastForward(2000);
  await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='대화와 학습 노트를 저장했어요');
  assert.equal(timedSession.status,'ended');assert.equal(reviews,2);assert.equal(saved.size,4,'deadline preserves final spoken turn');
- assert.match(await page.locator('#notice').textContent(),/20분/);
+ assert.match(await page.locator('#notice').textContent(),/50분/);
+ await page.screenshot({path:'test-results/call-50-minute-saved.png',fullPage:true});
  await page.clock.fastForward(60*1000);assert.equal(sessions.length,sessionCount,'deadline never starts another call automatically');
- console.log('PASS: 20-minute deadline stops microphone, saves the final turn, and creates feedback without automatically restarting.');
+ console.log('PASS: 50-minute deadline stops microphone, saves the final turn, and creates feedback without automatically restarting.');
  // Direct call, terminal failure, and a post-save refresh failure keep identity
  // and saved status correct. These are distinct from the transient reconnect.
  await openContact('juno');await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});

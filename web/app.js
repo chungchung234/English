@@ -88,7 +88,7 @@ function selectTranscript(session, current=null){
  transcriptReview.select(session,{name:companions[session.companion_id]?.name,current});
 }
 const NATURAL_CONVERSATION = 'Natural English conversation about everyday life';
-const CALL_DURATION = 20 * 60 * 1000;
+const CALL_DURATION = 50 * 60 * 1000;
 const memorySlots=[['name','이름'],['occupation','직업'],['location','사는 곳'],['goal','목표'],['interest','관심사'],['preference','선호']];
 let excludedMemorySessions=new Set();
 const companionName = () => companions[companionId].name;
@@ -340,7 +340,7 @@ function updateCallClock(current) {
   const elapsed=Math.min(CALL_DURATION,callElapsed(current)),remaining=Math.max(0,CALL_DURATION-elapsed);
   if($('call-timer'))$('call-timer').textContent=clockText(elapsed);
   if($('call-remaining')){$('call-remaining').textContent=clockText(remaining)+' 남음';$('call-remaining').hidden=current.startedAt===null||remaining>60000;}
-  if(current.startedAt!==null&&remaining<=0){current.durationReached=true;notice('20분이 되어 통화를 종료하고 저장합니다.');endCall().catch(e=>notice(e));}
+  if(current.startedAt!==null&&remaining<=0){current.durationReached=true;notice('50분이 되어 통화를 종료하고 저장합니다.');endCall().catch(e=>notice(e));}
 }
 
 function applyConversationContext(current, response) {

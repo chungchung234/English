@@ -17,6 +17,7 @@ export async function testTabUI(browser,base){
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/public-config.js',route=>route.fulfill({contentType:'text/javascript',body:'globalThis.LOOP_PUBLIC_CONFIG={url:"https://test-project.supabase.co",key:"sb_publishable_test"};'}));
  await page.route('https://test-project.supabase.co/**',async route=>{
+    if(new URL(route.request().url()).pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}});
   const url=new URL(route.request().url()),body=route.request().postDataJSON?.();let data=[];
   if(url.pathname==='/auth/v1/user')data={id:uid};
   else if(url.pathname==='/auth/v1/settings')data={external:{google:false,kakao:false}};

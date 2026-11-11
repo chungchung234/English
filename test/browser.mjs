@@ -32,6 +32,7 @@ try{
  const memoryQueries=[];const controlCalls=[],indexCalls=[];const memoryFacts={alex:[],mia:[],juno:[]},memoryExcluded={alex:[],mia:[],juno:[]};let indexRemaining=true,indexFailure=false,releaseSlowMemorySearch,slowMemorySearchStarted,slowMemorySearchDone;const slowMemorySearchWaiting=new Promise(resolve=>slowMemorySearchStarted=resolve);const slowMemorySearchFinished=new Promise(resolve=>slowMemorySearchDone=resolve);
  const companionMemory={alex:[{summary:'Alex memory fixture',practice:[{expression:'Could you repeat that?'}]}],mia:[{summary:'Mia memory fixture',practice:[]}],juno:[{summary:'Juno memory fixture',practice:[]}]};
  await page.route('https://test-project.supabase.co/**',async route=>{
+    if(new URL(route.request().url()).pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}});
   const url=new URL(route.request().url());const body=route.request().postDataJSON?.();let data=[];
   if(url.pathname==='/auth/v1/user')data={id:uid};
   else if(url.pathname==='/auth/v1/settings')data={external:{google:false,kakao:false}};

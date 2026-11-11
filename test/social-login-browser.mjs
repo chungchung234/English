@@ -13,6 +13,7 @@ async function fixture(browser,{approved=true,gates={},started={}}={}){
  await context.route('**/public-config.js',route=>route.fulfill({contentType:'text/javascript',body:`globalThis.LOOP_PUBLIC_CONFIG={url:"${endpoint}",key:"sb_publishable_fixture"};`}));
  await context.route('https://kauth.kakao.com/**',route=>route.fulfill({contentType:'text/html',body:'Kakao consent fixture'}));
  await context.route(endpoint+'/**',async route=>{
+    if(new URL(route.request().url()).pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}});
   const request=route.request(),url=new URL(request.url()),path=url.pathname;
   if(path==='/auth/v1/settings'){started.settings?.();await gates.settings;return route.fulfill({json:{external:{google:true,kakao:true}}});}
   if(path==='/auth/v1/authorize'){

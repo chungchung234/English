@@ -108,6 +108,7 @@ async function attachRoutes(page, html) {
   page.on('pageerror', error => transport.errors.push(error.message));
   await page.route('**/public-config.js', route => route.fulfill({ contentType: 'text/javascript', body: `globalThis.LOOP_PUBLIC_CONFIG=${JSON.stringify({ url: project, key: 'sb_publishable_local_fixture' })};` }));
   await page.route(project + '/**', async route => {
+    if(new URL(route.request().url()).pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}});
     const request = route.request(), url = new URL(request.url());
     let body = request.postData() ? request.postDataJSON() : undefined;
     transport.calls.push({ path: url.pathname, body });

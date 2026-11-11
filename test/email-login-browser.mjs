@@ -12,6 +12,7 @@ export async function testEmailLogin(browser, base) {
   const sendStarted=new Promise(resolve=>markSendStarted=resolve),verifyStarted=new Promise(resolve=>markVerifyStarted=resolve);
   await context.route('**/public-config.js',route=>route.fulfill({contentType:'text/javascript',body:'globalThis.LOOP_PUBLIC_CONFIG={url:"https://login-fixture.supabase.co",key:"sb_publishable_fixture"};'}));
   await context.route('https://login-fixture.supabase.co/**',async route=>{
+    if(new URL(route.request().url()).pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}});
     const path=new URL(route.request().url()).pathname;
     if(path==='/auth/v1/otp'){
       sendCount++;

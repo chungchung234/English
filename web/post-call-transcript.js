@@ -33,7 +33,8 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     const current = state.current;
     const session = { ...state.session, ...(current?.created_at ? { created_at: current.created_at } : {}), ...(current?.ended_at ? { ended_at: current.ended_at } : {}), ...(current?.time_zone ? { time_zone: current.time_zone } : {}) };
     const zone = sessionTimeZone(session).zone;
-    const timing = text('p', sessionTimeLabel(session), 'help'); timing.dataset.sessionTime = ''; host.append(timing);
+    const hasSessionTime = session.created_at && Object.hasOwn(session, 'time_zone');
+    const timing = text('p', hasSessionTime ? sessionTimeLabel(session) : state.metadataFailed ? '통화 시각과 시간대를 확인하지 못했어요.' : '통화 시각과 시간대를 확인하고 있어요.', 'help'); timing.dataset.sessionTime = ''; host.append(timing);
     const phase = current?.transcriptPhase || state.phase;
     const rows = ordered((current?.transcript || state.rows).values());
     const pending = rows.filter(row => row.storage !== 'server').length;
@@ -71,12 +72,23 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     }
     if (focused) host.querySelector(`[data-action="${focused}"]`)?.focus({ preventScroll: true });
   }
+  async function loadSessionMetadata(value, request) {
+    let session;
+    try {
+      const sessions = await allRows('sessions', `id=eq.${value.sessionId}`);
+      session = sessions.find(row => row.id === value.sessionId && row.companion_id === value.companionId);
+    } catch { /* Optional time metadata does not determine transcript readiness. */ }
+    if (!valid(value) || request !== version) return;
+    if (session) value.session = { ...value.session, ...session };
+    value.metadataFailed = !(value.session.created_at && Object.hasOwn(value.session, 'time_zone'));
+    render();
+  }
   async function load(value) {
     if (!valid(value)) return;
-    const request = ++version; value.loading = true; value.error = false; render();
+    const request = ++version; value.loading = true; value.error = false; value.metadataFailed = false; render();
+    if (!value.session.created_at || !Object.hasOwn(value.session, 'time_zone')) void loadSessionMetadata(value, request);
     const results = await Promise.allSettled([
-      allRows('transcript_events', `session_id=eq.${value.sessionId}&order=timestamp.asc,id.asc`), pendingRows(value.scope),
-      !value.session.created_at || !Object.hasOwn(value.session, 'time_zone') ? allRows('sessions', `id=eq.${value.sessionId}`) : Promise.resolve([])
+      allRows('transcript_events', `session_id=eq.${value.sessionId}&order=timestamp.asc,id.asc`), pendingRows(value.scope)
     ]);
     if (!valid(value) || request !== version) return;
     const rows = value.current?.transcript || value.rows;
@@ -87,11 +99,7 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     if (results[0].status === 'fulfilled') {
       for (const row of results[0].value.filter(row => row.session_id === value.sessionId)) rows.set(keyOf(row), { ...row, occurred_at: row.timestamp || row.occurred_at, storage: 'server' });
     }
-    if (results[2].status === 'fulfilled') {
-      const session = results[2].value.find(row => row.id === value.sessionId && row.companion_id === value.companionId);
-      if (session) value.session = { ...value.session, ...session };
-    }
-    value.error = results.slice(0, 2).some(result => result.status === 'rejected');
+    value.error = results.some(result => result.status === 'rejected');
     value.loading = false; render();
   }
   function select(session, { name, current = null } = {}) {

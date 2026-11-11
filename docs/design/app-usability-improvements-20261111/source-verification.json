@@ -7,7 +7,8 @@
     "git:d998452baac429fbff5f4fdd7eac03a046402a96"
   ],
   "initial_source_base": "d41b871e2811fc6196ba60b06cb5175eb1469e74",
-  "integrated_latest_base": "1eb405d4c10a003d6f725a76b027519bd3e0d6c5",
+  "integrated_latest_base": "1474b3707cf56ff9c98c5deea71ccbe1235af8b2",
   "source_unchanged_since_final_checks": false,
-  "authenticated_capture": "Actual local app source, synthetic auth/transcript/backend/microphone/WebRTC. Not a real learner account."
+  "authenticated_capture": "Actual local app source, synthetic auth/transcript/backend/microphone/WebRTC. Not a real learner account.",
+  "ui_implementation_commit": "26347cf80fd83077aca62f6968e85da979ece7d2"
 }

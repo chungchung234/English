@@ -160,7 +160,7 @@ async function main() {
       stage = `${profile.name}: published mobile home`;
       // A fresh browser process resets the offline WAV microphone capture for
       // each call; this avoids depending on Chromium's shared capture lifetime.
-      browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${process.env.SMOKE_AUDIO}`] });
+      browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true, args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${process.env.SMOKE_AUDIO}`] });
       const context = await browser.newContext({ permissions: ['microphone'], viewport: { width: 390, height: 844 } });
       await context.addInitScript(({ base, session }) => {
         localStorage.setItem('loop.auth:' + base, JSON.stringify({ ...session, expires_at: Math.floor(Date.now() / 1000) + session.expires_in }));

@@ -11,7 +11,7 @@ const project = 'https://end-transcript-test.supabase.co';
 const uid = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const sessions = [], saved = new Map(), finishes = [], partialFinishes = [], reviewRequests = [], errors = [], routeErrors = [];
 const defer = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
-let appendGate = null, finishGate = null, failReview = false;
+let appendGate = null, finishGate = null, sessionMetadataGate = null, failReview = false;
 const emptyEnhancements = { reviews: [], schedules: [], recalls: [], usage: [], weekly_goals: [], imports: [], personalized_item_ids: [], recommendation_reasons: {} };
 async function waitUntil(work, message, timeout = 15000) {
   const expires = Date.now() + timeout;
@@ -87,6 +87,16 @@ try {
         else {
           data = sessions.filter(session => !url.searchParams.get('companion_id') || session.companion_id === url.searchParams.get('companion_id').slice(3));
           if (url.searchParams.get('status') === 'eq.ended') data = data.filter(session => session.status === 'ended');
+          const id = url.searchParams.get('id');
+          if (id?.startsWith('eq.')) {
+            data = data.filter(session => session.id === id.slice(3));
+            const gate = sessionMetadataGate;
+            if (gate?.sessionId === id.slice(3)) { gate.started.resolve(); await gate.release.promise; }
+          } else if (sessionMetadataGate) {
+            // Exercise the partial session projection used by review selection:
+            // full optional time metadata must come from its independent lookup.
+            data = data.map(session => { if (session.id !== sessionMetadataGate.sessionId) return session; const { time_zone, ...partial } = session; return partial; });
+          }
         }
       } else if (url.pathname === '/rest/v1/transcript_events') {
         data = [...saved.values()].map(row => ({ ...row.event, session_id: row.sessionId, timestamp: row.event.occurred_at }));
@@ -149,11 +159,23 @@ try {
   await page.screenshot({ path: 'test-results/end-transcript-feedback-failed.png', fullPage: true });
   console.log('PASS: received and late-final speech is readable immediately during held append/finish; failed feedback keeps the full transcript.');
 
+  sessionMetadataGate = { sessionId: firstId, started: defer(), release: defer() };
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' });
   await page.locator('[data-view="review"]').click(); await transcript().waitFor({ state: 'visible' });
+  await milestone(sessionMetadataGate.started.promise, 'reload requests the held optional session metadata');
+  const savedIds = [...saved.values()].filter(row => row.sessionId === firstId).map(row => row.event.id).sort();
+  await page.waitForFunction(({ sessionId, ids }) => {
+    const host = document.querySelector('[data-post-call-transcript]');
+    const restored = [...(host?.querySelectorAll('[data-transcript-event-id][data-storage="server"]') || [])].map(row => row.dataset.transcriptEventId).sort();
+    return host?.dataset.sessionId === sessionId && JSON.stringify(restored) === JSON.stringify(ids);
+  }, { sessionId: firstId, ids: savedIds });
+  assert.match(await transcriptStatus().innerText(), /대화문 서버 저장 확인/, 'saved transcript is ready while optional session metadata remains held');
+  assert.match(await transcript().locator('[data-session-time]').innerText(), /확인하고 있어요/, 'pending metadata is not mislabeled as a legacy unstored time zone');
   assert.match(await transcript().innerText(), /중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요/, 'reload retains the generated-versus-heard transcript limitation');
   assert.match(await textRows().innerText(), /I would like to review what we said\./);
   assert.match(await textRows().innerText(), /This is my final sentence after hangup\./);
+  sessionMetadataGate.release.resolve(); sessionMetadataGate = null;
+  await page.waitForFunction(zone => document.querySelector('[data-post-call-transcript] [data-session-time]')?.textContent.includes(zone), sessions.find(session => session.id === firstId).time_zone);
   await page.screenshot({ path: 'test-results/end-transcript-reloaded.png', fullPage: true });
   await page.locator('[data-view="history"]').click();
   await page.locator(`.history-entry[data-session-id="${firstId}"] .history-open`).click();
@@ -161,7 +183,7 @@ try {
   assert(await historyTranscript.evaluate(node => node.open), 'opening ended-call details opens transcript without another disclosure click');
   await historyTranscript.getByText(/I would like to review what we said\./).waitFor();
   await page.locator('[data-close="call-detail-dialog"]').click();
-  console.log('PASS: reload restores server transcript in review and ended-call history opens its actual transcript directly.');
+  console.log('PASS: reload restores exact server transcript rows and the generated/heard warning before optional time metadata; ended-call history opens its actual transcript directly.');
 
   const emptyId = await start(); await page.locator('#end-call').click();
   await transcript().waitFor({ state: 'visible', timeout: 1500 });

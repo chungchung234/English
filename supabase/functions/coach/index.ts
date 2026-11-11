@@ -1,4 +1,5 @@
 import { weeklyLearningPlan } from './weekly.ts';
+import {requireBackground,drainPostCall,type PostCallTask} from './background.ts';
 import { HANDOFF_VERSION, HANDOFF_INSTRUCTIONS, handoffSchema, validateHandoff, handoffFailure } from './conversation-memory.ts';
 import { reconsiderContext, reconsiderSchema, validateReconsiderProposal, usageContext, observationalUsage, type ReviewContext, type UsageContext } from './enhancements.ts';
 import { POLICY_VERSION, reviewPolicy, usageEstimate, spendReservation } from './policy.ts';
@@ -250,6 +251,8 @@ async function reserve(env: Env, userId: string, kind: string, key: string, sess
   if (run.reserved) return run;
   if (run.state === 'completed') return run;
   if (run.reason === 'budget_exceeded') throw budgetError('BUDGET_EXCEEDED');
+  if (run.reason === 'retry_exhausted') throw new AppError(409,'ANALYSIS_RETRY_EXHAUSTED','같은 대화의 재처리를 멈췄어요. 기록이나 서비스 설정을 확인한 뒤 다시 처리해야 합니다.');
+  if (run.reason === 'retry_wait') throw new AppError(409,'ANALYSIS_RETRY_WAIT','재처리 대기 중이에요. 잠시 후 상태를 다시 확인해 주세요.',{retry_at:run.retry_at});
   throw new AppError(409, 'JOB_IN_PROGRESS', 'This request is already processing. Try again shortly.');
 }
 async function failRun(env: Env, run: Run, code: string) {
@@ -337,7 +340,7 @@ async function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session
   const payload = await response.json().catch(() => ({}));
   const accounting = usageEstimate(payload.usage, model);
   await rpc(env, 'record_model_spend', { p_job_id: run.job_id, p_lease_token: run.lease_token, p_usage: accounting.usage, p_estimated_usd: accounting.estimated_usd, p_outcome: !response.ok ? 'http_error' : payload.status === 'completed' ? 'generated' : 'incomplete' });
-  if (!response.ok) throw new AppError(502, 'ANALYSIS_UNAVAILABLE', 'Feedback could not be generated. Please retry.');
+  if (!response.ok) throw new AppError(502,response.status===429?'ANALYSIS_RATE_LIMITED':response.status>=500?'ANALYSIS_UNAVAILABLE':'ANALYSIS_CONFIGURATION','Feedback could not be generated. Please retry.',{retry_seconds:Math.max(1,Math.min(900,Math.ceil(Number(response.headers.get('retry-after'))||30)))});
   if (payload.status !== 'completed') throw new AppError(502, 'ANALYSIS_INCOMPLETE', 'Feedback was incomplete. Please retry.');
   const outputs = (payload.output || []).flatMap((item: { content?: { type: string; text?: string }[] }) => item.content || []);
   const textOutput = outputs.filter((item: { type: string }) => item.type === 'output_text').map((item: { text: string }) => item.text).join('');
@@ -349,7 +352,7 @@ function withoutWeeklyPlan(result: unknown) {
   const value = object(result), analysis = object(value.analysis), content = object(analysis.content);
   return { ...value, analysis: { ...analysis, content: { ...content, learning_plan: null, learning_plan_context: { status: 'unavailable', selection: 'user_required', future_calls_included: false } } } };
 }
-async function review(env: Env, userId: string, body: Record<string, unknown>, kind: 'session' | 'weekly') {
+async function review(env: Env, userId: string, body: Record<string, unknown>, kind: 'session' | 'weekly', background?:PostCallTask) {
   allowKeys(body, kind === 'session' ? ['sessionId'] : ['companionId']);
   let sessions: Session[], key: string, sessionId: string | null = null, companionId: CompanionId;
   const through = new Date(), since = new Date(through.getTime() - 7 * 86_400_000);
@@ -420,7 +423,7 @@ async function review(env: Env, userId: string, body: Record<string, unknown>, k
       } catch (error) { if (!(error instanceof AppError)) throw error; }
     }
     const content = { ...generated.content, ...learningPlan, scope: { companionId, chunk_count: chunks.length, session_count: sessions.length, event_count: events.length, user_event_count: events.filter(e => e.speaker === 'user').length, ...(kind === 'weekly' ? { period_start: since.toISOString(), period_end: through.toISOString() } : {}) }, based_on: events.map(e => ({ event_id: e.id, session_id: e.session_id, timestamp: e.timestamp })) };
-    const completed = await rpc(env, 'complete_analysis_run', { p_job_id: run.job_id, p_lease_token: run.lease_token, p_content: content, p_model: generated.model, p_source_event_ids: events.map(event => event.id) });
+    const completed = await rpc(env, 'complete_analysis_run', { p_job_id: run.job_id, p_lease_token: run.lease_token, p_content: {...content,...(background?{background_guard:{task_id:background.id,lease_token:background.lease_token,source_version:background.source_version}}:{})}, p_model: generated.model, p_source_event_ids: events.map(event => event.id) });
     if (kind === 'session') { try { await observeUsage(env, userId, { sessionId }); } catch { /* Observations are optional and never hide an already-saved review. */ } }
     return completed;
   } catch (error) { await failRun(env, run, error instanceof AppError ? error.code : 'ANALYSIS_FAILED'); throw error; }
@@ -599,9 +602,14 @@ export async function handler(req: Request): Promise<Response> {
     if (origin) cors = { ...cors, 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Max-Age': '600' };
     if (req.method === 'OPTIONS') { if (!origin) throw new AppError(403, 'ORIGIN_NOT_ALLOWED', 'An allowed origin is required.'); return new Response(null, { status: 204, headers: cors }); }
     const endpoint = new URL(req.url).pathname.replace(/\/$/, '').split('/').pop();
-    if (!['config', 'voice', 'review', 'weekly', 'memory', 'memory-prepare', 'checkpoint', 'memory-index', 'memory-manage', 'reconsider', 'usage-observe'].includes(endpoint || '')) throw new AppError(404, 'NOT_FOUND', 'This endpoint was not found.');
+    if (!['config', 'voice', 'review', 'weekly', 'memory', 'memory-prepare', 'background-work', 'checkpoint', 'memory-index', 'memory-manage', 'reconsider', 'usage-observe'].includes(endpoint || '')) throw new AppError(404, 'NOT_FOUND', 'This endpoint was not found.');
     if (req.method !== 'POST' && !(endpoint === 'config' && req.method === 'GET')) throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Use POST for this endpoint.');
-    const env = environment(), userId = await authenticate(req, env);
+    const env = environment();
+    if(endpoint==='background-work'){
+      requireBackground(req,env.serviceKey);allowKeys(await readBody(req),[]);
+      return json(await drainPostCall({rpc:(name,body)=>rpc(env,name,body),memory:task=>prepareConversationMemory(env,task.user_id,{sessionId:task.session_id,companionId:task.companion_id}),review:task=>review(env,task.user_id,{sessionId:task.session_id},'session',task)}),200,cors);
+    }
+    const userId = await authenticate(req, env);
     if (endpoint === 'config') return json({ models: { voice: env.voice, coach: env.coach, checkpoint: env.checkpoint, analysis: env.analysis, embedding: env.embedding, transcription: 'gpt-realtime-whisper' }, policy: {version: POLICY_VERSION,session:reviewPolicy('session',envValue),weekly:reviewPolicy('weekly',envValue),checkpoint:reviewPolicy('checkpoint',envValue),dailyTextReservationUsd:1}, companions: COMPANIONS }, 200, cors);
     const body = await readBody(req);
     let result: unknown;
@@ -624,7 +632,7 @@ export async function handler(req: Request): Promise<Response> {
     return json(result, 200, cors);
   } catch (error) {
     const safe = error instanceof AppError ? error : new AppError(500, 'INTERNAL_ERROR', 'The coach could not complete this request. Please retry.');
-    return json({ error: { code: safe.code, message: safe.message, ...(['BUDGET_EXCEEDED', 'COST_BUDGET_EXCEEDED'].includes(safe.code) && safe.metadata.retry_at ? { retry_at: safe.metadata.retry_at } : {}) } }, safe.status, cors);
+    return json({ error: { code: safe.code, message: safe.message, ...(['BUDGET_EXCEEDED', 'COST_BUDGET_EXCEEDED','ANALYSIS_RETRY_WAIT'].includes(safe.code) && safe.metadata.retry_at ? { retry_at: safe.metadata.retry_at } : {}) } }, safe.status, cors);
   }
 }
 // Supabase's worker imports this entrypoint, so do not depend on import.meta.main.

@@ -1,0 +1,28 @@
+name: Recover post-call analysis
+on:
+  schedule:
+    - cron: '3-58/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      max_requests:
+        description: Maximum tasks to inspect in this run
+        type: choice
+        options: ['1', '2', '4', '8']
+        default: '4'
+permissions:
+  contents: read
+concurrency:
+  group: post-call-worker
+  cancel-in-progress: false
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Recover bounded post-call tasks
+        run: python3 scripts/run-background-jobs.py
+        env:
+          SUPABASE_PROJECT_REF: domkmxmwmihcfadophfg
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          BACKGROUND_MAX_REQUESTS: ${{ inputs.max_requests || '4' }}

@@ -1,0 +1,19 @@
+- paragraph: Alex와 이어가기
+- heading "복습" [level=1]
+- button "주간 분석"
+- status
+- article:
+  - heading "지난 대화에서 남겨둔 표현" [level=3]
+  - text: 선택 가능한 다른 표현 내가 한 말 · 자동 전사
+  - paragraph: Please wait. I am still speaking.
+  - paragraph: Could you please wait until I finish speaking?
+  - paragraph: 말을 마칠 때까지 기다려 달라는 다른 표현이에요.
+  - button "대화와 학습 노트 보기"
+  - group:
+    - text: 근거·표현 관리 −
+    - group: 근거 발화 +
+    - button "이미 아는 표현이에요"
+    - button "그만 보기"
+    - group: 시간 두고 회상 · 선택 +
+- group: 아직 안 본 학습 노트 · 1회 +
+- group: 복습 보관함 +

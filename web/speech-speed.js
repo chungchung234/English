@@ -1,4 +1,4 @@
-export const SPEED = { min: 0.5, max: 1.5, step: 0.05, default: 1 };
+export const SPEED = { min: 0.5, max: 1.5, step: 0.05, default: 0.85 };
 export function validSpeed(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= SPEED.min && value <= SPEED.max && Math.abs(value * 20 - Math.round(value * 20)) < 1e-7;
 }
@@ -6,7 +6,7 @@ export const formatSpeed = value => value.toFixed(2).replace(/0$/, '') + '×';
 
 // Only the server acknowledgement changes the applied value. Output may still
 // be playing after response.done, so both generation and playback must be idle.
-export function createSpeechSpeed({ initial = 1, send, changed = () => {}, applied: onApplied = () => {}, failed = () => {}, timeoutMs = 8000 }) {
+export function createSpeechSpeed({ initial = SPEED.default, send, changed = () => {}, applied: onApplied = () => {}, failed = () => {}, timeoutMs = 8000 }) {
   let applied = initial, desired = initial, flight = null, available = false, busy = true, disposed = false;
   const sent = new Set();
   const state = () => ({ applied, desired, pending: Boolean(flight) || desired !== applied });

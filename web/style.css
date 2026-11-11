@@ -341,3 +341,5 @@ dialog::backdrop{background:rgba(8,23,68,.24)}
   body[data-call-state=live] .live-call:has(#hold-call[aria-pressed=true]){height:calc(100svh - 105px - env(safe-area-inset-bottom));min-height:0;overflow-y:auto;padding-bottom:8px;overscroll-behavior:contain}
   body[data-call-state=live] .live-call:has(#hold-call[aria-pressed=true])>*{flex-shrink:0}
 }
+
+.speed-presets{display:flex;gap:10px;justify-content:center;margin:18px 0 4px}.speed-presets button{flex:1;font-size:14px;white-space:nowrap}

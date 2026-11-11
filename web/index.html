@@ -61,7 +61,7 @@
 <section data-panel="call" id="call-panel" class="call-panel" hidden>
 <div id="live-call" class="live-call" hidden>
 <div class="call-presence"><canvas id="live-avatar" class="ai-presence ai-presence-live" data-ai-profile="current" role="img" aria-label="AI 통화 상대"></canvas><h1 id="live-name">Alex</h1><p id="call-status" role="status" aria-live="polite">연결 준비 중</p><p id="call-timer" class="call-timer" role="timer" aria-live="off">00:00</p><p id="call-remaining" class="call-remaining" hidden></p><p id="save-status" class="save-status" role="status" aria-live="polite">연결 확인 중</p></div>
-<div class="live-actions"><button id="mute-call" class="live-control" aria-label="음소거" aria-pressed="false"><span class="control-disc"><img src="assets/microphone.svg" alt=""></span><span>음소거</span></button><button id="speed-call" class="live-control" aria-label="말하기 속도 1.0배" aria-haspopup="dialog" aria-controls="speed-dialog" disabled><span id="speed-current" class="control-disc">1.0×</span><span>속도</span></button><button id="hint-call" data-cue="Suggest one short English sentence I could say next in this conversation, then let me speak." class="live-control" aria-label="힌트" disabled><span class="control-disc"><span class="hint-glyph" aria-hidden="true"></span></span><span>힌트</span></button></div>
+<div class="live-actions"><button id="mute-call" class="live-control" aria-label="음소거" aria-pressed="false"><span class="control-disc"><img src="assets/microphone.svg" alt=""></span><span>음소거</span></button><button id="speed-call" class="live-control" aria-label="말하기 속도 0.85배" aria-haspopup="dialog" aria-controls="speed-dialog" disabled><span id="speed-current" class="control-disc">0.85×</span><span>속도</span></button><button id="hint-call" data-cue="Suggest one short English sentence I could say next in this conversation, then let me speak." class="live-control" aria-label="힌트" disabled><span class="control-disc"><span class="hint-glyph" aria-hidden="true"></span></span><span>힌트</span></button></div>
 <p id="speed-pending" class="speed-pending" role="status" aria-live="polite" hidden></p>
 <div class="call-floor-controls"><button id="hold-call" class="text-button" aria-pressed="false" aria-describedby="hold-status" disabled>생각 중</button><p id="hold-status" role="status" aria-live="polite" hidden></p></div>
 <details class="transcript-details"><summary>대화문 보기 <span id="turn-count">0개 발화</span></summary><div class="transcript-scroll"><ol id="transcript" aria-live="polite"></ol><p id="empty-transcript" class="empty-state">대화를 기다리고 있어요.</p></div></details>
@@ -94,11 +94,12 @@
 <div class="dialog-heading"><h2 id="speed-title">말하기 속도</h2><button data-close="speed-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div>
 <p id="speed-note" class="dialog-note">AI 음성에만 적용돼요</p>
 <form id="speed-form">
-<output id="speed-value" for="speed-range" class="speed-value">1.0×</output>
+<output id="speed-value" for="speed-range" class="speed-value">0.85×</output>
 <label class="sr-only" for="speed-range">말하기 속도</label>
-<div class="speed-slider"><progress id="speed-progress" max="1" value="0.5" aria-hidden="true"></progress><input id="speed-range" type="range" min="0.5" max="1.5" step="0.05" value="1" aria-valuetext="1.0배" aria-describedby="speed-help"></div>
+<div class="speed-slider"><progress id="speed-progress" max="1" value="0.35" aria-hidden="true"></progress><input id="speed-range" type="range" min="0.5" max="1.5" step="0.05" value="0.85" aria-valuetext="0.85배" aria-describedby="speed-help"></div>
 <div class="speed-scale" aria-hidden="true"><span>0.5×</span><span>1.0×</span><span>1.5×</span></div>
-<button id="speed-reset" type="button" class="text-button">기본 속도로</button>
+<div class="speed-presets" role="group" aria-label="속도 빠른 선택"><button type="button" class="glass-button" data-speed-preset="0.7">느리게 · 0.7×</button><button type="button" class="glass-button" data-speed-preset="1">빠르게 · 1.0×</button></div>
+<button id="speed-reset" type="button" class="text-button">기본 · 0.85×</button>
 <p id="speed-help">다음 답변부터 적용</p>
 <button id="speed-apply" type="submit" class="primary-button">적용</button>
 </form></dialog>

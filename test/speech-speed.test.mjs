@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createSpeechSpeed} from '../web/speech-speed.js';
 function harness(options={}) {
   const sent=[],applied=[],errors=[];
-  const control=createSpeechSpeed({send:event=>sent.push(event),applied:value=>applied.push(value),failed:message=>errors.push(message),...options});
+  const control=createSpeechSpeed({send:event=>sent.push(event),applied:value=>applied.push(value),failed:message=>errors.push(message),initial:1,...options});
   const ack=value=>control.event({type:'session.updated',session:{audio:{output:{speed:value}}}});
   return {control,sent,applied,errors,ack};
 }

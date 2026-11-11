@@ -235,7 +235,7 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
   };
   try {
     for (const speechSpeed of [undefined, .5, .85, 1.5]) {
-      expectedSpeed = speechSpeed ?? 1;
+      expectedSpeed = speechSpeed ?? .85;
       const result = await handler(request('voice', { sessionId, sdp, ...(speechSpeed === undefined ? {} : { speechSpeed }) }));
       assert.equal(result.status, 200); assert.deepEqual(await result.json(), { sdp });
     }

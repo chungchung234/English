@@ -228,7 +228,7 @@ try{
  const hintMessage=await page.evaluate(()=>window.testMessages.at(-1));assert.equal(hintMessage.type,'response.create');assert.match(hintMessage.response.instructions,/sentence/);
  assert(hintMessage.response.instructions.startsWith(effectiveInstructions+'\n'),'hint preserves effective language, persona and memory boundaries');
  await testSpeechSpeed(page);
- assert.equal(voiceSpeeds[0],1,'first call starts at normal speed');
+ assert.equal(voiceSpeeds[0],.85,'first call starts at the default 0.85 speed');
  await assertVisibleImagesLoaded(page);await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/mobile-call.png',fullPage:true});
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'item1',content_index:0,transcript:'I am thinking of visiting a friend.'})}));
  await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.waitForFunction(()=>document.querySelector('#save-status').textContent==='클라우드 저장 확인됨');assert.equal(saved.size,2);

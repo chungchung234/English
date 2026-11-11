@@ -27,7 +27,7 @@ export function requireCompanionId(value: unknown = 'alex'): CompanionId {
   return value as CompanionId;
 }
 export function companionProfile(id: CompanionId) { return COMPANIONS.find(companion => companion.id === id)!; }
-export function requireSpeechSpeed(value: unknown = 1): number {
+export function requireSpeechSpeed(value: unknown = 0.85): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0.5 || value > 1.5 || Math.abs(value * 20 - Math.round(value * 20)) > 1e-7) throw new AppError(400, 'INVALID_SPEECH_SPEED', 'Choose a speech speed from 0.5 to 1.5 in steps of 0.05.');
   return value;
 }

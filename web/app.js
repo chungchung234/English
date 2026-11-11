@@ -1,6 +1,6 @@
 import { createLearningReview } from '../src/learning-review.mjs';
 import { createAIPresence } from './ai-presence.js';
-import { createSpeechSpeed, validSpeed, formatSpeed } from './speech-speed.js';
+import { createSpeechSpeed, validSpeed, formatSpeed, SPEED } from './speech-speed.js';
 import { createPostCallTranscript } from './post-call-transcript.js';
 import { createVoiceTurnControls } from './voice-turn-controls.js';
 import { createOutbox, flushOutbox } from '../src/outbox.js';
@@ -233,7 +233,7 @@ function renderFloor(current) {
   if(state?.held&&!current.ending){presence.setState('listening');$('call-status').textContent=state.pending?'응답 제어 확인 중':state.phase==='error'?'응답 제어 확인 필요':'생각할 시간 · AI가 기다려요';}
 }
 function savedSpeechSpeed() {
-  try { const value=Number(localStorage.getItem('loop.speech-speed:'+scope));return validSpeed(value)?value:1; } catch { return 1; }
+  try { const value=Number(localStorage.getItem('loop.speech-speed:'+scope));return validSpeed(value)?value:SPEED.default; } catch { return SPEED.default; }
 }
 function renderSpeechSpeed(state) {
   $('speed-current').textContent=formatSpeed(state.applied);
@@ -918,7 +918,8 @@ document.querySelectorAll('[data-link-provider]').forEach(button=>button.onclick
 $('start-call').onclick=protect(startCall);$('end-call').onclick=protect(endCall);
 $('speed-call').onclick=()=>{if(!call||call.ending)return;$('speed-range').value=String(call.speed.state.desired);renderSpeedDraft();openDialog('speed-dialog');};
 $('speed-range').oninput=renderSpeedDraft;
-$('speed-reset').onclick=()=>{$('speed-range').value='1';renderSpeedDraft();};
+document.querySelectorAll('[data-speed-preset]').forEach(button=>{button.onclick=()=>{$('speed-range').value=button.dataset.speedPreset;renderSpeedDraft();};});
+$('speed-reset').onclick=()=>{$('speed-range').value=String(SPEED.default);renderSpeedDraft();};
 $('speed-form').onsubmit=event=>{event.preventDefault();if(!call||call.ending||$('speed-apply').disabled)return;call.speed.request(Number($('speed-range').value));closeDialog('speed-dialog');};
 $('refresh-history').onclick=protect(async()=>{if(memoryBusy())return;await sync();await loadHistory();await loadMemory();});
 $('weekly').onclick=protect(async()=>{

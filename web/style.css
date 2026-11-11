@@ -337,9 +337,13 @@ dialog::backdrop{background:rgba(8,23,68,.24)}
 #hold-call{min-height:44px;padding:8px 16px;color:inherit;font-size:14px}
 #hold-call[aria-pressed=true]{text-decoration:underline;text-underline-offset:4px}
 #hold-status{margin:0 auto 8px;max-width:32ch;font-size:12px;line-height:1.55;color:inherit;opacity:.82;overflow-wrap:anywhere}
+.call-local-time,.call-memory-context{display:block;max-width:100%;margin:4px 0 0;font-size:11px;line-height:1.45;color:#c4d1e5;overflow-wrap:anywhere}
+.call-memory-context{max-width:36ch}
+.transcript-record-time{display:block;margin:0 0 5px;color:var(--secondary);font-size:11px;line-height:1.5;overflow-wrap:anywhere}
+#transcript .transcript-record-time{color:#c4d1e5}
 @media(max-height:700px){
-  body[data-call-state=live] .live-call:has(#hold-call[aria-pressed=true]){height:calc(100svh - 105px - env(safe-area-inset-bottom));min-height:0;overflow-y:auto;padding-bottom:8px;overscroll-behavior:contain}
-  body[data-call-state=live] .live-call:has(#hold-call[aria-pressed=true])>*{flex-shrink:0}
+  body[data-call-state=live] .live-call{height:calc(100svh - 105px - env(safe-area-inset-bottom));min-height:0;overflow-y:auto;padding-bottom:8px;overscroll-behavior:contain}
+  body[data-call-state=live] .live-call>*{flex-shrink:0}
 }
 
 .speed-presets{display:flex;gap:10px;justify-content:center;margin:18px 0 4px}#speed-dialog .speed-presets button{flex:1;font-size:14px;white-space:nowrap;background:#263f61;color:#edf3ff;border:1px solid #6e84a3;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none}

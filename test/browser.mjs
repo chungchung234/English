@@ -208,10 +208,12 @@ try{
  await page.setViewportSize({width:320,height:568});assert(await page.locator('#end-call').evaluate(button=>{const box=button.getBoundingClientRect();return box.top>=0&&box.bottom<=innerHeight;}),'hangup must stay reachable on compact phones');
  await page.evaluate(()=>{window.scaledText=[...document.querySelectorAll('#live-call h1,#live-call p,#live-call button,#live-call summary,#live-call summary span')].map(element=>({element,original:element.style.fontSize,size:parseFloat(getComputedStyle(element).fontSize)}));window.scaledText.forEach(({element,size})=>element.style.fontSize=`${size*1.25}px`);});
  assert(await page.locator('.transcript-details').evaluate(details=>details.getBoundingClientRect().top>=document.querySelector('.live-actions').getBoundingClientRect().bottom),'larger text must not place the transcript over call controls');
- await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));
+ await page.locator('#live-call').hover({position:{x:12,y:100}});
+ await page.mouse.wheel(0,1200);
+ await page.waitForFunction(()=>{const panel=document.querySelector('#live-call');return panel.scrollTop>=panel.scrollHeight-panel.clientHeight-1;});
  assert(await page.locator('.transcript-details').evaluate(details=>details.getBoundingClientRect().bottom<=document.querySelector('#end-call').getBoundingClientRect().top-8),'scrolling enlarged text must expose the transcript above the fixed hangup');
  await page.screenshot({path:'test-results/mobile-call-compact-large-text.png'});
- await page.evaluate(()=>{window.scaledText.forEach(({element,original})=>element.style.fontSize=original);window.scrollTo(0,0);});await page.setViewportSize({width:390,height:844});
+ await page.evaluate(()=>{window.scaledText.forEach(({element,original})=>element.style.fontSize=original);document.querySelector('#live-call').scrollTo(0,0);window.scrollTo(0,0);});await page.setViewportSize({width:390,height:844});
 
  await page.waitForFunction(()=>document.querySelector('#live-avatar').dataset.profile==='mia');
  for(const [type,state] of [['response.created','thinking'],['output_audio_buffer.started','speaking'],['output_audio_buffer.stopped','listening']]){

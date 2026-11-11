@@ -1,3 +1,5 @@
+import { recordTimeLabel, sessionTimeLabel, sessionTimeZone } from './conversation-time.js';
+
 const text = (tag, value, className) => {
   const node = document.createElement(tag); node.textContent = value || '';
   if (className) node.className = className;
@@ -29,6 +31,9 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     host.replaceChildren(); host.dataset.sessionId = state.sessionId;
     host.append(text('h3', `${state.name}와 나눈 대화문`));
     const current = state.current;
+    const session = { ...state.session, ...(current?.created_at ? { created_at: current.created_at } : {}), ...(current?.ended_at ? { ended_at: current.ended_at } : {}), ...(current?.time_zone ? { time_zone: current.time_zone } : {}) };
+    const zone = sessionTimeZone(session).zone;
+    const timing = text('p', sessionTimeLabel(session), 'help'); timing.dataset.sessionTime = ''; host.append(timing);
     const phase = current?.transcriptPhase || state.phase;
     const rows = ordered((current?.transcript || state.rows).values());
     const pending = rows.filter(row => row.storage !== 'server').length;
@@ -41,7 +46,10 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
       : '서버에서 확인된 발화가 없어요. 수신되지 않은 음성은 기록에 포함되지 않아요.';
     if (phase === 'saved' && (current?.recordIncomplete || state.recordIncomplete)) message = '수신된 기록으로 마무리한 통화예요. 누락된 음성은 포함되지 않아요.';
     const status = text('p', message, 'help'); status.dataset.transcriptStatus = ''; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); host.append(status);
-    if (rows.length) host.append(text('p', '자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.', 'help'));
+    if (rows.length) {
+      host.append(text('p', '자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.', 'help'));
+      host.append(text('p', '기록 시각은 발화를 수신한 때이며 실제 말하기 시작 시각과 다를 수 있어요.', 'help'));
+    }
     if (current?.wrapupCanLeave && phase === 'finalizing') {
       const home = text('button', '홈에서 기다리기', 'text-button'); home.id = 'wrapup-home'; home.type = 'button'; home.dataset.action = 'wrapup-home'; home.onclick = current.onWrapupHome; host.append(home);
     }
@@ -50,6 +58,7 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     const events = document.createElement('div'); events.dataset.transcriptEvents = '';
     for (const row of rows) {
       const block = document.createElement('div'); block.dataset.transcriptEventId = row.id; block.dataset.storage = row.storage || 'received';
+      block.append(text('small', recordTimeLabel(row.occurred_at || row.timestamp, zone), 'transcript-record-time'));
       block.append(text('pre', `${row.speaker === 'user' ? '나' : state.name}: ${row.text}`));
       if (row.storage !== 'server') block.append(text('p', row.storage === 'device' ? '이 기기 보관 확인 · 서버 전송 대기' : row.storage === 'failed' ? '기기 보관과 서버 저장을 확인하지 못했어요.' : '수신한 발화 · 기기 보관 확인 중', 'help'));
       events.append(block);
@@ -66,7 +75,8 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     if (!valid(value)) return;
     const request = ++version; value.loading = true; value.error = false; render();
     const results = await Promise.allSettled([
-      allRows('transcript_events', `session_id=eq.${value.sessionId}&order=timestamp.asc,id.asc`), pendingRows(value.scope)
+      allRows('transcript_events', `session_id=eq.${value.sessionId}&order=timestamp.asc,id.asc`), pendingRows(value.scope),
+      !value.session.created_at || !Object.hasOwn(value.session, 'time_zone') ? allRows('sessions', `id=eq.${value.sessionId}`) : Promise.resolve([])
     ]);
     if (!valid(value) || request !== version) return;
     const rows = value.current?.transcript || value.rows;
@@ -77,7 +87,11 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     if (results[0].status === 'fulfilled') {
       for (const row of results[0].value.filter(row => row.session_id === value.sessionId)) rows.set(keyOf(row), { ...row, occurred_at: row.timestamp || row.occurred_at, storage: 'server' });
     }
-    value.error = results.some(result => result.status === 'rejected');
+    if (results[2].status === 'fulfilled') {
+      const session = results[2].value.find(row => row.id === value.sessionId && row.companion_id === value.companionId);
+      if (session) value.session = { ...value.session, ...session };
+    }
+    value.error = results.slice(0, 2).some(result => result.status === 'rejected');
     value.loading = false; render();
   }
   function select(session, { name, current = null } = {}) {
@@ -85,6 +99,7 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     if (!session || !owner.scope || session.companion_id !== owner.companionId) { clear(); return; }
     if (state?.scope === owner.scope && state.sessionId === session.id && state.companionId === session.companion_id) {
       if (current) state.current = current;
+      state.session = { ...state.session, ...Object.fromEntries(Object.entries(session).filter(([, value]) => value !== undefined)) };
       if (session.record_incomplete !== undefined) state.recordIncomplete = session.record_incomplete;
       if (state.current?.transcriptPhase !== 'finalizing') {
         state.phase = session.status === 'ended' ? 'saved' : 'partial';
@@ -94,7 +109,7 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
       render(); return;
     }
     version++;
-    state = { scope: owner.scope, sessionId: session.id, companionId: session.companion_id, name: name || session.companion_id, current, rows: new Map(), phase: session.status === 'ended' ? 'saved' : 'partial', recordIncomplete:session.record_incomplete, loading: !current, error: false };
+    state = { scope: owner.scope, sessionId: session.id, companionId: session.companion_id, session: { ...session }, name: name || session.companion_id, current, rows: new Map(), phase: session.status === 'ended' ? 'saved' : 'partial', recordIncomplete:session.record_incomplete, loading: !current, error: false };
     document.getElementById('post-call-transcript')?.remove(); render();
     if (!current) void load(state);
   }

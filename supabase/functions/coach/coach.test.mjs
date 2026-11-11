@@ -42,6 +42,13 @@ test('transcript fingerprint ignores ordering and changes with restored or edite
   assert.notEqual(await transcriptFingerprint([event]), await transcriptFingerprint([event, second]));
   assert.notEqual(await transcriptFingerprint([event]), await transcriptFingerprint([{ ...event, text: 'Changed evidence.' }]));
 });
+test('review meanings preserve evidence validation and accept historical notes without generated translations',()=>{
+ const old=content();assert.equal(validateAnalysis(old,[event],'session'),old);assert(!analysisSchema('session',false).properties.practice.items.required.includes('meaning'),'rolling checkpoints do not request extra review translations');
+ const next=content();next.corrections[0].meaning='나는 갔어';next.practice[0].meaning='어제 시장에 갔어요.';next.practice[0].reason='어제 한 일을 말할 때 써요.';
+ assert.equal(validateAnalysis(next,[event],'session'),next);
+ next.corrections[0].meaning=42;assert.throws(()=>validateAnalysis(next,[event],'session'));
+ const fabricated=content();fabricated.practice[0].meaning='뜻';fabricated.practice[0].evidence_ids=[sessionId];assert.throws(()=>validateAnalysis(fabricated,[event],'session'));
+});
 test('preflight rejects untrusted origins without reflecting them', async () => {
   const result = await handler(new Request('https://project.supabase.co/functions/v1/coach/voice', { method: 'OPTIONS', headers: { Origin: 'https://example.com.evil.test' } }));
   assert.equal(result.status, 403); assert.equal(result.headers.get('access-control-allow-origin'), null);

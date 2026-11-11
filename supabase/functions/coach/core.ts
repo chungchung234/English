@@ -102,6 +102,10 @@ export function validateAnalysis(value: unknown, events: TranscriptEvent[], kind
       const item = citation(entry, sources);
       if (key === 'strengths' && !text(item.text)) return failEvidence();
       if (key === 'practice' && !text(item.expression)) return failEvidence();
+      // Meaning and usage were added for review browsing; older stored notes
+      // remain readable without fabricating translations on every page visit.
+      if (item.meaning !== undefined && !text(item.meaning, 500)) return failEvidence();
+      if (key === 'practice' && item.reason !== undefined && !text(item.reason, 1000)) return failEvidence();
       if (key === 'corrections') {
         if (!text(item.original) || !text(item.improved) || !text(item.reason)) return failEvidence();
         // Older saved reviews had no category; never promote those to mistakes.
@@ -142,12 +146,13 @@ export async function transcriptFingerprint(events: TranscriptEvent[]): Promise<
 const evidence = { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 12 };
 const string = { type: 'string' };
 const itemSchema = (properties: Record<string, unknown>) => ({ type: 'object', properties: { ...properties, evidence_ids: evidence }, required: [...Object.keys(properties), 'evidence_ids'], additionalProperties: false });
-export function analysisSchema(kind: 'session' | 'weekly') {
+export function analysisSchema(kind: 'session' | 'weekly', withMeanings = true) {
+  const meaning = withMeanings ? { meaning: { type: 'string', maxLength: 500 } } : {};
   const properties: Record<string, unknown> = {
     summary: string,
     strengths: { type: 'array', maxItems: 6, items: itemSchema({ text: string }) },
-    corrections: { type: 'array', maxItems: 8, items: itemSchema({ original: string, improved: string, reason: string, category: { type: 'string', enum: ['error', 'alternative'] } }) },
-    practice: { type: 'array', maxItems: 8, items: itemSchema({ expression: string }) },
+    corrections: { type: 'array', maxItems: 8, items: itemSchema({ original: string, improved: string, ...meaning, reason: string, category: { type: 'string', enum: ['error', 'alternative'] } }) },
+    practice: { type: 'array', maxItems: 8, items: itemSchema({ expression: string, ...meaning, ...(withMeanings ? { reason: { type: 'string', maxLength: 1000 } } : {}) }) },
     next_scenario: string,
     memory_facts: { type: 'array', maxItems: 6, items: itemSchema({ key: { type: 'string', enum: ['name', 'occupation', 'location', 'goal', 'interest', 'preference'] }, value: { type: 'string', maxLength: 240 }, quote: { type: 'string', maxLength: 500 } }) },
   };

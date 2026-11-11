@@ -70,7 +70,7 @@ rpcMetadata = (await db.query(`select p.proname as name, p.proretset as set,
   from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public'`)).rows;
 
 async function tableRequest(table, url, request, user = uid) {
-  assert(['sessions', 'analyses', 'transcript_events', 'memory_state', 'memory_fact_overrides', 'memory_session_exclusions'].includes(table) || /^learning_[a-z_]+$/.test(table), `Known PostgREST table ${table}`);
+  assert(['sessions', 'analyses', 'transcript_events', 'review_bookmarks', 'memory_state', 'memory_fact_overrides', 'memory_session_exclusions'].includes(table) || /^learning_[a-z_]+$/.test(table), `Known PostgREST table ${table}`);
   return asUser(async () => {
     if (request.method() === 'POST') {
       const body = request.postDataJSON(), keys = Object.keys(body);
@@ -351,7 +351,7 @@ try {
   const weeklyContent = { summary: '시간을 둔 회상과 확인된 발화를 돌아보는 로컬 주간 분석입니다.', scope: { companionId: 'alex', period_start: periodStart, period_end: periodEnd }, learning_plan: { keep: { goal: '다음 대화에서 상대의 말을 천천히 다시 요청하기', item_id: recallItem.id }, try: { goal: '새 상황에서 정중하게 다시 요청하기', item_id: recallItem.id } } };
   await query("insert into public.analyses(id,user_id,kind,content,model,source_event_ids) values($1,$2,'weekly',$3::jsonb,'explicit-local-weekly-fixture',$4::uuid[])", [weeklyId, uid, JSON.stringify(weeklyContent), [recallSource.eventId]]);
   transport.weekly = async () => ({ json: { analysis: (await query('select * from public.analyses where id=$1', [weeklyId])).rows[0] } });
-  await refresh(page); await page.locator('[data-view="review"]').click();
+  await refresh(page); await page.locator('[data-view="history"]').click();
   await page.locator('#weekly').click();
   await page.waitForFunction(() => document.querySelector('#review-content h3')?.textContent === 'Alex · 최근 7일 분석');
   const expectedPeriod = await page.evaluate(({ start, end }) => [start, end].map(value => new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date(value))), { start: periodStart, end: periodEnd });
@@ -443,7 +443,9 @@ try {
   const privateWeekly = await serviceRpc('learning_weekly_context', { p_user_id: uid, p_companion_id: 'alex', p_start: periodStart, p_end: periodEnd });
   assert(!privateWeekly.items.some(row => row.id === recallItem.id)); assert(!privateWeekly.usage.some(row => row.id === observed.id));
   await refresh(page); await page.locator('[data-view="review"]').click();
-  assert(!await page.locator('body').innerText().then(value => value.includes('PRIVATE_OTHER_ACCOUNT_MARKER') || value.includes('Mia only expression.')));
+  assert(!await page.locator('body').innerText().then(value => value.includes('PRIVATE_OTHER_ACCOUNT_MARKER')),'all-companion review still excludes every other account');
+  await page.locator('#review-journal .journal-call').first().waitFor();
+  assert.match(await page.locator('#review-journal').innerText(),/Mia only expression\./,'review intentionally includes the same learner’s other companions; voice-memory isolation remains checked above');
   await query("delete from loop_private.approved_emails where email='owner@example.com'");
   await assert.rejects(rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' }), /not approved/i);
   await assert.rejects(serviceRpc('learning_weekly_context', { p_user_id: uid, p_companion_id: 'alex', p_start: periodStart, p_end: periodEnd }), /not approved/i);

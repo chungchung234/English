@@ -42,7 +42,7 @@ async function rpc(name, body, user = uid) {
   }, user);
 }
 async function tableRequest(table, url, request) {
-  assert(['sessions', 'analyses', 'transcript_events', 'memory_state', 'memory_fact_overrides', 'memory_session_exclusions'].includes(table) || /^learning_[a-z_]+$/.test(table), `Known PostgREST table ${table}`);
+  assert(['sessions', 'analyses', 'transcript_events', 'review_bookmarks', 'memory_state', 'memory_fact_overrides', 'memory_session_exclusions'].includes(table) || /^learning_[a-z_]+$/.test(table), `Known PostgREST table ${table}`);
   return asUser(async () => {
     if (request.method() === 'POST') {
       const body = request.postDataJSON();
@@ -125,7 +125,6 @@ async function openSessionActions(page) {
 }
 async function refresh(page) { await leaveReview(page); await page.locator('[data-view="history"]').click(); await page.locator('#refresh-history').click(); }
 function itemCard(page, itemId, root = '#learning-session') { return page.locator(`${root} [data-item-id="${itemId}"]`).first(); }
-async function openQueue(page) { const fold=page.locator('#learning-queue > details').filter({has:page.getByText('복습 보관함',{exact:true})}); if(await fold.count()&&!await fold.evaluate(node=>node.open))await fold.locator('summary').first().click(); }
 async function clickControl(page, control) {
   // Keep locators live: acknowledging an earlier queued action may replace the
   // disclosure while Playwright waits for its summary to stop moving.
@@ -248,7 +247,9 @@ try {
   await clickControl(page, itemCard(page, extra.id).locator('[data-action="enroll"]'));
   await waitUntil(async () => (await item(extra.expression)).enrolled, 'third candidate enrollment is explicit');
   await leaveReview(page); await page.locator('[data-view="review"]').click();
-  await openQueue(page); await page.locator('#learning-queue [data-action="recommend-more"]').click();
+  // Date browsing replaces the recommendation drawer. The independent legacy
+  // recommendation quota remains checked at the authenticated RPC boundary.
+  await rpc('learning_recommend_more',{p_companion_id:'alex'});
   const moreSnapshot = await rpc('learning_snapshot', { p_companion_id: 'alex' });
   assert(moreSnapshot.recommended_item_ids.length <= 3);
   const deferredFixture = await fixture('Acceptance: explicit defer', [{ original: 'I am wait for you.', improved: 'I am waiting for you.' }]);
@@ -363,11 +364,10 @@ try {
   assert.equal(await page.locator('#learning-session').getAttribute('data-feedback-session'), normal.session.id, 'background completion does not change selected feedback');
   assert(await page.locator('[data-panel="history"]').isVisible(), 'background completion does not force the review tab');
   await page.locator('[data-view="review"]').click();
-  const backgroundLink = page.locator(`#learning-queue [data-session-id="${background.session.id}"]`);
+  const backgroundLink = page.locator(`#review-journal [data-session-id="${background.session.id}"]`);
   await backgroundLink.waitFor({ state: 'attached' });
-  const unseenFold = backgroundLink.locator('xpath=ancestor::details');
-  if (!await unseenFold.evaluate(node => node.open)) await unseenFold.locator('summary').click();
   await backgroundLink.waitFor({ state: 'visible' });
+  assert(await backgroundLink.locator('.journal-expression').count()>0,'background feedback is directly visible without opening a drawer');
   assert.equal(await page.locator('#review-panel').getAttribute('data-mode'), 'hub', 'general review makes background feedback discoverable without changing the selected call');
   console.log('PASS T12/T13: running server job survives reload, blocks duplicate generation and completes without forced navigation.');
 
@@ -456,7 +456,7 @@ try {
   const periodEnd = new Date(Date.now() - 24 * 3600000).toISOString();
   const periodStart = new Date(new Date(periodEnd).getTime() - 168 * 3600000).toISOString();
   await query(`insert into public.analyses(user_id,kind,content,model) values($1,'weekly',$2::jsonb,'local-weekly-fixture')`, [uid, JSON.stringify({ summary: '저장된 168시간 분석입니다.', scope: { companionId: 'alex', period_start: periodStart, period_end: periodEnd } })]);
-  await refresh(page); await page.locator('[data-view="review"]').click();
+  await refresh(page); await page.locator('[data-view="history"]').click();
   await page.locator('#weekly').click();
   await page.waitForFunction(()=>document.querySelector('#review-content h3')?.textContent==='Alex · 최근 7일 분석');
   const weekly = page.locator('#review-content');

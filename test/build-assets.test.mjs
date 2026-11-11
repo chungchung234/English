@@ -9,6 +9,9 @@ test('phone build caches content-hashed application and AI assets with verified 
  const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
  assert(Buffer.byteLength(html)<300_000,'primary HTML must stay below 300 kB; application code and character art stay separately cached');
  assert(!html.includes('data:image/png;base64,'));
+ for(const name of ['bookmark-simple','calendar-blank','chevron']){
+  assert.match(html,new RegExp(`data-review-icon="${name}" src="data:image/svg\\+xml;base64,`),'runtime review icons must be embedded for deployed subpath hosting');
+ }
  for(const name of ['alex','mia','juno']){
   const source=await readFile(new URL(`../web/assets/ai-${name}.webp`,import.meta.url));
   const hash=createHash('sha256').update(source).digest('hex').slice(0,12),url=`assets/ai-${name}.${hash}.webp`;

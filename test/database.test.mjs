@@ -88,7 +88,7 @@ test('migration applies to the Supabase auth and role contract', async (t) => {
   `);
   assert.deepEqual(rows.map((row) => row.tablename), [
     'analyses', 'analysis_jobs', 'api_daily_usage', 'conversation_memories', 'learning_actions', 'learning_daily', 'learning_enhancement_actions', 'learning_enhancement_imports', 'learning_events', 'learning_feedback', 'learning_items', 'learning_next_plans', 'learning_plans', 'learning_practice_days', 'learning_recalls', 'learning_reviews', 'learning_schedules', 'learning_source_holds', 'learning_sources', 'learning_state_items', 'learning_usage_observations', 'learning_usage_targets', 'learning_visits', 'learning_weekly_goals', 'learning_weekly_versions', 'memory_embeddings', 'memory_fact_overrides',
-    'memory_session_exclusions', 'memory_state', 'model_spend', 'post_call_tasks', 'sessions', 'transcript_events',
+    'memory_session_exclusions', 'memory_state', 'model_spend', 'post_call_tasks', 'review_bookmarks', 'sessions', 'transcript_events',
   ]);
 });
 

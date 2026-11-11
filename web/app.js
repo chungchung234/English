@@ -1,5 +1,6 @@
 import { createFirstUse, createContentLoading, microphoneHelp } from './first-use.js';
 import { createSessionReview } from './session-review.js';
+import { createReviewJournal } from './review-journal.js';
 import { createConversationMemoryDelivery } from '../src/conversation-memory.js';
 import { createLearningReview } from '../src/learning-review.mjs';
 import { createCallCompletion } from './call-completion.js';
@@ -65,6 +66,12 @@ const learning=createLearningReview({document,rpc,edge,allRows,sync,isBusy:()=>m
   setView('review');
  }
 });
+const journal=createReviewJournal({root:$('review-journal'),
+ context:()=>({scope:auth&&scope?scope:null,active:currentView==='review',mode:$('review-panel').dataset.mode,busy:memoryBusy()}),
+ rpc,edge,allRows,setMode:setReviewMode,openView:()=>setView('review'),notice
+});
+$('review-panel').dataset.journal='on';
+$('history-tools').append($('weekly'));
 function mountLearningSession(sessionId,session={}){
  $('review-content').replaceChildren();
  const host=document.createElement('div');host.id='learning-session';$('review-content').append(host);
@@ -87,11 +94,12 @@ function setReviewMode(mode) {
   $('review-title').textContent=mode==='session'?'통화 돌아보기':mode==='weekly'?'최근 7일':'복습';
   $('review-context').textContent=mode==='session'?companionName()+'와의 통화':companionName()+'와 이어가기';
   $('review-back').hidden=mode==='hub';
+  $('review-journal').hidden=!['hub','journal-note','journal-source'].includes(mode);
+  $('review-context').hidden=mode==='hub'||mode.startsWith('journal-');
   renderWeeklyAction();
 }
 function openReviewHub() {
-  learning.closePractice?.();setReviewMode('hub');setView('review');
-  $('review-title').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});
+  learning.closePractice?.();void journal.show();
 }
 function showWrapup() {
   const region=document.createElement('section');region.className='review-state';region.dataset.reviewState='finalizing';
@@ -370,7 +378,7 @@ function emptyReview(message = '통화를 마치면 이곳에서 학습 노트�
   updatePracticePreview();
 }
 function renderWeeklyAction(){
-  const available=Boolean(auth&&scope&&weeklyCompanions.has(companionId)&&$('review-panel')?.dataset.mode==='hub');
+  const available=Boolean(auth&&scope&&weeklyCompanions.has(companionId));
   $('weekly').hidden=!available;$('weekly').disabled=!available||Boolean(weeklyRequest)||memoryBusy();
   $('weekly').textContent=weeklyRequest?'분석 중…':'주간 분석';
 }
@@ -1019,6 +1027,7 @@ function revealWorkspace(){
 }
 companionMotion.addEventListener('change',()=>{if(companionMotion.matches){if(authTransitionLeaving)hideAuthTransition();else clearAuthAnimations();}});
 function resetSignedOutUI(){
+  journal.clear();
   conversationMemory.clear();
   stopCompanionSlide();
   readyEpoch++;hideAuthTransition();firstUse.reset();historyLoading.reset();reviewLoading.reset();$('access-help').hidden=true;$('call-help').hidden=true;
@@ -1086,12 +1095,12 @@ $('weekly').onclick=protect(async()=>{
     const result=await edge('weekly',{companionId:selected});if(!valid())return;
     if(result.analysis?.kind!=='weekly'||result.analysis.content?.scope?.companionId!==selected)throw Error('이 상대의 주간 분석을 확인하지 못했어요. 다시 시도해 주세요.');
     await loadHistory();if(!valid())return;
-    selectedReviewSessionId=null;setReviewMode('weekly');$('review-content').replaceChildren();showAnalysis($('review-content'),{...result.analysis,companion_id:selected});
+    selectedReviewSessionId=null;setReviewMode('weekly');$('review-content').replaceChildren();showAnalysis($('review-content'),{...result.analysis,companion_id:selected});setView('review');
   }finally{if(weeklyRequest===request){weeklyRequest=null;renderWeeklyAction();}}
 });
 $('memory-search').onsubmit=protect(async e=>{e.preventDefault();if(memoryBusy())return;const selectedCompanion=companionId,epoch=memoryEpoch;const data=await edge('memory',{query:$('memory-query').value.trim(),companionId:selectedCompanion});if(selectedCompanion!==companionId||epoch!==memoryEpoch)return;$('memory-results').replaceChildren();if(!data.memories.length){$('memory-results').textContent='관련 학습 기록이 없습니다.';return;}for(const item of data.memories){const article=document.createElement('article');article.className='history-entry';const p=document.createElement('p');p.textContent=item.summary;const meta=document.createElement('small');meta.textContent=`${item.session_created_at?formatInstant(item.session_created_at,sessionTimeZone({time_zone:item.session_time_zone}).zone):'통화 시각 미확인'} · ${sessionTimeZone({time_zone:item.session_time_zone}).label} · 근거 ${(item.source_event_ids||[]).length}개`;article.append(p,meta);const button=document.createElement('button');button.className='text-button';button.textContent='근거 발화 보기';button.onclick=protect(async()=>{if(memoryBusy())return;const actionView=viewEpoch,actionScope=scope,ids=item.source_event_ids||[];if(!ids.length)return;const rows=await allRows('transcript_events',`id=in.(${ids.join(',')})&order=timestamp.asc,id.asc`);if(actionView!==viewEpoch||actionScope!==scope||epoch!==memoryEpoch||selectedCompanion!==companionId||!button.isConnected)return;const pre=document.createElement('pre');pre.style.whiteSpace='pre-wrap';pre.textContent=rows.filter(row=>row.session_id===item.session_id).map(row=>row.text).join('\n');button.replaceWith(pre);});article.append(button);$('memory-results').append(article);}if(data.limited)notice('관련 기록 일부는 통화 문맥 크기 제한으로 제외되었습니다. 더 구체적인 검색어를 사용하세요.');});
-$('export').onclick=protect(async()=>{if(call || callStarting || callEnding)throw Error('통화를 마친 뒤 백업하세요.');const backupScope=scope;await saving;await sync();await learning.flush();const learningProgress=await learning.getBackup();const backup={schema_version:2,learning_progress:learningProgress,exported_at:new Date().toISOString(),sessions:await allRows('sessions','order=created_at.asc,id.asc'),events:await allRows('transcript_events','order=timestamp.asc,id.asc'),analyses:await allRows('analyses','order=created_at.asc,id.asc'),memory_controls:{state:await allRows('memory_state','order=companion_id.asc'),facts:await allRows('memory_fact_overrides','order=companion_id.asc,key.asc'),exclusions:await allRows('memory_session_exclusions','order=companion_id.asc,session_id.asc')}};if(scope!==backupScope||!auth)throw Error('백업 중 계정이 바뀌었어요. 같은 계정에서 다시 선택해 주세요.');const a=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}));a.href=url;a.download='sisicolcol-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
-$('restore').onchange=protect(async e=>{if(call || callStarting || callEnding)throw Error('통화를 마친 뒤 복원하세요.');const restoreScope=scope,restoreRpc=async(name,body)=>{if(scope!==restoreScope||!auth)throw Error('기록을 가져오는 중에 계정이 바뀌었어요. 같은 계정에서 다시 시도해 주세요.');return rpc(name,body);};const file=e.target.files[0];if(!file)return;try{if(file.size>15_000_000)throw Error('복원 파일은 15MB 이하로 나눠 주세요.');const data=JSON.parse(await file.text());if(![1,2].includes(data.schema_version)||!Array.isArray(data.sessions)||!Array.isArray(data.events)||(data.schema_version===2&&!Array.isArray(data.learning_progress)))throw Error('지원하지 않는 백업 형식입니다.');const included=new Set(data.sessions.map(s=>s.id));if(data.events.some(event=>!included.has(event.session_id)))throw Error('대화와 연결되지 않은 기록이 포함된 파일이에요.');
+$('export').onclick=protect(async()=>{if(call || callStarting || callEnding)throw Error('통화를 마친 뒤 백업하세요.');const backupScope=scope;await saving;await sync();await learning.flush();const learningProgress=await learning.getBackup();const backup={schema_version:2,learning_progress:learningProgress,review_bookmarks:await allRows('review_bookmarks','order=session_id.asc,expression_key.asc'),exported_at:new Date().toISOString(),sessions:await allRows('sessions','order=created_at.asc,id.asc'),events:await allRows('transcript_events','order=timestamp.asc,id.asc'),analyses:await allRows('analyses','order=created_at.asc,id.asc'),memory_controls:{state:await allRows('memory_state','order=companion_id.asc'),facts:await allRows('memory_fact_overrides','order=companion_id.asc,key.asc'),exclusions:await allRows('memory_session_exclusions','order=companion_id.asc,session_id.asc')}};if(scope!==backupScope||!auth)throw Error('백업 중 계정이 바뀌었어요. 같은 계정에서 다시 선택해 주세요.');const a=document.createElement('a');const url=URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}));a.href=url;a.download='sisicolcol-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
+$('restore').onchange=protect(async e=>{if(call || callStarting || callEnding)throw Error('통화를 마친 뒤 복원하세요.');const restoreScope=scope,restoreRpc=async(name,body)=>{if(scope!==restoreScope||!auth)throw Error('기록을 가져오는 중에 계정이 바뀌었어요. 같은 계정에서 다시 시도해 주세요.');return rpc(name,body);};const file=e.target.files[0];if(!file)return;try{if(file.size>15_000_000)throw Error('복원 파일은 15MB 이하로 나눠 주세요.');const data=JSON.parse(await file.text());if(![1,2].includes(data.schema_version)||!Array.isArray(data.sessions)||!Array.isArray(data.events)||(data.schema_version===2&&!Array.isArray(data.learning_progress)))throw Error('지원하지 않는 백업 형식입니다.');const included=new Set(data.sessions.map(s=>s.id));if(data.review_bookmarks!==undefined&&(!Array.isArray(data.review_bookmarks)||data.review_bookmarks.some(row=>!row||!included.has(row.session_id))))throw Error('저장한 표현의 출처 통화를 확인해 주세요.');if(data.events.some(event=>!included.has(event.session_id)))throw Error('대화와 연결되지 않은 기록이 포함된 파일이에요.');
 if(data.schema_version===2&&data.learning_progress.some(item=>!included.has(item.source_session_id||item.restored_session_id)||(item.held_sources||[]).some(source=>!included.has(source.session_id))))throw Error('복습 출처 통화가 빠진 백업입니다.');
 const controls=data.memory_controls??{state:[],facts:[],exclusions:[]};if(!controls||!Array.isArray(controls.state)||!Array.isArray(controls.facts)||!Array.isArray(controls.exclusions))throw Error('백업의 기억 설정 형식이 올바르지 않습니다.');
 if([...controls.state,...controls.facts,...controls.exclusions].some(row=>!row||typeof row!=='object'||Array.isArray(row)))throw Error('백업의 기억 설정 형식이 올바르지 않습니다.');const sessionCompanions=new Map(data.sessions.map(session=>[session.id,session.companion_id]));for(const row of [...controls.state,...controls.facts])if(!companions[row.companion_id]||typeof row.companion_id!=='string')throw Error('백업에 알 수 없는 대화 상대의 기억이 있습니다.');for(const row of controls.facts)if(!memorySlots.some(([key])=>key===row.key)||typeof row.value!=='string'||row.value.length>240)throw Error('백업의 기억 사실 형식이 올바르지 않습니다.');for(const row of controls.exclusions)if(typeof row.session_id!=='string'||!companions[row.companion_id]||sessionCompanions.get(row.session_id)!==row.companion_id)throw Error('백업의 기억 제외 기록이 대화와 일치하지 않습니다.');
@@ -1102,7 +1111,7 @@ const controlsFor=sessions=>({state:controls.state,facts:controls.facts,exclusio
 const ended=data.sessions.filter(session=>session.status==='ended');for(let start=0;start<ended.length;start+=20){const sessions=ended.slice(start,start+20);const ids=new Set(sessions.map(session=>session.id));const events=data.events.filter(event=>ids.has(event.session_id));if(events.length>1000){for(const session of sessions){const own=events.filter(event=>event.session_id===session.id);for(let n=0;n<Math.max(own.length,1);n+=500)await restoreRpc('restore_history',{p_backup:{sessions:[session],events:own.slice(n,n+500),memory_controls:controlsFor([session])}});}}else await restoreRpc('restore_history',{p_backup:{sessions,events,memory_controls:controlsFor(sessions)}});}
 for(const sessions of activeByCompanion.values()){const ids=new Set(sessions.map(session=>session.id));const events=data.events.filter(event=>ids.has(event.session_id));await restoreRpc('restore_history',{p_backup:{sessions,events,memory_controls:controlsFor(sessions)}});}
 if(!data.sessions.length)await restoreRpc('restore_history',{p_backup:{sessions:[],events:[],memory_controls:controls}});
-for(const session of data.sessions)if(session.record_incomplete===true)await restoreRpc('learning_finish_partial',{p_session_id:session.id});if(scope!==restoreScope||!auth)throw Error('복원 중 계정이 바뀌었어요. 같은 계정에서 다시 시도해 주세요.');if(data.schema_version===2)await learning.restoreBackup(data.learning_progress);notice('대화와 복습 기록을 가져왔어요. 학습 노트는 대화 내용을 다시 확인해 만들 수 있어요.');}finally{e.target.value='';if(scope&&auth)await Promise.allSettled([loadHistory(),loadMemory()]);}});
+for(const session of data.sessions)if(session.record_incomplete===true)await restoreRpc('learning_finish_partial',{p_session_id:session.id});if(scope!==restoreScope||!auth)throw Error('복원 중 계정이 바뀌었어요. 같은 계정에서 다시 시도해 주세요.');if(data.schema_version===2)await learning.restoreBackup(data.learning_progress);if(data.review_bookmarks)for(let start=0;start<data.review_bookmarks.length;start+=200)await restoreRpc('review_bookmarks_restore',{p_bookmarks:data.review_bookmarks.slice(start,start+200)});notice('대화와 복습 기록을 가져왔어요. 학습 노트는 대화 내용을 다시 확인해 만들 수 있어요.');}finally{e.target.value='';if(scope&&auth)await Promise.allSettled([loadHistory(),loadMemory()]);}});
 document.querySelectorAll('[data-cue]').forEach(button=>button.onclick=protect(async()=>{
   const current=call;
   if(!current||!current.voiceInstructions||current.ending||current.compacting||current.floor?.blocksResponse||current.responding||current.speaking||current.aiSpeaking||current.dc.readyState!=='open'||current.pc.connectionState!=='connected')return;
@@ -1115,7 +1124,7 @@ window.addEventListener('online',()=>sync().catch(e=>notice(e)));
 window.addEventListener('offline',()=>{cloudVerified=false;updatePending().catch(()=>{});});
 window.addEventListener('beforeunload',e=>{if(call || callStarting || callEnding){e.preventDefault();e.returnValue='';}});
 setInterval(()=>{if(auth)sync().catch(()=>{});},5000);
-$('review-back').onclick=protect(()=>{if(!memoryBusy())openReviewHub();});
+$('review-back').onclick=protect(()=>{if(!memoryBusy()){if(journal.isOpen())journal.back();else openReviewHub();}});
 document.querySelectorAll('[data-view]').forEach(button=>button.onclick=protect(async()=>{if(memoryBusy())return;const view=button.dataset.view;if(view==='history')historyFilter=null;if(view==='review')openReviewHub();else setView(view);if(view==='history')await loadHistory();if(view==='review')await learning.resume();}));
 document.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>closeDialog(button.dataset.close));
 const companionButtons=[...document.querySelectorAll('[data-companion]')];

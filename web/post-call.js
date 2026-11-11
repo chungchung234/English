@@ -122,7 +122,7 @@ export function createPostCallFlow(deps) {
       if (!practiceHidden.has(node)) practiceHidden.set(node, node.hidden);
       node.hidden = true;
     };
-    for (const node of document.querySelectorAll('#review-content, #session-feedback-content, #post-call-transcript, [data-practice-surrounding], [data-weekly-analysis-id], #learning-queue, #review-back')) conceal(node);
+    for (const node of document.querySelectorAll('#review-journal, #review-content, #session-feedback-content, #post-call-transcript, [data-practice-surrounding], [data-weekly-analysis-id], #learning-queue, #review-back')) conceal(node);
     for (const node of $('learning-session')?.children || []) conceal(node);
     syncPracticeRecovery(activePractice);
     if (!practiceObserver && typeof MutationObserver !== 'undefined') {

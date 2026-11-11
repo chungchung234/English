@@ -40,6 +40,8 @@ export async function testTabUI(browser,base){
    data={analysis:{id:'weekly',kind:'weekly',content:{...content,summary:'최근 7일의 영어 표현을 정리했어요.',scope:{...content.scope,companionId:body.companionId}}}};
   }
   else if(url.pathname.endsWith('/coach/review')){reviewCalls++;data={analysis};}
+  else if(url.pathname.endsWith('/rpc/review_journal'))data={calls:mode==='populated'?[{session:sessions[0],analysis_id:analysis.id,status:'ready',strengths:content.strengths,expressions:[{key:'cafe',kind:'error',expression:content.corrections[0].improved,original:content.corrections[0].original,reason:content.corrections[0].reason,evidence_ids:[eid],saved:false,bookmark_revision:0},{key:'try',kind:'reusable',expression:content.practice[0].expression,evidence_ids:[eid],saved:false,bookmark_revision:0}]}]:[],next:null};
+  else if(url.pathname.endsWith('/rpc/review_note'))data={session:sessions[0],analysis_id:analysis.id,status:'ready',strengths:content.strengths,expressions:[{key:'cafe',kind:'error',expression:content.corrections[0].improved,original:content.corrections[0].original,reason:content.corrections[0].reason,evidence_ids:[eid],saved:false,bookmark_revision:0},{key:'try',kind:'reusable',expression:content.practice[0].expression,evidence_ids:[eid],saved:false,bookmark_revision:0}]};
   else if(url.pathname.endsWith('/rpc/learning_snapshot')||url.pathname.endsWith('/rpc/learning_recommend_more'))data={items:mode==='populated'&&body.p_companion_id==='alex'?[learningItem]:[],recommended_item_ids:mode==='populated'&&learningItem.status==='active'?[learningItem.id]:[],feedback:mode==='populated'&&body.p_companion_id==='alex'?[{session_id:sid,analysis_id:analysis.id,current:true,job_state:'completed',has_user_speech:true,exposed_at:null}]:[],next_plan:plans[body.p_companion_id]?{id:'77777777-7777-4777-8777-777777777777',item_id:learningItem.id,source_session_id:sid,source_analysis_id:analysis.id,scenario:plans[body.p_companion_id]}:null};
   else if(url.pathname.endsWith('/rpc/learning_record_event'))data={saved:true};
   else if(url.pathname.endsWith('/rpc/learning_enhancement_snapshot'))data={reviews:[],schedules:[],recalls:[],usage:[],weekly_goals:[],personalized_item_ids:[],recommendation_reasons:{}};
@@ -109,7 +111,7 @@ export async function testTabUI(browser,base){
   assert.equal(await page.locator('#companion-name').textContent(),'Alex','reading another call does not change the selected companion');
   await page.locator('[data-close="call-detail-dialog"]').click();await page.locator('[data-view="contacts"]').click();
   await page.locator('[data-companion="juno"]').click();assert.equal(await page.locator('#weekly').isEnabled(),false,'calls older than seven days cannot start weekly analysis');
-  await page.locator('[data-companion="alex"]').click();await page.locator('[data-view="review"]').click();await page.locator('#weekly').waitFor({state:'visible'});
+  await page.locator('[data-companion="alex"]').click();await page.locator('[data-view="history"]').click();await page.locator('#weekly').waitFor({state:'visible'});
   holdWeekly=true;const weeklyWaiting=new Promise(resolve=>weeklyArrived=resolve);
   await page.locator('#weekly').evaluate(button=>{button.onclick();button.onclick();});await weeklyWaiting;
   assert.equal(weeklyCalls,1,'weekly requests are deduplicated while pending');assert.equal(await page.locator('#weekly').isDisabled(),true);
@@ -117,13 +119,23 @@ export async function testTabUI(browser,base){
   await page.waitForFunction(()=>document.querySelector('#review-content h3')?.textContent==='Alex · 최근 7일 분석');
   await page.locator('#review-back').click();
   assert.equal(await page.locator('#weekly').isEnabled(),true);
+  await page.locator('[data-view="review"]').click();
+  await page.locator('#review-journal [data-expression-key]').first().click();
+  await page.locator('#review-journal [data-note-expression="cafe"]').waitFor();
+  assert.equal(await page.locator('#review-journal [data-note-expression]').count(),2,'real app integration opens the whole call note');
+  await page.locator('#review-journal [data-note-expression="cafe"]').getByRole('button',{name:'대화에서 보기',exact:true}).click();
+  await page.locator('#review-journal [data-source-highlight]').waitFor();
+  await page.locator('#review-journal').getByRole('button',{name:'학습 노트로 돌아가기'}).click();
+  await page.locator('#review-back').click();
+  await page.locator('#review-journal .journal-expression').first().waitFor();
+  assert.equal(reviewCalls,0,'journal browsing and source jumps reuse stored analysis');
   mode='empty';await page.reload();await page.locator('#workspace').waitFor({state:'visible'});await page.waitForFunction(()=>document.querySelector('#history').textContent.includes('아직 통화 기록'));
   await page.locator('[data-view="review"]').click();assert.equal(await page.locator('#weekly').isVisible(),false);assert.equal(await page.locator('#weekly').isDisabled(),true);assert.equal(await page.locator('#practice-preview').isVisible(),false);
   await page.locator('#weekly').evaluate(button=>button.onclick());assert.equal(weeklyCalls,1,'even a programmatic click cannot request weekly analysis without eligible calls');
   await page.locator('[data-view="history"]').click();assert.equal(await page.locator('#memory-search').isVisible(),false);assert.equal(await page.locator('#history-tools').isVisible(),false);
   await page.locator('[data-view="contacts"]').click();await page.locator('[data-companion="mia"]').click();mode='older-page';
   await page.reload();await page.locator('#workspace').waitFor({state:'visible'});await page.waitForFunction(()=>document.querySelectorAll('#history .history-entry').length===30);
-  await page.locator('[data-view="review"]').click();assert.equal(await page.locator('#weekly').isEnabled(),true,'an eligible call outside the recent 30 must still permit weekly analysis');
+  await page.locator('[data-view="history"]').click();assert.equal(await page.locator('#weekly').isEnabled(),true,'an eligible call outside the recent 30 must still permit weekly analysis');
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  }finally{releaseHistory?.();releaseWeekly?.();releaseTranscript?.();await context.close();}
  assert.deepEqual(errors,[]);

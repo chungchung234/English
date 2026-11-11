@@ -103,7 +103,7 @@ async function main() {
       stage = 'private access enforcement';
       for (const user of users) {
         for (const table of [
-          'sessions','transcript_events','analyses','memory_state','memory_fact_overrides','memory_session_exclusions',
+          'sessions','transcript_events','analyses','review_bookmarks','memory_state','memory_fact_overrides','memory_session_exclusions',
           'learning_state_items','learning_feedback','learning_sources','learning_source_holds','learning_actions',
           'learning_practice_days','learning_daily','learning_visits','learning_next_plans','learning_events',
           'learning_reviews','learning_schedules','learning_recalls','learning_usage_targets','learning_usage_observations',
@@ -116,6 +116,10 @@ async function main() {
           ['/rest/v1/rpc/append_events', {p_session_id:randomUUID(),p_events:[]}],
           ['/rest/v1/rpc/finish_session', {p_session_id:randomUUID()}],
           ['/rest/v1/rpc/restore_history', {p_backup:{sessions:[],events:[]}}],
+          ['/rest/v1/rpc/review_journal', {}],
+          ['/rest/v1/rpc/review_note', {p_session_id:randomUUID()}],
+          ['/rest/v1/rpc/review_bookmark', {p_session_id:randomUUID(),p_expression_key:'denied',p_saved:true,p_expected_revision:0}],
+          ['/rest/v1/rpc/review_bookmarks_restore', {p_bookmarks:[]}],
           ['/rest/v1/rpc/learning_snapshot', {p_companion_id:'alex'}],
           ['/rest/v1/rpc/learning_enhancement_snapshot', {p_companion_id:'alex'}],
           ['/rest/v1/rpc/learning_review_submit', {p_item_id:randomUUID(),p_expected_revision:1,p_action_id:randomUUID(),p_source_analysis_id:randomUUID(),p_explanation:'Must be denied'}],

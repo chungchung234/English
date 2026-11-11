@@ -41,7 +41,7 @@ async function rpc(name, body, user = uid) {
   }, user);
 }
 async function tableRequest(table, url, request) {
-  assert(['sessions', 'analyses', 'transcript_events', 'memory_state', 'memory_fact_overrides', 'memory_session_exclusions'].includes(table) || /^learning_[a-z_]+$/.test(table), `Known PostgREST table ${table}`);
+  assert(['sessions', 'analyses', 'transcript_events', 'review_bookmarks', 'memory_state', 'memory_fact_overrides', 'memory_session_exclusions'].includes(table) || /^learning_[a-z_]+$/.test(table), `Known PostgREST table ${table}`);
   return asUser(async () => {
     if (request.method() === 'POST') {
       const body = request.postDataJSON();
@@ -421,7 +421,7 @@ try {
   transport.historyGate = { started: deferred(), release: deferred() };
   const historyGate = transport.historyGate;
   await page.locator('#refresh-history').click(); await historyGate.started.promise;
-  await page.locator('[data-view="review"]').click(); await page.locator('#weekly').click();
+  await page.locator('#weekly').click();
   await page.locator('#review-panel[data-mode="weekly"]').waitFor({ state: 'visible' });
   await page.locator('#review-content').getByText('주간 분석 선택을 유지하는 검증 문장입니다.', { exact: true }).waitFor();
   historyGate.release.resolve();

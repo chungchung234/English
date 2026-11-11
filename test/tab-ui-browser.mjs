@@ -74,7 +74,7 @@ export async function testTabUI(browser,base){
   await page.screenshot({path:'test-results/call-detail-long.png'});
   assert.equal(await page.locator('.call-management').getAttribute('open'),null);
   await page.locator('.call-feedback').click();await page.locator('#review-panel').waitFor({state:'visible'});
-  assert.equal(await page.locator('#review-content h4').first().textContent(),'더 자연스럽게 말하기');
+  assert.equal(await page.locator('#learning-session .review-takeaway h3').first().textContent(),'이번 통화에서 가져갈 말');
   assert(await page.locator('.improved').first().evaluate(node=>node.getBoundingClientRect().top<document.querySelector('.glass-dock').getBoundingClientRect().top),'the correction must appear above the dock on a compact screen');
   assert.equal(await page.locator('.analysis > .feedback-context').first().getAttribute('open'),null);assert.equal(await page.locator('#practice-preview').isVisible(),false);
   const contrast=await page.locator('.original').first().evaluate(node=>{
@@ -82,18 +82,19 @@ export async function testTabUI(browser,base){
    const linear=v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;};
    const l=values.map(linear).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);return 1.05/(l+.05);
   });assert(contrast>=4.5,'normal correction text must meet AA contrast on white');
-  await page.locator('#review-content .feedback-item').first().getByRole('button',{name:'근거 발화'}).click();await page.locator('blockquote').waitFor({state:'visible'});
+  await page.locator('#learning-session .takeaway-details > summary').click();
+  await page.locator('#learning-session .review-takeaway').getByText('근거 발화',{exact:true}).click();await page.locator('blockquote').waitFor({state:'visible'});
   assert.equal(reviewCalls,0,'opening saved feedback never regenerates analysis');
   await page.locator('[data-view="history"]').click();await page.locator('#history .history-open').first().click();await page.locator('.call-feedback').click();
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:'test-results/post-call-feedback.png'});
-  await page.locator('#learning-session > details > summary').first().click();
-  await page.locator('#learning-session .learning-actions').first().scrollIntoViewIfNeeded();await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));await page.screenshot({path:'test-results/post-call-practice.png'});await page.setViewportSize({width:320,height:568});
+  assert(await page.locator('#learning-session [data-action="practice"]').isVisible(),'the one-expression action does not need another disclosure');
+  await page.screenshot({path:'test-results/post-call-practice.png'});await page.setViewportSize({width:320,height:568});
   await page.locator('#learning-session [data-action="practice"]').click();
   assert(await page.locator('#learning-session [data-practice-expression]').isHidden(),'rephrasing begins with the model answer hidden');
   await page.locator('#learning-session [data-action="toggle-expression"]').click();assert(await page.locator('#learning-session [data-practice-expression]').isVisible());
   await page.locator('#learning-session [data-action="toggle-expression"]').click();assert(await page.locator('#learning-session [data-practice-expression]').isHidden());
   learningFailure=true;await page.locator('#learning-session [data-action="save-practice"]').click();await page.locator('[data-practice-status]').filter({hasText:'기기 보관 확인'}).waitFor();assert.equal(learningItem.status,'active');
-  learningFailure=false;await page.locator('#learning-queue').getByRole('button',{name:'같은 요청 다시 전송',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-practice-status]')?.textContent.includes('서버에 저장'));
+  learningFailure=false;await page.locator('.learning-practice [data-action="retry-practice"]').click();await page.waitForFunction(()=>document.querySelector('[data-practice-status]')?.textContent.includes('서버에 저장'));
   assert.equal(learningItem.state,'practiced');
   await page.locator('#learning-session [data-action="prepare-next"]').click();await page.locator('#contacts-panel').waitFor({state:'visible'});assert.equal(await page.locator('#start-call').isVisible(),true);assert.equal(await page.locator('#live-call').isVisible(),false);assert.equal(plans.alex,content.next_scenario);
   await page.reload();await page.locator('#workspace').waitFor({state:'visible'});await page.getByText('준비한 이야기 · '+content.next_scenario,{exact:true}).waitFor();await page.locator('[data-view="review"]').click();
@@ -114,6 +115,7 @@ export async function testTabUI(browser,base){
   assert.equal(weeklyCalls,1,'weekly requests are deduplicated while pending');assert.equal(await page.locator('#weekly').isDisabled(),true);
   const weeklyDone=page.waitForResponse(response=>response.url().endsWith('/coach/weekly'));releaseWeekly();await weeklyDone;
   await page.waitForFunction(()=>document.querySelector('#review-content h3')?.textContent==='Alex · 최근 7일 분석');
+  await page.locator('#review-back').click();
   assert.equal(await page.locator('#weekly').isEnabled(),true);
   mode='empty';await page.reload();await page.locator('#workspace').waitFor({state:'visible'});await page.waitForFunction(()=>document.querySelector('#history').textContent.includes('아직 통화 기록'));
   await page.locator('[data-view="review"]').click();assert.equal(await page.locator('#weekly').isVisible(),false);assert.equal(await page.locator('#weekly').isDisabled(),true);assert.equal(await page.locator('#practice-preview').isVisible(),false);

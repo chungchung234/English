@@ -1,0 +1,62 @@
+{
+  "base_commit": "f9f253e65e2b42dba3f431b24776f5cc633bef2f",
+  "verified_at": "2026-11-11T01:01:50.660376+00:00",
+  "environment": "Local Chromium, synthetic auth/WebRTC/model transports; actual app, PGlite SQL/RLS/RPC and IndexedDB. No live accounts or conversations.",
+  "tests": [
+    {
+      "name": "call-transition",
+      "command": "node test/call-transition.browser.mjs",
+      "exit_code": 0,
+      "stdout": [
+        "PASS: real pending connection cues, two-part readiness, no artificial connect delay, and one greeting.",
+        "PASS: immediate microphone/audio/control/avatar stop, a short ended frame, and parallel late-transcript preservation.",
+        "PASS: failed connection cleanup/retry, silent AudioContext fallback, and idempotent data-channel closure."
+      ]
+    },
+    {
+      "name": "end-transcript",
+      "command": "node test/end-transcript.browser.mjs",
+      "exit_code": 0,
+      "stdout": [
+        "PASS: received and late-final speech is readable immediately during held append/finish; failed feedback keeps the full transcript.",
+        "PASS: reload restores exact server transcript rows and the generated/heard warning before optional time metadata; ended-call history opens its actual transcript directly.",
+        "PASS: zero-turn transcript states that no speech is available and never invents a successful review.",
+        "PASS: transcription failure preserves received speech and visible partial/save recovery without claiming completion.",
+        "PASS: explicit received-only recovery updates partial status while preserving the missing-audio limitation.",
+        "PASS: device-save failure still exposes received text with explicit unconfirmed storage and no false completed call."
+      ]
+    },
+    {
+      "name": "post-call-experience",
+      "command": "POST_CALL_EXPERIENCE_PORT=4201 node test/post-call-experience.browser.mjs",
+      "exit_code": 0,
+      "stdout": [
+        "PASS: mobile first action, collapsed transcript, current-call scope, direct recall, honest durable save and clean completion, restored hub, background completion, empty speech and analysis recovery."
+      ]
+    }
+  ],
+  "source_sha256": {
+    "test/call-transition.browser.mjs": "eec1bacb82aaa4fb64987188078a8b5136512c6c0ed483fd0d1a032522d3a9a5",
+    "test/end-transcript.browser.mjs": "1f9085e73db96e9682b335f1dce68db577b4b529c28b90fafc98bca51625ec74",
+    "test/post-call-experience.browser.mjs": "c8711391c4fa799d9f93b148e9f31e5673992b493c6b9f4ce90f226391d821d0",
+    "web/app.js": "3a96a0b80d13ec510cb14d5dc6885bf1fca65d20ee56b4b00e0364dee8c0b436",
+    "web/style.css": "7f1f2b0067cedff17295470357d95b8981d2ec29936b3db758a471a42c9a2f69",
+    "web/post-call.js": "11955dc9443cb140b519772a96d2fca544f15626e85800d2d87eb1abf8f74347",
+    "web/learning-enhancements.js": "6f9bf36e726f659d4e4670160b2c2bd931d6116c1b8bff3f959dd673fcbb508e",
+    "web/post-call-transcript.js": "34e98315603ac9e7bacaebaa7e82520c44ca5fe1df1e7c60b1da5408bdc52e1e"
+  },
+  "artifact_sha256": {
+    "01-finishing-390.png": "54624e6fd1543e1a26496e2e366f573f5ab9fe8c18d0e6379b111d8101ef62e2",
+    "02-analysis-pending-390.png": "4899d2641ad22dd29e6be6106d5a38a18d13f83af0d4c8e7695bda9c30d3cb5d",
+    "03-result-390.png": "68a09fae3b1fac672cbdbdf17f0ebfd625d82b095887e2d5884292a85cf64aae",
+    "04-result-320.png": "54fa48b30ffa62758b2d57577b7f63e8899b84c24f2e568d301b7f8c1a432110",
+    "05-practice-390.png": "13b9338e4499051f3dd35c12b16480c9df1c4a33ebdfb31b14299bd2b0f89801",
+    "06-completion-390.png": "e5e8cf83273afc05d5cd23d4e781cf0711e54edf5ef69d496b63e1b7a3f210a3",
+    "07-returning-hub-390.png": "73755b4ad45ad98857c1dfb5ddc8863ebb9fb4671bb6d6c21f331996a8bae408",
+    "08-no-user-speech-390.png": "9c0f8b3150dba6c4861730341cd8605f8f4b47a2de5d349e3a62c476e9f9db17",
+    "09-analysis-recovery-390.png": "58fe350514a5b628564e125b92386b591e049d8e0b40dc39135299030013536e",
+    "10-return-after-abandoned-practice-390.png": "3105095e22044ffe05cc7783e14749389e7b40532e52d2810f84746666ba1625",
+    "11-hub-practice-completion-390.png": "d7f9d847fb47642f85e01d032a1570e3918d17e251864cedd18f349a2b2230de",
+    "12-weekly-after-history-race-390.png": "14edf5eab72417d4cbd97d1249f8ea0c81f0ff4acdc848fe142054a3429ab032"
+  }
+}

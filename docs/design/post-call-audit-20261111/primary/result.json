@@ -1,0 +1,86 @@
+{
+  "sourceCommit": "published-module-70f6d5b1dfa1",
+  "source": "Unmodified published HTML/module/images at /built/ + actual local PostgreSQL/RPC/RLS; auth/voice/analysis transports synthetic; no real user account/data",
+  "turns": 12,
+  "captures": [
+    {
+      "name": "01-immediate-after-hangup",
+      "core": null,
+      "practice": null,
+      "transcriptOpen": true,
+      "documentHeight": 1704
+    },
+    {
+      "name": "02-saved-analysis-pending",
+      "core": null,
+      "practice": {
+        "top": 1494,
+        "bottom": 1610,
+        "height": 116
+      },
+      "transcriptOpen": true,
+      "documentHeight": 1728
+    },
+    {
+      "name": "03-analysis-ready-same-position",
+      "core": {
+        "top": 1513,
+        "bottom": 1540,
+        "height": 27
+      },
+      "practice": {
+        "top": 2397,
+        "bottom": 2519,
+        "height": 122
+      },
+      "transcriptOpen": true,
+      "documentHeight": 2657
+    },
+    {
+      "name": "04-ready-compact",
+      "core": {
+        "top": 1698,
+        "bottom": 1725,
+        "height": 27
+      },
+      "practice": {
+        "top": 2663,
+        "bottom": 2785,
+        "height": 122
+      },
+      "transcriptOpen": true,
+      "documentHeight": 2923
+    },
+    {
+      "name": "05-scrolled-to-feedback",
+      "core": {
+        "top": 408,
+        "bottom": 435,
+        "height": 27
+      },
+      "practice": {
+        "top": 1292,
+        "bottom": 1414,
+        "height": 122
+      },
+      "transcriptOpen": true,
+      "documentHeight": 2657
+    },
+    {
+      "name": "06-same-call-history-reentry",
+      "core": {
+        "top": 379,
+        "bottom": 406,
+        "height": 27
+      },
+      "practice": {
+        "top": 1262,
+        "bottom": 1384,
+        "height": 122
+      },
+      "transcriptOpen": false,
+      "documentHeight": 1759
+    }
+  ],
+  "errors": []
+}

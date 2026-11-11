@@ -25,16 +25,16 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
       host = text('section', '', 'analysis'); host.id = 'post-call-transcript'; host.dataset.postCallTranscript = '';
     }
     const review = document.getElementById('review-content');
-    if (state.feedbackFirst) { if (review.nextElementSibling !== host) review.after(host); }
-    else if (host.nextElementSibling !== review) review.before(host);
-    const wasOpen = host.querySelector('details')?.open ?? true;
+    if (review.nextElementSibling !== host) review.after(host);
+    const wasOpen = host.querySelector('details')?.open ?? false;
     host.replaceChildren(); host.dataset.sessionId = state.sessionId;
-    host.append(text('h3', `${state.name}와 나눈 대화문`));
+    const details = document.createElement('details'); details.className = 'call-transcript'; details.open = wasOpen;
+    const summary = text('summary', '대화문 보기'); summary.dataset.action = 'toggle-post-call-transcript'; details.append(summary);
     const current = state.current;
     const session = { ...state.session, ...(current?.created_at ? { created_at: current.created_at } : {}), ...(current?.ended_at ? { ended_at: current.ended_at } : {}), ...(current?.time_zone ? { time_zone: current.time_zone } : {}) };
     const zone = sessionTimeZone(session).zone;
     const hasSessionTime = session.created_at && Object.hasOwn(session, 'time_zone');
-    const timing = text('p', hasSessionTime ? sessionTimeLabel(session) : state.metadataFailed ? '통화 시각과 시간대를 확인하지 못했어요.' : '통화 시각과 시간대를 확인하고 있어요.', 'help'); timing.dataset.sessionTime = ''; host.append(timing);
+    const timing = text('p', hasSessionTime ? sessionTimeLabel(session) : state.metadataFailed ? '통화 시각과 시간대를 확인하지 못했어요.' : '통화 시각과 시간대를 확인하고 있어요.', 'help'); timing.dataset.sessionTime = ''; details.append(timing);
     const phase = current?.transcriptPhase || state.phase;
     const rows = ordered((current?.transcript || state.rows).values());
     const pending = rows.filter(row => row.storage !== 'server').length;
@@ -46,16 +46,18 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
       : rows.length ? '대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.'
       : '서버에서 확인된 발화가 없어요. 수신되지 않은 음성은 기록에 포함되지 않아요.';
     if (phase === 'saved' && (current?.recordIncomplete || state.recordIncomplete)) message = '수신된 기록으로 마무리한 통화예요. 누락된 음성은 포함되지 않아요.';
-    const status = text('p', message, 'help'); status.dataset.transcriptStatus = ''; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); host.append(status);
+    const status = text('p', message, 'help'); status.dataset.transcriptStatus = ''; status.setAttribute('role', 'status'); status.setAttribute('aria-live', 'polite'); details.append(status);
     if (rows.length) {
-      host.append(text('p', '자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.', 'help'));
-      host.append(text('p', '기록 시각은 발화를 수신한 때이며 실제 말하기 시작 시각과 다를 수 있어요.', 'help'));
+      details.append(text('p', '자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.', 'help'));
+      details.append(text('p', '기록 시각은 발화를 수신한 때이며 실제 말하기 시작 시각과 다를 수 있어요.', 'help'));
     }
     if (current?.wrapupCanLeave && phase === 'finalizing') {
-      const home = text('button', '홈에서 기다리기', 'text-button'); home.id = 'wrapup-home'; home.type = 'button'; home.dataset.action = 'wrapup-home'; home.onclick = current.onWrapupHome; host.append(home);
+      if (!document.getElementById('wrapup-home')) {
+        const home = text('button', '홈에서 기다리기', 'text-button'); home.id = 'wrapup-home'; home.type = 'button'; home.dataset.action = 'wrapup-home'; home.onclick = current.onWrapupHome;
+        (review.querySelector('.review-state') || details).append(home);
+      }
     }
-    const details = document.createElement('details'); details.className = 'call-transcript'; details.open = wasOpen;
-    const summary = text('summary', `대화문 보기 · ${rows.length}개 발화`); summary.dataset.action = 'toggle-post-call-transcript'; details.append(summary);
+    summary.textContent = `대화문 보기 · ${rows.length}개 발화`;
     const events = document.createElement('div'); events.dataset.transcriptEvents = '';
     for (const row of rows) {
       const block = document.createElement('div'); block.dataset.transcriptEventId = row.id; block.dataset.storage = row.storage || 'received';
@@ -68,7 +70,7 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     details.append(events); host.append(details);
     if (state.error || phase === 'partial') {
       const retry = text('button', '대화문 저장 상태 다시 확인', 'text-button'); retry.type = 'button'; retry.dataset.action = 'retry-post-call-transcript';
-      retry.onclick = () => load(state); host.append(retry);
+      retry.onclick = () => load(state); details.append(retry);
     }
     if (focused) host.querySelector(`[data-action="${focused}"]`)?.focus({ preventScroll: true });
   }
@@ -123,7 +125,7 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
   }
   return {
     clear, select,
-    prioritizeFeedback() { if (valid(state)) { state.feedbackFirst = true; const details = document.querySelector('#post-call-transcript details'); if (details) details.open = false; render(); } },
+    prioritizeFeedback() { if (valid(state)) render(); },
     changed(current) { if (state?.current === current) render(); },
     confirm(scope, sessionId, events) {
       if (!valid(state) || state.scope !== scope || state.sessionId !== sessionId) return;

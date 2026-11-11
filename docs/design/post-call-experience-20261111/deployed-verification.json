@@ -1,0 +1,24 @@
+{
+  "status": "local_validation_passed_deployment_pending",
+  "local_validation": {
+    "unit_tests": 222,
+    "type_check": "passed",
+    "browser_suites": [
+      "browser",
+      "post-call",
+      "enhancements",
+      "end-transcript",
+      "voice-turn-controls",
+      "research-recall",
+      "temporal-memory",
+      "call-transition",
+      "post-call-experience"
+    ],
+    "presence": "passed",
+    "synthetic_memory_and_learning_evaluations": "passed"
+  },
+  "limitations": [
+    "Browser transport fixtures and local SQL are used for private flows.",
+    "Physical iPhone and human learning outcomes were not measured."
+  ]
+}

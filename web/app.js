@@ -36,16 +36,17 @@ const transcriptReview=createPostCallTranscript({
 const learning=createLearningReview({document,rpc,edge,allRows,sync,isBusy:()=>memoryBusy(),
  getEventMetadata:()=>releaseMetadata,onTelemetryStage:event=>telemetryDiagnostics.record(event),
  getScope:()=>auth&&scope?{key:scope+'|'+companionId,companionId,name:companionName()}:null,
- onNotice:message=>notice(message),setView,onPlan:()=>loadPlan().catch(error=>notice(error.message)),
+ onNotice:message=>notice(message),setView,setReviewMode,navigationKey:()=>viewEpoch,onPlan:()=>loadPlan().catch(error=>notice(error.message)),
  refresh:()=>loadHistory(),onAnalysis:analysis=>{
   if(selectedReviewSessionId!==analysis.session_id||companionId!==(analysis.companion_id||analysis.content?.scope?.companionId)||callStarting||call&&call.id!==analysis.session_id)return;
   $('review-content').replaceChildren();showAnalysis($('review-content'),analysis);
+  if(currentView==='review'&&$('review-panel').dataset.mode==='session')$('review-announcement').textContent='이번 통화의 표현이 준비됐어요.';
  },onSession:async(sessionId,analysis)=>{
   if(memoryBusy())return;
-  const requestScope=scope,selected=companionId;
+  const requestScope=scope,selected=companionId,navigation=viewEpoch;
   if(!analysis){const rows=await api('/rest/v1/analyses?session_id=eq.'+sessionId+'&kind=eq.session&order=created_at.desc&limit=1');analysis=rows[0];}
-  if(scope!==requestScope||companionId!==selected||memoryBusy())return;
-  selectedReviewSessionId=sessionId;$('review-content').replaceChildren();
+  if(scope!==requestScope||companionId!==selected||navigation!==viewEpoch||memoryBusy())return;
+  selectedReviewSessionId=sessionId;setReviewMode('session');$('review-content').replaceChildren();
   selectTranscript({id:sessionId,companion_id:selected,status:'ended'});
   transcriptReview.prioritizeFeedback();
   if(analysis)showAnalysis($('review-content'),{...analysis,companion_id:selected});else mountLearningSession(sessionId);
@@ -53,6 +54,7 @@ const learning=createLearningReview({document,rpc,edge,allRows,sync,isBusy:()=>m
  }
 });
 function mountLearningSession(sessionId,session={}){
+ $('review-content').replaceChildren();
  const host=document.createElement('div');host.id='learning-session';$('review-content').append(host);
  learning.selectSession({id:sessionId,companion_id:companionId,status:'ended',...session});
 }
@@ -65,9 +67,31 @@ const memorySlots=[['name','이름'],['occupation','직업'],['location','사는
 let excludedMemorySessions=new Set();
 const companionName = () => companions[companionId].name;
 const companionStorageKey = () => 'loop.companion:' + config.url + '|' + auth.user.id;
+function setReviewMode(mode) {
+  const panel=$('review-panel');if(!panel)return;
+  panel.dataset.mode=mode;
+  $('review-announcement').textContent='';
+  $('review-title').textContent=mode==='session'?'통화 돌아보기':mode==='weekly'?'최근 7일':'복습';
+  $('review-context').textContent=mode==='session'?companionName()+'와의 통화':companionName()+'와 이어가기';
+  $('review-back').hidden=mode==='hub';
+  renderWeeklyAction();
+}
+function openReviewHub() {
+  learning.closePractice?.();setReviewMode('hub');setView('review');
+  $('review-title').focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});
+}
+function showWrapup() {
+  const region=document.createElement('section');region.className='review-state';region.dataset.reviewState='finalizing';
+  const title=document.createElement('h2');title.textContent='통화가 끝났어요';
+  const state=document.createElement('p');state.className='help';state.setAttribute('role','status');state.textContent='마지막 말을 정리하고 저장을 확인하고 있어요.';
+  region.append(title,state);$('review-content').replaceChildren(region);
+}
 function setView(view,allowWrapup=false) {
   if((memoryBusy()&&!allowWrapup) || !['contacts','call','history','review'].includes(view)) return false;
-  if(view!==currentView)window.scrollTo({top:0,behavior:'instant'});
+  if(view!==currentView){
+    if(currentView==='review')learning.closePractice?.();
+    window.scrollTo({top:0,behavior:'instant'});
+  }
   if(view!=='contacts')stopCompanionSlide();
   currentView=view;viewEpoch++;
   document.querySelectorAll('[data-panel]').forEach(panel => panel.hidden = panel.dataset.panel !== view);
@@ -188,7 +212,7 @@ function selectCompanion(next, {refresh=true}={}) {
   const slide=prepareCompanionSlide(next);
   historyEpoch++;memoryEpoch++;viewEpoch++;
   closeDialog('memory-dialog');$('memory-facts').replaceChildren();$('memory-exclusions').replaceChildren();excludedMemorySessions=new Set();
-  companionId=next;practiceMemory=null;selectedReviewSessionId=null;learning.reset();$('next-plan').hidden=true;
+  companionId=next;practiceMemory=null;selectedReviewSessionId=null;learning.reset();setReviewMode('hub');$('next-plan').hidden=true;
   if(auth&&config)localStorage.setItem(companionStorageKey(),companionId);
   transcriptReview.clear();updateCompanion();slide();$('memory-results').replaceChildren();$('memory-query').value='';emptyReview();
   if($('practice-preview-text'))$('practice-preview-text').textContent='지난 대화에서 표현을 찾고 있어요…';
@@ -270,7 +294,7 @@ function updateCallClock(current) {
   const elapsed=Math.min(CALL_DURATION,callElapsed(current)),remaining=Math.max(0,CALL_DURATION-elapsed);
   if($('call-timer'))$('call-timer').textContent=clockText(elapsed);
   if($('call-remaining')){$('call-remaining').textContent=clockText(remaining)+' 남음';$('call-remaining').hidden=current.startedAt===null||remaining>60000;}
-  if(current.startedAt!==null&&remaining<=0){notice('20분이 되어 통화를 종료하고 저장합니다.');endCall().catch(e=>notice(e.message));}
+  if(current.startedAt!==null&&remaining<=0){current.durationReached=true;notice('20분이 되어 통화를 종료하고 저장합니다.');endCall().catch(e=>notice(e.message));}
 }
 function renderConversationContext(current) {
   if(call!==current||current.ending)return;
@@ -337,13 +361,13 @@ function emptyReview(message = '통화를 마치면 이곳에서 피드백을 �
   updatePracticePreview();
 }
 function renderWeeklyAction(){
-  const available=Boolean(auth&&scope&&weeklyCompanions.has(companionId));
+  const available=Boolean(auth&&scope&&weeklyCompanions.has(companionId)&&$('review-panel')?.dataset.mode==='hub');
   $('weekly').hidden=!available;$('weekly').disabled=!available||Boolean(weeklyRequest)||memoryBusy();
   $('weekly').textContent=weeklyRequest?'분석 중…':'주간 분석';
 }
 function updatePracticePreview(){
   const expression=!learning.hasPendingExclusions()?practiceMemory?.practice.find(item=>typeof item.expression==='string'&&item.expression.trim())?.expression:null;
-  const visible=Boolean(expression)&&!$('review-content').querySelector('.analysis');
+  const visible=false; // The review hub owns the single current recommendation.
   $('practice-preview-text').textContent=expression||'아직 표현이 없어요.';
   $('practice-preview').hidden=!visible;$('practice-preview').disabled=!visible;
 }
@@ -629,11 +653,11 @@ function endCall() {
   setCallPhase('ending');$('hold-status').hidden=true;$('speed-pending').hidden=true;$('save-status').textContent='마지막 대화는 계속 저장해요';$('call-status').textContent='통화가 종료됐어요';$('call-status').tabIndex=-1;$('call-status').focus({preventScroll:true});current.cues.end();
   current.assistantInterrupted=Boolean(current.responding||current.aiSpeaking);
   current.transcriptPhase='finalizing';current.nextView='review';selectedReviewSessionId=current.id;historyFilter=null;
-  emptyReview('대화문을 먼저 확인하세요. 마지막 발화의 전사와 저장을 마친 뒤 피드백을 준비해요.');
+  setReviewMode('session');showWrapup();if(!current.durationReached)notice('');
   selectTranscript({id:current.id,companion_id:current.companionId,status:'active',created_at:current.created_at,time_zone:current.time_zone},current);
   const endTransition=new Promise(resolve=>setTimeout(()=>{
     current.cues.dispose();if(callCues===current.cues)callCues=null;
-    if(scope===current.scope&&selectedReviewSessionId===current.id){setCallLayout(false);setView('review',true);$('post-call-transcript')?.querySelector('summary')?.focus({preventScroll:true});}
+    if(scope===current.scope&&selectedReviewSessionId===current.id){setCallLayout(false);setView('review',true);$('review-title')?.focus({preventScroll:true});}
     resolve();
   },600));
   current.onWrapupHome=()=>{current.wrapupHome=true;current.nextView='contacts';setView('contacts',true);notice('수신된 발화의 저장을 확인하고 있어요. 앱을 닫으면 전사 중인 음성은 복구되지 않을 수 있어요. 서버 저장 완료 전에는 통화 완료로 표시하지 않아요.');};
@@ -664,10 +688,8 @@ function endCall() {
       if(scope!==current.scope)throw Error('계정이 바뀌어 저장 확인을 중단했어요. 원래 계정에서 다시 확인해 주세요.');
       const finished=await rpc('finish_session',{p_session_id:current.id});if(finished?.id===current.id&&finished.ended_at)current.ended_at=finished.ended_at;current.pc.close();
       if(scope!==current.scope)throw Error('계정이 바뀌었어요. 원래 계정에서 통화 저장 상태를 확인해 주세요.');
-      const savedName=companions[current.companionId].name;
       selectedReviewSessionId=current.id;historyFilter=null;
       current.transcriptPhase='saved';transcriptReview.changed(current);
-      emptyReview(savedName+'와의 통화는 저장됐습니다. 피드백을 만들고 있어요…');
       if(document.body.dataset.callPhase!=='ending')$('call-status').textContent='통화 저장 완료 · 피드백을 만들고 있습니다';
       mountLearningSession(current.id);
       learning.saved({id:current.id,companion_id:current.companionId,status:'ended',created_at:current.created_at,time_zone:current.time_zone,ended_at:current.ended_at??null}).catch(error=>notice(error.message));
@@ -677,10 +699,10 @@ function endCall() {
       current.pc.close();if(call===current)call=null;if(!current.wrapupHome)current.nextView='review';historyFilter=null;
       if(document.body.dataset.callPhase!=='ending')$('call-status').textContent='통화 중단 · 전사 또는 저장 미완료';
       if(scope===current.scope) {
-        mountLearningSession(current.id,{status:'active'});learning.interrupted({id:current.id,companion_id:current.companionId,status:'active'},e.message);
+        notice('');mountLearningSession(current.id,{status:'active'});learning.interrupted({id:current.id,companion_id:current.companionId,status:'active'},e.message);
         loadHistory().catch(()=>{});
       }
-      throw e;
+      // Recovery is kept beside this call, rather than covering it with a toast.
     } finally {
       await endTransition;
       clearTimeout(wrapupTimer);current.wrapupCanLeave=false;$('wrapup-home')?.remove();callEnding=false;clearCallClock(current);if(call===current)call=null;
@@ -732,25 +754,28 @@ function showAnalysis(target,analysis){
     }
     parent.append(sectionGroup);
   };
-  if(content.summary){const summary=paragraph(content.summary);summary.className='review-summary';div.append(summary);}
-  if(content.strengths?.[0]?.text){const strength=paragraph(content.strengths[0].text);strength.className='help';div.append(strength);}
-  group(div,'corrections','더 자연스럽게 말하기');group(div,'practice','다음에도 써볼 표현');
-  const hasPractice=Boolean(content.corrections?.length||content.practice?.length);
-  const context=hasPractice?disclosure(analysis.kind==='weekly'?'분석 자세히':'통화 돌아보기','feedback-context'):null;
-  const supporting=context?.body||div;
-  supporting.append(paragraph(content.summary));
-  if(content.scope){const scope=document.createElement('small');scope.textContent=`분석 범위: ${content.scope.session_count}회 통화 · ${content.scope.user_event_count}개 사용자 발화`;supporting.append(scope);}
-
-  if(content.corrections?.length>2&&analysis.kind!=='weekly')group(supporting,'corrections','전체 교정',true);
-  group(supporting,'strengths','잘한 점');group(supporting,'patterns','반복해서 확인된 패턴');
-  if(content.next_scenario){const h=document.createElement('h4');h.textContent='다음 대화에서 나눠볼 이야기';supporting.append(h,paragraph(content.next_scenario));}
-  if(context)div.append(context.details);
+  const isSession=analysis.kind==='session';
+  if(isSession){
+    div.id='review-core';
+    const details=disclosure('통화 내용과 전체 피드백','feedback-context');
+    if(content.summary)details.body.append(paragraph(content.summary));
+    group(details.body,'strengths','잘한 점');
+    group(details.body,'corrections','교정과 대안',true);
+    group(details.body,'practice','다음에도 써볼 표현');
+    group(details.body,'patterns','반복해서 확인된 패턴');
+    if(content.next_scenario){const h=document.createElement('h4');h.textContent='다음에 나눌 이야기';details.body.append(h,paragraph(content.next_scenario));}
+    if(content.scope){const scope=document.createElement('small');scope.textContent=`분석에 포함된 사용자 발화 ${content.scope.user_event_count ?? 0}개`;details.body.append(scope);}
+    div.replaceChildren(details.details);
+  }else{
+    if(content.summary)div.append(paragraph(content.summary));
+    group(div,'strengths','잘한 점');group(div,'corrections','교정과 대안',true);group(div,'practice','다음에도 써볼 표현');group(div,'patterns','반복해서 확인된 패턴');
+  }
   target.append(div);
   if(target.id==='review-content'){
     updatePracticePreview();
-    if(analysis.kind==='session'&&analysis.session_id)selectTranscript({id:analysis.session_id,companion_id:analysis.companion_id||analysis.content?.scope?.companionId||companionId,status:'ended'});
+    if(isSession&&analysis.session_id)selectTranscript({id:analysis.session_id,companion_id:analysis.companion_id||analysis.content?.scope?.companionId||companionId,status:'ended'});
     else if(analysis.kind==='weekly')transcriptReview.clear();
-    if(analysis.kind==='session'&&analysis.id){const practice=document.createElement('div');practice.id='learning-session';div.append(practice);learning.show(analysis);}
+    if(isSession&&analysis.id){const practice=document.createElement('div');practice.id='learning-session';div.before(practice);learning.show(analysis);}
   }
 }
 function openCallDetails({session,analysis,excluded,meta,onReview,requestScope,entry}){
@@ -792,7 +817,7 @@ function openCallDetails({session,analysis,excluded,meta,onReview,requestScope,e
 }
 async function loadHistory(){
   if(!auth||!scope)return;
-  const epoch=++historyEpoch,requestScope=scope,filter=historyFilter,reviewSelection=selectedReviewSessionId,selectedCompanion=companionId;
+  const epoch=++historyEpoch,requestScope=scope,filter=historyFilter,reviewSelection=selectedReviewSessionId,selectedCompanion=companionId,reviewMode=$('review-panel').dataset.mode;
   const through=Date.now(),since=through-7*86400000;
   const sessions=await api('/rest/v1/sessions?select=*&user_id=eq.'+auth.user.id+(filter?'&companion_id=eq.'+filter:'')+'&order=created_at.desc&limit=30');
   const analyses=await api('/rest/v1/analyses?select=*&user_id=eq.'+auth.user.id+'&order=created_at.desc&limit=100');
@@ -806,7 +831,7 @@ async function loadHistory(){
   weeklyCompanions=new Set(weeklySessions.filter(session=>Object.hasOwn(companions,session.companion_id)&&session.status==='ended'&&Date.parse(session.ended_at)>=since&&Date.parse(session.ended_at)<=through).map(session=>session.companion_id));renderWeeklyAction();
   const ownSessions=sessions.filter(session=>Object.hasOwn(companions,session.companion_id));
   $('memory-search').hidden=!ownSessions.length;$('history-tools').hidden=!ownSessions.length;
-  if(selectedReviewSessionId===reviewSelection&&companionId===selectedCompanion){
+  if(reviewMode!=='weekly'&&$('review-panel').dataset.mode===reviewMode&&selectedReviewSessionId===reviewSelection&&companionId===selectedCompanion){
     const selectedSession=ownSessions.find(session=>session.id===selectedReviewSessionId)||ownSessions.find(session=>session.companion_id===companionId);
     selectedReviewSessionId=selectedSession?.id||null;
     if(selectedSession)selectTranscript(selectedSession);else transcriptReview.clear();
@@ -834,7 +859,7 @@ async function loadHistory(){
     const openReview=async regenerate=>{
       if(memoryBusy())throw Error('현재 통화를 종료한 뒤 사용하세요.');
       if(scope!==requestScope)return;
-      selectCompanion(id,{refresh:false});selectedReviewSessionId=session.id;closeDialog('call-detail-dialog');
+      selectCompanion(id,{refresh:false});selectedReviewSessionId=session.id;setReviewMode('session');closeDialog('call-detail-dialog');
       selectTranscript(session);
       transcriptReview.prioritizeFeedback();
       setView('review');const actionView=viewEpoch,actionScope=scope;
@@ -983,7 +1008,7 @@ $('weekly').onclick=protect(async()=>{
     const result=await edge('weekly',{companionId:selected});if(!valid())return;
     if(result.analysis?.kind!=='weekly'||result.analysis.content?.scope?.companionId!==selected)throw Error('이 상대의 주간 분석을 확인하지 못했어요. 다시 시도해 주세요.');
     await loadHistory();if(!valid())return;
-    selectedReviewSessionId=null;$('review-content').replaceChildren();showAnalysis($('review-content'),{...result.analysis,companion_id:selected});
+    selectedReviewSessionId=null;setReviewMode('weekly');$('review-content').replaceChildren();showAnalysis($('review-content'),{...result.analysis,companion_id:selected});
   }finally{if(weeklyRequest===request){weeklyRequest=null;renderWeeklyAction();}}
 });
 $('memory-search').onsubmit=protect(async e=>{e.preventDefault();if(memoryBusy())return;const selectedCompanion=companionId,epoch=memoryEpoch;const data=await edge('memory',{query:$('memory-query').value.trim(),companionId:selectedCompanion});if(selectedCompanion!==companionId||epoch!==memoryEpoch)return;$('memory-results').replaceChildren();if(!data.memories.length){$('memory-results').textContent='관련 학습 기록이 없습니다.';return;}for(const item of data.memories){const article=document.createElement('article');article.className='history-entry';const p=document.createElement('p');p.textContent=item.summary;const meta=document.createElement('small');meta.textContent=`${item.session_created_at?formatInstant(item.session_created_at,sessionTimeZone({time_zone:item.session_time_zone}).zone):'통화 시각 미확인'} · ${sessionTimeZone({time_zone:item.session_time_zone}).label} · 근거 ${(item.source_event_ids||[]).length}개`;article.append(p,meta);const button=document.createElement('button');button.className='text-button';button.textContent='근거 발화 보기';button.onclick=protect(async()=>{if(memoryBusy())return;const actionView=viewEpoch,actionScope=scope,ids=item.source_event_ids||[];if(!ids.length)return;const rows=await allRows('transcript_events',`id=in.(${ids.join(',')})&order=timestamp.asc,id.asc`);if(actionView!==viewEpoch||actionScope!==scope||epoch!==memoryEpoch||selectedCompanion!==companionId||!button.isConnected)return;const pre=document.createElement('pre');pre.style.whiteSpace='pre-wrap';pre.textContent=rows.filter(row=>row.session_id===item.session_id).map(row=>row.text).join('\n');button.replaceWith(pre);});article.append(button);$('memory-results').append(article);}if(data.limited)notice('관련 기록 일부는 통화 문맥 크기 제한으로 제외되었습니다. 더 구체적인 검색어를 사용하세요.');});
@@ -1012,7 +1037,8 @@ window.addEventListener('online',()=>sync().catch(e=>notice(e.message)));
 window.addEventListener('offline',()=>{cloudVerified=false;updatePending().catch(()=>{});});
 window.addEventListener('beforeunload',e=>{if(call || callStarting || callEnding){e.preventDefault();e.returnValue='';}});
 setInterval(()=>{if(auth)sync().catch(()=>{});},5000);
-document.querySelectorAll('[data-view]').forEach(button=>button.onclick=protect(async()=>{if(memoryBusy())return;const view=button.dataset.view;if(view==='history')historyFilter=null;setView(view);if(view==='history')await loadHistory();if(view==='review')await learning.resume();}));
+$('review-back').onclick=protect(()=>{if(!memoryBusy())openReviewHub();});
+document.querySelectorAll('[data-view]').forEach(button=>button.onclick=protect(async()=>{if(memoryBusy())return;const view=button.dataset.view;if(view==='history')historyFilter=null;if(view==='review')openReviewHub();else setView(view);if(view==='history')await loadHistory();if(view==='review')await learning.resume();}));
 document.querySelectorAll('[data-close]').forEach(button=>button.onclick=()=>closeDialog(button.dataset.close));
 const companionButtons=[...document.querySelectorAll('[data-companion]')];
 companionButtons.forEach(button=>{

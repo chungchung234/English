@@ -154,6 +154,10 @@ try {
   assert.equal(finishes.length, 0, 'UI transition does not skip final speech collection');
   await page.clock.fastForward(350);
   await page.locator('#review-panel').waitFor({ state: 'visible' });
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'review-title', 'the end transition announces the call result stage');
+  const transcript = page.locator('[data-post-call-transcript] details.call-transcript');
+  assert.equal(await transcript.evaluate(node => node.open), false, 'the result precedes optional transcript exploration');
+  await transcript.locator('summary').click();
   await eventually(() => page.locator('[data-post-call-transcript]').innerText().then(text => text.includes('One last thought after hangup.')), 'late transcription appears before storage acknowledgement');
   await milestone(appendGate.started.promise, 'late transcription reaches the held append request');
   assert.equal(finishes.length, 0, 'review is available before the existing final transcription/save wait');

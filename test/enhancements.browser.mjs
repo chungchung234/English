@@ -309,7 +309,8 @@ try {
   await page.locator('.learning-practice [data-action="save-practice"]').click();
   await waitUntil(async () => (await item(recallSource.expression)).practice_count === 1, 'immediate practice remains a self-report');
   assert.equal((await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' })).recalls.filter(row => row.item_id === recallItem.id).length, 0, 'immediate practice cannot become delayed recall');
-  await page.locator('.learning-practice [data-action="close-practice"]').click();
+  await page.locator('.learning-practice [data-action="home"]').click();
+  await openFeedback(page, recallSource);
   assert(await itemCard(page, recallItem.id).locator('[data-action="start-delayed-recall"]').isDisabled(), 'future recall cannot be reported immediately');
   for (const rating of ['hard', 'assisted', 'independent']) {
     await query("update public.learning_schedules set due_at=now()-interval '1 day' where item_id=$1", [recallItem.id]);
@@ -331,7 +332,7 @@ try {
     assert.equal(nextSchedule.last_rating, rating); assert.equal(nextSchedule.days, nextDays);
     const nextDue = (await query("select (((now() at time zone 'Asia/Seoul')::date+$1::integer)::timestamp at time zone 'Asia/Seoul') as due", [nextDays])).rows[0].due;
     assert.equal(new Date(nextSchedule.due_at).toISOString(), new Date(nextDue).toISOString(), `${rating} self-report adjusts the next KST recall day`);
-    await delayed.locator('[data-action="close-practice"]').click();
+    await delayed.locator('[data-action="home"]').click();
   }
   const recallState = await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' });
   assert.deepEqual(recallState.recalls.filter(row => row.item_id === recallItem.id).map(row => row.rating).sort(), ['assisted', 'hard', 'independent']);
@@ -427,7 +428,7 @@ try {
   const linkedRecall = (await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' })).recalls.find(row => row.id === selectedGoal.recall_id);
   assert.equal(linkedRecall.kind, 'delayed'); assert.equal(linkedRecall.item_id, recallItem.id);
   assert.equal(new Date(selectedGoal.period_start).toISOString(), periodStart); assert.equal(new Date(selectedGoal.period_end).toISOString(), periodEnd, 'later follow-up and recall never expand the saved weekly analysis window');
-  await page.locator('.learning-practice [data-action="close-practice"]').click();
+  await page.locator('.learning-practice [data-action="home"]').click();
   pass('E05: exact saved 168-hour period and generation disclosure remain fixed through goal selection → preparation → actual connection → delayed recall.');
 
   await fixture('PRIVATE_OTHER_ACCOUNT_MARKER', 'Other account private expression.', { user: otherUid });

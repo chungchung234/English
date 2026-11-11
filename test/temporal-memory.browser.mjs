@@ -84,6 +84,7 @@ try {
   assert(await page.locator('#live-call').evaluate(e => e.getBoundingClientRect().bottom <= document.querySelector('#end-call').getBoundingClientRect().top));
   await page.screenshot({ path: 'test-results/temporal-call-320-large-text.png', fullPage: true });
   await end();
+  await page.locator('[data-action="toggle-post-call-transcript"]').click();
   await page.locator('[data-session-time]').waitFor({ state: 'visible' });
   assert.match(await page.locator('[data-session-time]').textContent(), /Asia\/Seoul/);
   assert.match(await page.locator('[data-post-call-transcript] .transcript-record-time').textContent(), /2026\. 11\. 11\. 00:00/);

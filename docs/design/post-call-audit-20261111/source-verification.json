@@ -1,0 +1,28 @@
+{
+  "site": "https://chungchung234.github.io/English/",
+  "capture_mode": "Exact published HTML, module, CSS and images at local /built/; protected API/auth/voice responses intercepted to isolated synthetic fixtures. No user account/data.",
+  "assets": [
+    {
+      "path": "assets/ai-alex.cc68fe3acd91.webp",
+      "bytes": 515878,
+      "sha256": "cc68fe3acd919db19a6a8f2f5a54bd093e2b49af0807bfb4299c9c4ee56af37d"
+    },
+    {
+      "path": "assets/ai-juno.9af4cc7fb746.webp",
+      "bytes": 458512,
+      "sha256": "9af4cc7fb746af15fd7d599b6e4f54f21c6ebc8593cd8ca52f84f295f15e52da"
+    },
+    {
+      "path": "assets/ai-mia.c2811706559f.webp",
+      "bytes": 491026,
+      "sha256": "c2811706559f2d38ba5c0801531f8bdb3c338a587b37e1e36aecb980444e80b3"
+    },
+    {
+      "path": "assets/app.70f6d5b1dfa1.js",
+      "bytes": 297108,
+      "sha256": "70f6d5b1dfa14b0726d3ec218da10255031b2994607dc44ad840c0397fe6ad12"
+    }
+  ],
+  "html_sha256": "8c32538cf816eca43f811168c78f5263d4ccaec61d83e4500929ea661646f1c1",
+  "current_source_differs_from_published": true
+}

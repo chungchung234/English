@@ -1,0 +1,666 @@
+{
+  "browser_timezone": "Asia/Seoul",
+  "synthetic_session_timezone": "Asia/Seoul",
+  "source": "Exact downloaded published HTML/hashed module/assets served unchanged under /built/ and original CSP; real Chromium, actual local PGlite SQL (ee6acbe migration superset) and IndexedDB; all protected production API URLs intercepted into synthetic auth/records. No real user data or live model calls.",
+  "evidence": [
+    {
+      "name": "01-ready-feedback-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollY": 0,
+      "documentHeight": 1599,
+      "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 1개\nAlex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n근거 발화\n통화 돌아보기\n표현 하나 연습\n원하면 추가 표현 선택 · 후보 최대 3개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화",
+      "core": {
+        "top": 370.796875,
+        "height": 872.78125,
+        "visible": true,
+        "text": "Alex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n"
+      },
+      "practice": {
+        "top": 1380.96875,
+        "height": 44,
+        "visible": false,
+        "text": ""
+      },
+      "backlog": {
+        "top": 163,
+        "height": 207.796875,
+        "visible": true,
+        "text": "Alex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 1개"
+      },
+      "transcript": {
+        "top": 1243.578125,
+        "height": 237,
+        "visible": true,
+        "text": "Alex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화"
+      },
+      "buttons": [
+        {
+          "text": "주간 분석",
+          "top": 99
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 209.796875
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 253.796875
+        },
+        {
+          "text": "남겨둔 복습 · 1개",
+          "top": 322.796875
+        },
+        {
+          "text": "근거 발화",
+          "top": 729.1875
+        },
+        {
+          "text": "근거 발화",
+          "top": 947.578125
+        },
+        {
+          "text": "통화 돌아보기",
+          "top": 1029.578125
+        },
+        {
+          "text": "표현 하나 연습",
+          "top": 1102.578125
+        },
+        {
+          "text": "원하면 추가 표현 선택 · 후보 최대 3개",
+          "top": 1175.578125
+        },
+        {
+          "text": "대화문 보기 · 1개 발화",
+          "top": 1412.578125
+        }
+      ]
+    },
+    {
+      "name": "02-ready-feedback-320",
+      "viewport": {
+        "width": 320,
+        "height": 568
+      },
+      "scrollY": 0,
+      "documentHeight": 1608,
+      "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 1개\nAlex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n근거 발화\n통화 돌아보기\n표현 하나 연습\n원하면 추가 표현 선택 · 후보 최대 3개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화",
+      "core": {
+        "top": 352.796875,
+        "height": 872.78125,
+        "visible": true,
+        "text": "Alex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n"
+      },
+      "practice": {
+        "top": 1362.96875,
+        "height": 44,
+        "visible": false,
+        "text": ""
+      },
+      "backlog": {
+        "top": 145,
+        "height": 207.796875,
+        "visible": true,
+        "text": "Alex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 1개"
+      },
+      "transcript": {
+        "top": 1225.578125,
+        "height": 264,
+        "visible": true,
+        "text": "Alex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화"
+      },
+      "buttons": [
+        {
+          "text": "주간 분석",
+          "top": 81
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 191.796875
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 235.796875
+        },
+        {
+          "text": "남겨둔 복습 · 1개",
+          "top": 304.796875
+        },
+        {
+          "text": "근거 발화",
+          "top": 711.1875
+        },
+        {
+          "text": "근거 발화",
+          "top": 929.578125
+        },
+        {
+          "text": "통화 돌아보기",
+          "top": 1011.578125
+        },
+        {
+          "text": "표현 하나 연습",
+          "top": 1084.578125
+        },
+        {
+          "text": "원하면 추가 표현 선택 · 후보 최대 3개",
+          "top": 1157.578125
+        },
+        {
+          "text": "대화문 보기 · 1개 발화",
+          "top": 1421.578125
+        }
+      ]
+    },
+    {
+      "name": "03-practice-options-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollY": 813,
+      "documentHeight": 2032,
+      "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 1개\nAlex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n근거 발화\n통화 돌아보기\n표현 하나 연습\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n표현 하나 연습\n나중에 하기\n표현 관리\n시간 두고 회상 · 선택\n원하면 추가 표현 선택 · 후보 최대 3개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화",
+      "core": {
+        "top": 370.796875,
+        "height": 1306.171875,
+        "visible": true,
+        "text": "Alex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n"
+      },
+      "practice": {
+        "top": 1380.96875,
+        "height": 44,
+        "visible": true,
+        "text": "표현 하나 연습"
+      },
+      "backlog": {
+        "top": 163,
+        "height": 207.796875,
+        "visible": true,
+        "text": "Alex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 1개"
+      },
+      "transcript": {
+        "top": 1676.96875,
+        "height": 237,
+        "visible": true,
+        "text": "Alex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화"
+      },
+      "buttons": [
+        {
+          "text": "주간 분석",
+          "top": 99
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 209.796875
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 253.796875
+        },
+        {
+          "text": "남겨둔 복습 · 1개",
+          "top": 322.796875
+        },
+        {
+          "text": "근거 발화",
+          "top": 729.1875
+        },
+        {
+          "text": "근거 발화",
+          "top": 947.578125
+        },
+        {
+          "text": "통화 돌아보기",
+          "top": 1029.578125
+        },
+        {
+          "text": "표현 하나 연습",
+          "top": 1102.578125
+        },
+        {
+          "text": "근거 발화",
+          "top": 1332.96875
+        },
+        {
+          "text": "표현 하나 연습",
+          "top": 1380.96875
+        },
+        {
+          "text": "나중에 하기",
+          "top": 1380.96875
+        },
+        {
+          "text": "표현 관리",
+          "top": 1449.96875
+        },
+        {
+          "text": "시간 두고 회상 · 선택",
+          "top": 1522.96875
+        },
+        {
+          "text": "원하면 추가 표현 선택 · 후보 최대 3개",
+          "top": 1608.96875
+        },
+        {
+          "text": "대화문 보기 · 1개 발화",
+          "top": 1845.96875
+        }
+      ]
+    },
+    {
+      "name": "04-active-recall-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollY": 0,
+      "documentHeight": 897,
+      "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n같은 뜻을 내 말로\n\n단서를 보고 같은 뜻을 영어로 말해 보세요. 똑같이 외울 필요는 없고, 표현을 다시 봐도 괜찮아요.\n\n지난 통화에서 말한 내용 · 자동 전사\n\nYesterday I go to the park.\n\n교정 뒤 다시 말해본 연습으로 기록해요. 녹음·자동 채점은 하지 않아요.\n\n표현 다시 보기 · 도움 받기\n직접 연습했어요\n나중에 하기\n연습 닫기\n\n아직 연습 기록을 저장하지 않았어요.\n\n홈으로",
+      "core": {
+        "top": 209.796875,
+        "height": 569,
+        "visible": true,
+        "text": "같은 뜻을 내 말로\n\n단서를 보고 같은 뜻을 영어로 말해 보세요. 똑같이 외울 필요는 없고, 표현을 다시 봐도 괜찮아요.\n\n지난 통화에서 말한 내용 · 자동 전사\n\nYesterday I go to the park.\n\n교정 뒤 다시 말해본 연습으로 기록해요. 녹음·자동 채점은 하지 않아요.\n\n표현 다시 보기 · 도움 받기\n직접 연습했어요\n나중에 하기\n연습 닫기\n\n아직 연습 기록을 저장하지 않았어요.\n\n홈으로"
+      },
+      "practice": {
+        "top": 0,
+        "height": 0,
+        "visible": false,
+        "text": "표현 하나 연습"
+      },
+      "backlog": {
+        "top": 163,
+        "height": 28.078125,
+        "visible": true,
+        "text": "Alex의 미확인 피드백"
+      },
+      "transcript": {
+        "top": 0,
+        "height": 0,
+        "visible": false,
+        "text": "Alex와 나눈 대화문대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.대화문 보기 · 1개 발화나: Yesterday I go to the park. I would like a coffee, please. Can you say again?"
+      },
+      "buttons": [
+        {
+          "text": "주간 분석",
+          "top": 99
+        },
+        {
+          "text": "표현 다시 보기 · 도움 받기",
+          "top": 518.796875
+        },
+        {
+          "text": "직접 연습했어요",
+          "top": 518.796875
+        },
+        {
+          "text": "나중에 하기",
+          "top": 570.796875
+        },
+        {
+          "text": "연습 닫기",
+          "top": 570.796875
+        },
+        {
+          "text": "홈으로",
+          "top": 671.796875
+        }
+      ]
+    },
+    {
+      "name": "05-answer-revealed-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollY": 0,
+      "documentHeight": 1008,
+      "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n같은 뜻을 내 말로\n\n단서를 보고 같은 뜻을 영어로 말해 보세요. 똑같이 외울 필요는 없고, 표현을 다시 봐도 괜찮아요.\n\n지난 통화에서 말한 내용 · 자동 전사\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n표현을 참고했어요. 가리고 다시 말해봐도 좋아요. 녹음·자동 채점은 하지 않아요.\n\n표현 가리고 내 말로\n직접 연습했어요\n나중에 하기\n연습 닫기\n\n아직 연습 기록을 저장하지 않았어요.\n\n홈으로",
+      "core": {
+        "top": 209.796875,
+        "height": 680,
+        "visible": true,
+        "text": "같은 뜻을 내 말로\n\n단서를 보고 같은 뜻을 영어로 말해 보세요. 똑같이 외울 필요는 없고, 표현을 다시 봐도 괜찮아요.\n\n지난 통화에서 말한 내용 · 자동 전사\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n표현을 참고했어요. 가리고 다시 말해봐도 좋아요. 녹음·자동 채점은 하지 않아요.\n\n표현 가리고 내 말로\n직접 연습했어요\n나중에 하기\n연습 닫기\n\n아직 연습 기록을 저장하지 않았어요.\n\n홈으로"
+      },
+      "practice": {
+        "top": 0,
+        "height": 0,
+        "visible": false,
+        "text": "표현 하나 연습"
+      },
+      "backlog": {
+        "top": 163,
+        "height": 28.078125,
+        "visible": true,
+        "text": "Alex의 미확인 피드백"
+      },
+      "transcript": {
+        "top": 0,
+        "height": 0,
+        "visible": false,
+        "text": "Alex와 나눈 대화문대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.대화문 보기 · 1개 발화나: Yesterday I go to the park. I would like a coffee, please. Can you say again?"
+      },
+      "buttons": [
+        {
+          "text": "주간 분석",
+          "top": 99
+        },
+        {
+          "text": "표현 가리고 내 말로",
+          "top": 629.796875
+        },
+        {
+          "text": "직접 연습했어요",
+          "top": 629.796875
+        },
+        {
+          "text": "나중에 하기",
+          "top": 681.796875
+        },
+        {
+          "text": "연습 닫기",
+          "top": 681.796875
+        },
+        {
+          "text": "홈으로",
+          "top": 782.796875
+        }
+      ]
+    },
+    {
+      "name": "06-practice-saved-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollY": 0,
+      "documentHeight": 2194,
+      "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 0개\nAlex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n근거 발화\n통화 돌아보기\n연습 기록 보기\n같은 뜻을 내 말로\n\n단서를 보고 같은 뜻을 영어로 말해 보세요. 똑같이 외울 필요는 없고, 표현을 다시 봐도 괜찮아요.\n\n지난 통화에서 말한 내용 · 자동 전사\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n표현을 참고했어요. 가리고 다시 말해봐도 좋아요. 녹음·자동 채점은 하지 않아요.\n\n나중에 하기\n연습 닫기\n\n교정 뒤 다시 말해본 기록을 서버에 저장했어요.\n\n홈으로다음 통화 준비\n홈으로\n원하면 추가 표현 선택 · 후보 최대 3개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화",
+      "core": {
+        "top": 370.796875,
+        "height": 1467.78125,
+        "visible": true,
+        "text": "Alex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n"
+      },
+      "practice": {
+        "top": 2023.46875,
+        "height": 44,
+        "visible": false,
+        "text": ""
+      },
+      "backlog": {
+        "top": 163,
+        "height": 207.796875,
+        "visible": true,
+        "text": "Alex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 0개"
+      },
+      "transcript": {
+        "top": 1838.578125,
+        "height": 237,
+        "visible": true,
+        "text": "Alex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화"
+      },
+      "buttons": [
+        {
+          "text": "주간 분석",
+          "top": 99
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 209.796875
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 253.796875
+        },
+        {
+          "text": "남겨둔 복습 · 0개",
+          "top": 322.796875
+        },
+        {
+          "text": "근거 발화",
+          "top": 729.1875
+        },
+        {
+          "text": "근거 발화",
+          "top": 947.578125
+        },
+        {
+          "text": "통화 돌아보기",
+          "top": 1029.578125
+        },
+        {
+          "text": "연습 기록 보기",
+          "top": 1102.578125
+        },
+        {
+          "text": "나중에 하기",
+          "top": 1537.578125
+        },
+        {
+          "text": "연습 닫기",
+          "top": 1537.578125
+        },
+        {
+          "text": "홈으로",
+          "top": 1638.578125
+        },
+        {
+          "text": "다음 통화 준비",
+          "top": 1638.578125
+        },
+        {
+          "text": "홈으로",
+          "top": 1682.578125
+        },
+        {
+          "text": "원하면 추가 표현 선택 · 후보 최대 3개",
+          "top": 1770.578125
+        },
+        {
+          "text": "대화문 보기 · 1개 발화",
+          "top": 2007.578125
+        }
+      ]
+    },
+    {
+      "name": "06b-practice-saved-details-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollY": 1026,
+      "documentHeight": 2194,
+      "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 0개\nAlex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n근거 발화\n통화 돌아보기\n연습 기록 보기\n같은 뜻을 내 말로\n\n단서를 보고 같은 뜻을 영어로 말해 보세요. 똑같이 외울 필요는 없고, 표현을 다시 봐도 괜찮아요.\n\n지난 통화에서 말한 내용 · 자동 전사\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n표현을 참고했어요. 가리고 다시 말해봐도 좋아요. 녹음·자동 채점은 하지 않아요.\n\n나중에 하기\n연습 닫기\n\n교정 뒤 다시 말해본 기록을 서버에 저장했어요.\n\n홈으로다음 통화 준비\n홈으로\n원하면 추가 표현 선택 · 후보 최대 3개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화",
+      "core": {
+        "top": 370.796875,
+        "height": 1467.78125,
+        "visible": true,
+        "text": "Alex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n"
+      },
+      "practice": {
+        "top": 2023.46875,
+        "height": 44,
+        "visible": false,
+        "text": ""
+      },
+      "backlog": {
+        "top": 163,
+        "height": 207.796875,
+        "visible": true,
+        "text": "Alex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 0개"
+      },
+      "transcript": {
+        "top": 1838.578125,
+        "height": 237,
+        "visible": true,
+        "text": "Alex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화"
+      },
+      "buttons": [
+        {
+          "text": "주간 분석",
+          "top": 99
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 209.796875
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 253.796875
+        },
+        {
+          "text": "남겨둔 복습 · 0개",
+          "top": 322.796875
+        },
+        {
+          "text": "근거 발화",
+          "top": 729.1875
+        },
+        {
+          "text": "근거 발화",
+          "top": 947.578125
+        },
+        {
+          "text": "통화 돌아보기",
+          "top": 1029.578125
+        },
+        {
+          "text": "연습 기록 보기",
+          "top": 1102.578125
+        },
+        {
+          "text": "나중에 하기",
+          "top": 1537.578125
+        },
+        {
+          "text": "연습 닫기",
+          "top": 1537.578125
+        },
+        {
+          "text": "홈으로",
+          "top": 1638.578125
+        },
+        {
+          "text": "다음 통화 준비",
+          "top": 1638.578125
+        },
+        {
+          "text": "홈으로",
+          "top": 1682.578125
+        },
+        {
+          "text": "원하면 추가 표현 선택 · 후보 최대 3개",
+          "top": 1770.578125
+        },
+        {
+          "text": "대화문 보기 · 1개 발화",
+          "top": 2007.578125
+        }
+      ]
+    },
+    {
+      "name": "07-returning-review-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "scrollY": 0,
+      "documentHeight": 2194,
+      "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 0개\nAlex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n근거 발화\n통화 돌아보기\n연습 기록 보기\n같은 뜻을 내 말로\n\n단서를 보고 같은 뜻을 영어로 말해 보세요. 똑같이 외울 필요는 없고, 표현을 다시 봐도 괜찮아요.\n\n지난 통화에서 말한 내용 · 자동 전사\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n표현을 참고했어요. 가리고 다시 말해봐도 좋아요. 녹음·자동 채점은 하지 않아요.\n\n나중에 하기\n연습 닫기\n\n교정 뒤 다시 말해본 기록을 서버에 저장했어요.\n\n홈으로다음 통화 준비\n홈으로\n원하면 추가 표현 선택 · 후보 최대 3개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화",
+      "core": {
+        "top": 370.796875,
+        "height": 1467.78125,
+        "visible": true,
+        "text": "Alex · 통화 피드백\n\n어제 공원에 간 일과 카페에서 주문한 경험을 이야기했어요.\n\n경험을 분명하게 공유했어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to the park.\n\nYesterday I went to the park.\n\n어제 있었던 일을 말하므로 go를 과거형 went로 바꿔요.\n\n근거 발화\n선택 가능한 대안\n\nI would like a coffee, please.\n\nCould I have a coffee, please?\n\n원래 표현도 맞아요. 주문할 때 쓸 수 있는 다른 표현이에요.\n\n"
+      },
+      "practice": {
+        "top": 2023.46875,
+        "height": 44,
+        "visible": false,
+        "text": ""
+      },
+      "backlog": {
+        "top": 163,
+        "height": 207.796875,
+        "visible": true,
+        "text": "Alex의 미확인 피드백\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n2026. 11. 11. 오전 9:27:13 KST 피드백 보기\n남겨둔 복습 · 0개"
+      },
+      "transcript": {
+        "top": 1838.578125,
+        "height": 237,
+        "visible": true,
+        "text": "Alex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 1개 발화"
+      },
+      "buttons": [
+        {
+          "text": "주간 분석",
+          "top": 99
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 209.796875
+        },
+        {
+          "text": "2026. 11. 11. 오전 9:27:13 KST 피드백 보기",
+          "top": 253.796875
+        },
+        {
+          "text": "남겨둔 복습 · 0개",
+          "top": 322.796875
+        },
+        {
+          "text": "근거 발화",
+          "top": 729.1875
+        },
+        {
+          "text": "근거 발화",
+          "top": 947.578125
+        },
+        {
+          "text": "통화 돌아보기",
+          "top": 1029.578125
+        },
+        {
+          "text": "연습 기록 보기",
+          "top": 1102.578125
+        },
+        {
+          "text": "나중에 하기",
+          "top": 1537.578125
+        },
+        {
+          "text": "연습 닫기",
+          "top": 1537.578125
+        },
+        {
+          "text": "홈으로",
+          "top": 1638.578125
+        },
+        {
+          "text": "다음 통화 준비",
+          "top": 1638.578125
+        },
+        {
+          "text": "홈으로",
+          "top": 1682.578125
+        },
+        {
+          "text": "원하면 추가 표현 선택 · 후보 최대 3개",
+          "top": 1770.578125
+        },
+        {
+          "text": "대화문 보기 · 1개 발화",
+          "top": 2007.578125
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "published_html_sha256": "8c32538cf816eca43f811168c78f5263d4ccaec61d83e4500929ea661646f1c1",
+  "published_module": "assets/app.70f6d5b1dfa1.js"
+}

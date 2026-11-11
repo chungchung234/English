@@ -1,0 +1,188 @@
+[
+  {
+    "name": "01-immediate-after-hangup",
+    "viewport": [
+      390,
+      844
+    ],
+    "scrollY": 0,
+    "documentHeight": 1704,
+    "title": "복습",
+    "core": null,
+    "practice": null,
+    "transcript": {
+      "top": 203,
+      "bottom": 1429,
+      "height": 1226
+    },
+    "queue": {
+      "top": 154,
+      "bottom": 203,
+      "height": 49
+    },
+    "transcriptOpen": true,
+    "navDisabled": true,
+    "visibleText": "복습\n남겨둔 복습 · 1개\nAlex와 나눈 대화문\n\n통화 음성을 종료했어요. 마지막 발화의 전사와 서버 저장을 확인하고 있어요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 12개 발화\n나: Yesterday I go to a cafe with my friend. It was very nice. We stayed there for almost two hours.\nAlex: That sounds like a relaxed afternoon. What did you like about the cafe?\n나: I liked the big windows and the quiet music. We could talk without shouting, and the coffee was really good.\nAlex: A quiet place makes catching up easier. Did you try anything with your coffee?\n나: Yes, we shared a piece of cheesecake. I usually prefer something less sweet, but this one was quite light.\nAlex: That sounds like a good match for the coffee. Would you go back to the same place?\n나: I think I would. My friend wants to go again next month, but I also want to try a new place near the station.\nAlex: You have two good options. What have you heard about the place near the station?\n나: It opens early, so we could have breakfast before the park gets crowded. I saw a few photos and the sandwiches looked delicious.\nAlex: Breakfast followed by a walk sounds like a good plan. How would you invite your friend?\n나: Maybe I could say, would you like to have breakfast and take a walk with me next Saturday?\n\n이 기기 보관 확인 · 서버 전송 대기\n\nAlex: That invitation is clear and friendly. You can keep it that simple.\n\n이 기기 보관 확인 · 서버 전송 대기\n\n대화문을 먼저 확인하세요. 마지막 발화의 전사와 저장을 마친 뒤 피드백을 준비해요."
+  },
+  {
+    "name": "02-saved-analysis-pending",
+    "viewport": [
+      390,
+      844
+    ],
+    "scrollY": 0,
+    "documentHeight": 1728,
+    "title": "복습",
+    "core": null,
+    "practice": {
+      "top": 1494,
+      "bottom": 1610,
+      "height": 116
+    },
+    "transcript": {
+      "top": 203,
+      "bottom": 1337,
+      "height": 1134
+    },
+    "queue": {
+      "top": 154,
+      "bottom": 203,
+      "height": 49
+    },
+    "transcriptOpen": true,
+    "navDisabled": false,
+    "visibleText": "복습\n남겨둔 복습 · 1개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 12개 발화\n나: Yesterday I go to a cafe with my friend. It was very nice. We stayed there for almost two hours.\nAlex: That sounds like a relaxed afternoon. What did you like about the cafe?\n나: I liked the big windows and the quiet music. We could talk without shouting, and the coffee was really good.\nAlex: A quiet place makes catching up easier. Did you try anything with your coffee?\n나: Yes, we shared a piece of cheesecake. I usually prefer something less sweet, but this one was quite light.\nAlex: That sounds like a good match for the coffee. Would you go back to the same place?\n나: I think I would. My friend wants to go again next month, but I also want to try a new place near the station.\nAlex: You have two good options. What have you heard about the place near the station?\n나: It opens early, so we could have breakfast before the park gets crowded. I saw a few photos and the sandwiches looked delicious.\nAlex: Breakfast followed by a walk sounds like a good plan. How would you invite your friend?\n나: Maybe I could say, would you like to have breakfast and take a walk with me next Saturday?\nAlex: That invitation is clear and friendly. You can keep it that simple.\n\nAlex와의 통화는 저장됐습니다. 피드백을 만들고 있어요…\n\n피드백을 준비하고 있어요. 홈으로 이동해도 이 회차에서 상태를 확인할 수 있어요. 앱을 닫은 뒤 완료 여부는 다시 확인이 필요해요.\n\n피드백 상태 확인홈으로"
+  },
+  {
+    "name": "03-analysis-ready-same-position",
+    "viewport": [
+      390,
+      844
+    ],
+    "scrollY": 0,
+    "documentHeight": 2657,
+    "title": "복습",
+    "core": {
+      "top": 1513,
+      "bottom": 1540,
+      "height": 27
+    },
+    "practice": {
+      "top": 2397,
+      "bottom": 2519,
+      "height": 122
+    },
+    "transcript": {
+      "top": 371,
+      "bottom": 1505,
+      "height": 1134
+    },
+    "queue": {
+      "top": 163,
+      "bottom": 371,
+      "height": 208
+    },
+    "transcriptOpen": true,
+    "navDisabled": false,
+    "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n2026. 11. 11. 오전 9:30:00 KST 피드백 보기\n2026. 11. 11. 오전 9:29:56 KST 피드백 보기\n남겨둔 복습 · 1개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 12개 발화\n나: Yesterday I go to a cafe with my friend. It was very nice. We stayed there for almost two hours.\nAlex: That sounds like a relaxed afternoon. What did you like about the cafe?\n나: I liked the big windows and the quiet music. We could talk without shouting, and the coffee was really good.\nAlex: A quiet place makes catching up easier. Did you try anything with your coffee?\n나: Yes, we shared a piece of cheesecake. I usually prefer something less sweet, but this one was quite light.\nAlex: That sounds like a good match for the coffee. Would you go back to the same place?\n나: I think I would. My friend wants to go again next month, but I also want to try a new place near the station.\nAlex: You have two good options. What have you heard about the place near the station?\n나: It opens early, so we could have breakfast before the park gets crowded. I saw a few photos and the sandwiches looked delicious.\nAlex: Breakfast followed by a walk sounds like a good plan. How would you invite your friend?\n나: Maybe I could say, would you like to have breakfast and take a walk with me next Saturday?\nAlex: That invitation is clear and friendly. You can keep it that simple.\nAlex · 통화 피드백\n\n친구와 다녀온 카페와 다음 주말 계획을 영어로 이야기했어요.\n\n어떤 점이 좋았는지 구체적인 이유를 덧붙였어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to a cafe with my friend.\n\nYesterday I went to a cafe with my friend.\n\n어제 있었던 일이므로 과거형 went로 말하면 자연스러워요.\n\n근거 발화\n선택 가능한 대안\n\nIt was very nice.\n\nI really enjoyed the atmosphere.\n\n좋았던 점을 조금 더 구체적으로 표현할 수 있어요.\n\n근거 발화\n다음에도 써볼 표현\n\nI have been meaning to try that place.\n\n근거 발화\n통화 돌아보기\n표현 하나 연습\n원하면 추가 표현 선택 · 후보 최대 3개"
+  },
+  {
+    "name": "04-ready-compact",
+    "viewport": [
+      320,
+      568
+    ],
+    "scrollY": 0,
+    "documentHeight": 2923,
+    "title": "복습",
+    "core": {
+      "top": 1698,
+      "bottom": 1725,
+      "height": 27
+    },
+    "practice": {
+      "top": 2663,
+      "bottom": 2785,
+      "height": 122
+    },
+    "transcript": {
+      "top": 353,
+      "bottom": 1690,
+      "height": 1338
+    },
+    "queue": {
+      "top": 145,
+      "bottom": 353,
+      "height": 208
+    },
+    "transcriptOpen": true,
+    "navDisabled": false,
+    "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n2026. 11. 11. 오전 9:30:00 KST 피드백 보기\n2026. 11. 11. 오전 9:29:56 KST 피드백 보기\n남겨둔 복습 · 1개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 12개 발화\n나: Yesterday I go to a cafe with my friend. It was very nice. We stayed there for almost two hours.\nAlex: That sounds like a relaxed afternoon. What did you like about the cafe?\n나: I liked the big windows and the quiet music. We could talk without shouting, and the coffee was really good.\nAlex: A quiet place makes catching up easier. Did you try anything with your coffee?\n나: Yes, we shared a piece of cheesecake. I usually prefer something less sweet, but this one was quite light.\nAlex: That sounds like a good match for the coffee. Would you go back to the same place?\n나: I think I would. My friend wants to go again next month, but I also want to try a new place near the station.\nAlex: You have two good options. What have you heard about the place near the station?\n나: It opens early, so we could have breakfast before the park gets crowded. I saw a few photos and the sandwiches looked delicious.\nAlex: Breakfast followed by a walk sounds like a good plan. How would you invite your friend?\n나: Maybe I could say, would you like to have breakfast and take a walk with me next Saturday?\nAlex: That invitation is clear and friendly. You can keep it that simple.\nAlex · 통화 피드백\n\n친구와 다녀온 카페와 다음 주말 계획을 영어로 이야기했어요.\n\n어떤 점이 좋았는지 구체적인 이유를 덧붙였어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to a cafe with my friend.\n\nYesterday I went to a cafe with my friend.\n\n어제 있었던 일이므로 과거형 went로 말하면 자연스러워요.\n\n근거 발화\n선택 가능한 대안\n\nIt was very nice.\n\nI really enjoyed the atmosphere.\n\n좋았던 점을 조금 더 구체적으로 표현할 수 있어요.\n\n근거 발화\n다음에도 써볼 표현\n\nI have been meaning to try that place.\n\n근거 발화\n통화 돌아보기\n표현 하나 연습\n원하면 추가 표현 선택 · 후보 최대 3개"
+  },
+  {
+    "name": "05-scrolled-to-feedback",
+    "viewport": [
+      390,
+      844
+    ],
+    "scrollY": 1105,
+    "documentHeight": 2657,
+    "title": "복습",
+    "core": {
+      "top": 408,
+      "bottom": 435,
+      "height": 27
+    },
+    "practice": {
+      "top": 1292,
+      "bottom": 1414,
+      "height": 122
+    },
+    "transcript": {
+      "top": -734,
+      "bottom": 400,
+      "height": 1134
+    },
+    "queue": {
+      "top": -942,
+      "bottom": -734,
+      "height": 208
+    },
+    "transcriptOpen": true,
+    "navDisabled": false,
+    "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n2026. 11. 11. 오전 9:30:00 KST 피드백 보기\n2026. 11. 11. 오전 9:29:56 KST 피드백 보기\n남겨둔 복습 · 1개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 12개 발화\n나: Yesterday I go to a cafe with my friend. It was very nice. We stayed there for almost two hours.\nAlex: That sounds like a relaxed afternoon. What did you like about the cafe?\n나: I liked the big windows and the quiet music. We could talk without shouting, and the coffee was really good.\nAlex: A quiet place makes catching up easier. Did you try anything with your coffee?\n나: Yes, we shared a piece of cheesecake. I usually prefer something less sweet, but this one was quite light.\nAlex: That sounds like a good match for the coffee. Would you go back to the same place?\n나: I think I would. My friend wants to go again next month, but I also want to try a new place near the station.\nAlex: You have two good options. What have you heard about the place near the station?\n나: It opens early, so we could have breakfast before the park gets crowded. I saw a few photos and the sandwiches looked delicious.\nAlex: Breakfast followed by a walk sounds like a good plan. How would you invite your friend?\n나: Maybe I could say, would you like to have breakfast and take a walk with me next Saturday?\nAlex: That invitation is clear and friendly. You can keep it that simple.\nAlex · 통화 피드백\n\n친구와 다녀온 카페와 다음 주말 계획을 영어로 이야기했어요.\n\n어떤 점이 좋았는지 구체적인 이유를 덧붙였어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to a cafe with my friend.\n\nYesterday I went to a cafe with my friend.\n\n어제 있었던 일이므로 과거형 went로 말하면 자연스러워요.\n\n근거 발화\n선택 가능한 대안\n\nIt was very nice.\n\nI really enjoyed the atmosphere.\n\n좋았던 점을 조금 더 구체적으로 표현할 수 있어요.\n\n근거 발화\n다음에도 써볼 표현\n\nI have been meaning to try that place.\n\n근거 발화\n통화 돌아보기\n표현 하나 연습\n원하면 추가 표현 선택 · 후보 최대 3개"
+  },
+  {
+    "name": "06-same-call-history-reentry",
+    "viewport": [
+      390,
+      844
+    ],
+    "scrollY": 0,
+    "documentHeight": 1759,
+    "title": "복습",
+    "core": {
+      "top": 379,
+      "bottom": 406,
+      "height": 27
+    },
+    "practice": {
+      "top": 1262,
+      "bottom": 1384,
+      "height": 122
+    },
+    "transcript": {
+      "top": 1404,
+      "bottom": 1641,
+      "height": 237
+    },
+    "queue": {
+      "top": 163,
+      "bottom": 371,
+      "height": 208
+    },
+    "transcriptOpen": false,
+    "navDisabled": false,
+    "visibleText": "복습\n주간 분석\nAlex의 미확인 피드백\n2026. 11. 11. 오전 9:30:00 KST 피드백 보기\n2026. 11. 11. 오전 9:29:56 KST 피드백 보기\n남겨둔 복습 · 1개\nAlex · 통화 피드백\n\n친구와 다녀온 카페와 다음 주말 계획을 영어로 이야기했어요.\n\n어떤 점이 좋았는지 구체적인 이유를 덧붙였어요.\n\n더 자연스럽게 말하기\n의미·문법 오류\n\nYesterday I go to a cafe with my friend.\n\nYesterday I went to a cafe with my friend.\n\n어제 있었던 일이므로 과거형 went로 말하면 자연스러워요.\n\n근거 발화\n선택 가능한 대안\n\nIt was very nice.\n\nI really enjoyed the atmosphere.\n\n좋았던 점을 조금 더 구체적으로 표현할 수 있어요.\n\n근거 발화\n다음에도 써볼 표현\n\nI have been meaning to try that place.\n\n근거 발화\n통화 돌아보기\n표현 하나 연습\n원하면 추가 표현 선택 · 후보 최대 3개\nAlex와 나눈 대화문\n\n대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.\n\n자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.\n\n대화문 보기 · 12개 발화"
+  }
+]

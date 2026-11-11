@@ -73,8 +73,10 @@
 <form id="memory-search" class="memory-search" hidden><label class="sr-only" for="memory-query">이전 대화 검색</label><input id="memory-query" placeholder="이전 대화 검색" maxlength="300" required><button class="glass-button">검색</button></form><div id="memory-results"></div><div id="history"></div>
 <div id="history-tools" class="history-tools" hidden><button id="memory-manage-open" class="quiet-button">기억 관리</button></div>
 </section>
-<section data-panel="review" id="review-panel" class="content-panel review-panel" hidden>
-<div class="panel-heading"><h1>복습</h1><button id="weekly" class="glass-button" hidden disabled>주간 분석</button></div>
+<section data-panel="review" id="review-panel" class="content-panel review-panel" data-mode="hub" hidden>
+<button id="review-back" class="text-button review-back" hidden>복습 목록</button>
+<div class="panel-heading"><div><p id="review-context" class="panel-subtitle">Alex와 이어가기</p><h1 id="review-title" tabindex="-1">복습</h1></div><button id="weekly" class="glass-button" hidden disabled>주간 분석</button></div>
+<p id="review-announcement" class="sr-only" role="status" aria-live="polite"></p>
 <div id="learning-queue"></div>
 <div id="review-content"></div>
 <button id="practice-preview" class="practice-preview" hidden disabled><span class="practice-icon"><img src="assets/book.svg" alt=""></span><span class="practice-copy"><strong>지난 표현</strong><span id="practice-preview-text">첫 통화 후에 만나요</span></span><img class="row-chevron" src="assets/chevron.svg" alt=""></button>

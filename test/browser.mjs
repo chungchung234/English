@@ -232,8 +232,9 @@ try{
  await testSpeechSpeed(page);
  assert.equal(voiceSpeeds[0],.85,'first call starts at the default 0.85 speed');
  await assertVisibleImagesLoaded(page);await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/mobile-call.png',fullPage:true});
+ const receivedTurnSaved=page.waitForResponse(response=>response.url().endsWith('/rpc/append_events')&&response.request().postDataJSON()?.p_events?.some(event=>event.text==='I am thinking of visiting a friend.'));
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'item1',content_index:0,transcript:'I am thinking of visiting a friend.'})}));
- await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.waitForFunction(()=>document.querySelector('#save-status').textContent==='클라우드 저장 확인됨');assert.equal(saved.size,2);
+ await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await receivedTurnSaved;await page.waitForFunction(()=>document.querySelector('#save-status').textContent==='클라우드 저장 확인됨');assert.equal(saved.size,2);
  // A completed long turn triggers a durable checkpoint before old items delete.
  await page.evaluate(()=>{for(let i=0;i<10;i++)window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.created',item:{id:'context-'+i}})});window.testPeer.dc.onmessage({data:JSON.stringify({type:'response.done',response:{usage:{input_tokens:19000}}})});});
  await page.waitForFunction(()=>window.testMessages?.filter(message=>message.type==='conversation.item.delete').length===4);

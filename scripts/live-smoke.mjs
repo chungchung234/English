@@ -205,9 +205,8 @@ async function main() {
       pass(`${profile.name}: actual WebRTC connected, provider confirmed ${profile.voice}, and both speech transcripts reached the app.`);
       stage = `${profile.name}: automatic transcript and feedback save`;
       await page.locator('#end-call').click();
-      await page.waitForFunction(() => document.querySelector('#call-status')?.textContent === '통화와 피드백 저장 완료', {}, { timeout: 120_000 });
-      await page.locator('[data-view="review"]').click();
-      await page.locator('#review-content .analysis').first().waitFor({ state: 'visible' });
+      await page.waitForFunction(() => document.querySelector('#call-status')?.textContent === '통화와 피드백 서버 저장 확인', {}, { timeout: 120_000 });
+      await page.locator('#review-panel[data-mode="session"] [data-feedback-core]').first().waitFor({ state: 'visible' });
       await page.screenshot({ path: `test-results/live-${profile.id}-review.png`, fullPage: true });
       pass(`${profile.name}: call ended and automatic cloud transcript plus feedback save completed.`);
       stage = `${profile.name}: reload restores selected companion, history, and visible feedback`;
@@ -217,8 +216,9 @@ async function main() {
       await page.locator('[data-view="history"]').click();
       await page.locator('#history .history-entry').first().waitFor({ state: 'visible' });
       ensure(await page.locator('#history .history-entry[data-companion-id="'+profile.id+'"]').count() === 1, 'Reloaded history is missing or duplicates this companion conversation.');
-      await page.locator('[data-view="review"]').click();
-      await page.locator('#review-content .analysis').first().waitFor({ state: 'visible' });
+      await page.locator('#history .history-entry[data-companion-id="'+profile.id+'"] .history-open').click();
+      await page.locator('#call-detail-dialog .call-feedback').click();
+      await page.locator('#review-panel[data-mode="session"] [data-feedback-core]').first().waitFor({ state: 'visible' });
       await statusSnapshot();
       pass(`${profile.name}: reload retained the selected friend and restored visible scoped history and feedback.`);
       await browser.close(); browser = undefined; page = undefined;

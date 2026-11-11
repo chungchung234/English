@@ -174,7 +174,9 @@ export function createLearningEnhancements(host) {
     const box = text('section', '', 'learning-practice'); box.dataset.itemId = item.id; box.dataset.practiceKind = 'delayed';
     const cueValue = text('p', cue.value, cue.kind === 'source' ? 'original' : 'help'); cueValue.dataset.practiceCue = cue.kind;
     const expression = text('p', item.expression, 'improved'); expression.hidden = true; expression.dataset.practiceExpression = '';
-    const state = status('단서만 보고 같은 뜻을 영어로 말해 보세요. 똑같은 문장일 필요는 없어요. 해본 뒤 내 느낌을 선택해요. 녹음·자동 채점은 하지 않아요.');
+    const state = status(''); state.dataset.practiceStatus = '';
+    const intro = text('p', '같은 뜻을 영어로 말해보고, 어땠는지 선택해요.', 'help');
+    const note = text('p', '혼자 소리 내어 연습해요 · 녹음·자동 채점 없음', 'help');
     const finish = document.createElement('div'), actions = text('div', '', 'learning-actions');
     const gradeButtons = [];
     let revealed = false, submitting = false;
@@ -210,8 +212,9 @@ export function createLearningEnhancements(host) {
       gradeButtons.push(node); actions.append(node);
     }
     const close = button('연습 닫기', handlers.close); close.dataset.action = 'close-practice';
-    box.append(text('h4', '시간을 두고 가려서 회상'), text('small', cue.label), cueValue, state, expression, reveal, actions, close, finish);
-    return { box, state, save, toggle: reveal, finish, gradeButtons };
+    const heading=text('h3','지난 표현, 다시 말해보기'); heading.tabIndex=-1; heading.dataset.action='practice-start';
+    box.append(heading, intro, text('small', cue.label), cueValue, expression, reveal, note, actions, state, close, finish);
+    return { box, heading, state, save, toggle: reveal, finish, gradeButtons };
   }
   return {
     clear() { data = empty(); unavailable = false; drafts.clear(); requests.clear(); },

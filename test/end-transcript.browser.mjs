@@ -119,6 +119,17 @@ try {
   const transcript = () => page.locator('[data-post-call-transcript]');
   const textRows = () => transcript().locator('[data-transcript-events]');
   const transcriptStatus = () => transcript().locator('[data-transcript-status]');
+  const openTranscript = async () => {
+    const details = transcript().locator('details.call-transcript');
+    if (!await details.evaluate(node => node.open)) await details.locator('summary').click();
+  };
+  const openFeedback = async sessionId => {
+    await page.locator('[data-view="history"]').click();
+    await page.locator(`.history-entry[data-session-id="${sessionId}"] .history-open`).click();
+    await page.locator('.call-feedback').click();
+    await transcript().waitFor({ state: 'visible' });
+    await openTranscript();
+  };
 
   appendGate = { started: defer(), release: defer() }; finishGate = { started: defer(), release: defer() }; failReview = true;
   const firstId = await start();
@@ -128,6 +139,9 @@ try {
   await page.locator('#end-call').click();
   await page.locator('[data-panel="review"]').waitFor({ state: 'visible', timeout: 1500 });
   await transcript().waitFor({ state: 'visible', timeout: 1500 });
+  assert.equal(await transcript().locator('details.call-transcript').evaluate(node => node.open), false, 'hangup leaves transcript available on demand instead of before the result');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'review-title', 'hangup announces the call result stage');
+  await openTranscript();
   assert.match(await textRows().innerText(), /I would like to review what we said\./);
   assert.match(await textRows().innerText(), /Of course\. What stood out to you\?/);
   assert.match(await transcript().innerText(), /중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요/);
@@ -136,7 +150,7 @@ try {
   assert.match(await transcriptStatus().innerText(), /전사|전송|저장.*확인|대기/);
   assert.doesNotMatch(await transcriptStatus().innerText(), /서버 저장 완료|통화 저장 완료/);
   assert.equal(await transcriptStatus().getAttribute('role'), 'status');
-  assert.equal(await page.evaluate(() => document.activeElement?.dataset.action), 'toggle-post-call-transcript', 'hangup moves keyboard focus to the newly opened transcript');
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.action), 'toggle-post-call-transcript', 'explicitly opening the transcript moves focus to its disclosure');
   await emit({ type: 'input_audio_buffer.committed', item_id: 'late-final-user' });
   await emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'late-final-user', transcript: 'This is my final sentence after hangup.' });
   await textRows().getByText('This is my final sentence after hangup.', { exact: false }).waitFor();
@@ -161,7 +175,7 @@ try {
 
   sessionMetadataGate = { sessionId: firstId, started: defer(), release: defer() };
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' });
-  await page.locator('[data-view="review"]').click(); await transcript().waitFor({ state: 'visible' });
+  await openFeedback(firstId);
   await milestone(sessionMetadataGate.started.promise, 'reload requests the held optional session metadata');
   const savedIds = [...saved.values()].filter(row => row.sessionId === firstId).map(row => row.event.id).sort();
   await page.waitForFunction(({ sessionId, ids }) => {
@@ -187,6 +201,7 @@ try {
 
   const emptyId = await start(); await page.locator('#end-call').click();
   await transcript().waitFor({ state: 'visible', timeout: 1500 });
+  await openTranscript();
   assert.equal(await transcript().locator('[data-transcript-event-id]').count(), 0, 'a zero-turn call does not invent transcript rows');
   assert.match(await transcript().innerText(), /발화.*없|대화.*없|0개/);
   await waitUntil(() => sessions.find(session => session.id === emptyId).status === 'ended', 'zero-turn call can still finish honestly');
@@ -199,6 +214,7 @@ try {
   await page.locator('#transcript').getByText(/Keep this received sentence/).waitFor({ state: 'attached' });
   await emit({ type: 'conversation.item.input_audio_transcription.failed', item_id: 'missing-user' });
   await page.locator('#end-call').click(); await transcript().waitFor({ state: 'visible', timeout: 1500 });
+  await openTranscript();
   assert.match(await textRows().innerText(), /Keep this received sentence/);
   await page.waitForFunction(() => !document.querySelector('[data-view="contacts"]').disabled);
   assert.equal(sessions.find(session => session.id === partialId).status, 'active', 'missing transcription never becomes a false completed server call');
@@ -232,6 +248,7 @@ try {
   assert(await page.locator('#mute-call').isDisabled(), 'muting controls cannot bypass the storage-failure block');
   assert.match(await page.locator('#call-status').textContent(), /저장 오류/, 'reconnection must not invite speech while the microphone remains blocked');
   await page.locator('#end-call').click(); await transcript().waitFor({ state: 'visible', timeout: 1500 });
+  await openTranscript();
   assert.match(await textRows().innerText(), /Show this received text even when device storage fails\./);
   await transcript().locator('[data-transcript-event-id][data-storage="failed"]').waitFor();
   assert.match(await textRows().innerText(), /기기 보관과 서버 저장을 확인하지 못/);

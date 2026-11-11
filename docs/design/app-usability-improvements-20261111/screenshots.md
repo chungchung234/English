@@ -46,3 +46,5 @@
 | after | [after/44-weekly-goals.png](after/44-weekly-goals.png) | 해당 시나리오 기본값 |
 | after | [after/45-weekly-persistent-notice.png](after/45-weekly-persistent-notice.png) | 해당 시나리오 기본값 |
 | after | [after/46-weekly-summary.png](after/46-weekly-summary.png) | 해당 시나리오 기본값 |
+| after · 운영 익명 | [47-public-login](after/47-public-login.png) | 390×844 |
+| after · 운영 익명 | [48-public-email](after/48-public-email.png) | 390×844 |

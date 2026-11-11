@@ -376,5 +376,23 @@
     "phase": "after",
     "file": "after/46-weekly-summary.png",
     "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "after",
+    "file": "after/47-public-login.png",
+    "source": "actual public URL / anonymous browser / release ea6024ae7bf8dedd1bd93014c91e96ded49b85e8",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  {
+    "phase": "after",
+    "file": "after/48-public-email.png",
+    "source": "actual public URL / anonymous browser / release ea6024ae7bf8dedd1bd93014c91e96ded49b85e8",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    }
   }
 ]

@@ -8,7 +8,16 @@
   ],
   "initial_source_base": "d41b871e2811fc6196ba60b06cb5175eb1469e74",
   "integrated_latest_base": "1474b3707cf56ff9c98c5deea71ccbe1235af8b2",
-  "source_unchanged_since_final_checks": false,
+  "source_unchanged_since_final_checks": true,
   "authenticated_capture": "Actual local app source, synthetic auth/transcript/backend/microphone/WebRTC. Not a real learner account.",
-  "ui_implementation_commit": "26347cf80fd83077aca62f6968e85da979ece7d2"
+  "ui_implementation_commit": "26347cf80fd83077aca62f6968e85da979ece7d2",
+  "release_commit": "ea6024ae7bf8dedd1bd93014c91e96ded49b85e8",
+  "public_release_asset": "assets/app.d3edaa33f7b6.js",
+  "public_release_sha256": "d3edaa33f7b6e217be3653334e4f4fa01bc635b96d7f989c03dc71c216d9888f",
+  "public_release_checked_at_utc": "2026-11-11T14:25:24.124Z",
+  "release_ci_url": "https://github.com/chungchung234/English/actions/runs/43036951735",
+  "release_ci_conclusion": "success",
+  "integrated_unit_tests": 310,
+  "live_approved_voice": "not run; no approved test account; unapproved access-policy checks passed",
+  "authenticated_ui": "local current source / synthetic account, data and voice transport; anonymous production login/email separately verified"
 }

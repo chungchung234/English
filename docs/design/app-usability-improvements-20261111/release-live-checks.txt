@@ -1,0 +1,3 @@
+deploy	Verify live access policy and available voice paths	2026-11-11T14:24:20.5707692Z ##[notice]Two temporary email-verified test accounts authenticated against live Supabase.
+deploy	Verify live access policy and available voice paths	2026-11-11T14:24:56.2360290Z ##[notice]Unapproved verified accounts cannot read records, canonical learning state or memory controls, invoke learning RPCs or service-only learning voice context, create, append, finish, restore, manage/index memories, checkpoint, or access AI. Voice checks require an approved account and were not run.
+deploy	Verify live access policy and available voice paths	2026-11-11T14:24:56.7450876Z Temporary account cleanup attempted.

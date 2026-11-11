@@ -68,7 +68,7 @@
 ## 검증과 범위
 
 - 최초 기준은 `d41b871`이다. 작업 중 추가된 `1eb405d`의 50분 통화 변경을 먼저 합쳤고, 최신 통화 한도·최종 전사·저장을 별도로 재검증했다. 20분 한도로 되돌리지 않는다. 이후 원격에 추가된 `1474b37`의 통화 안정성·진단 변경도 보존해 통합했다. 최종 CI는 이 통합본 전체를 검사한다.
-- 사용성 수정 기준에서 로컬 `npm run check`, `npm test` 282개, `npm run test:browser` 전체, `npm run test:presence`, `npm run eval:memory`, `npm run eval:learning`, `npm run build`를 실행했다. 최신 50분 기준 `node test/browser.mjs`도 통과했다. 최종 배포 CI 결과는 배포 확인 후 아래에 기록한다.
+- 사용성 수정 기준에서 로컬 `npm run check`, `npm test` 282개, `npm run test:browser` 전체, `npm run test:presence`, `npm run eval:memory`, `npm run eval:learning`, `npm run build`를 실행했다. 최신 50분 기준 `node test/browser.mjs`도 통과했다. 최신 통합본의 로컬 기능 검사 310개와 추가 음성 안정성 브라우저 검사도 통과했다. 최종 CI는 동일 통합본에서 기능·브라우저·빌드 검사를 모두 통과했다.
 - 390×844를 기본으로 320×740, 320×568, 1024×900을 확인했다. 320px·루트 글자 32px 시뮬레이션에서도 가로 넘침 없이 마지막 동작을 메뉴 위로 스크롤할 수 있었다. [큰 글자](after/15-detail-large-text.png). 이 시뮬레이션을 모든 OS 글자 확대/브라우저 줌 검증으로 간주하지 않는다.
 - 수정 전후는 같은 화면 크기와 같은 합성 표현·입력으로 캡처했다. 실행 시각은 각 캡처의 합성 통화 시각에 반영되므로 몇 분 차이가 있다. 서버·인증·음성은 통제된 대역이며 실제 학습자 데이터가 아니다. 오류 비교의 수정 전은 최초 기준 커밋을 임시 디렉터리에서 실행했다.
 - 전반 WCAG 인증, 실제 사용자 발견 성공률, 학습 효과·음성 품질·운영 계정의 기억 연속성은 이번 UI 검증으로 측정하지 않았다. 공개 로그인은 배포 뒤 실제 URL에서 별도로 확인한다.
@@ -76,6 +76,10 @@
 
 ## 배포 확인
 
-앞선 50분 배포의 [운영 검사 준비 단계](https://github.com/chungchung234/English/actions/runs/43032815041)가 Ubuntu 미러 DNS 오류로 실패했다. 같은 실패가 예상되는 이번 첫 실행은 취소하고, 배포 후 검사에서 이미 제공되는 Chrome과 고정 합성 WAV를 사용하도록 수정했다. 브라우저·폰트·TTS를 매번 시스템 패키지로 설치하지 않는다. 접근 정책·실제 음성·전사·저장 검사는 유지한다. WAV의 PCM 형식·길이와 실제 브라우저 마이크 입력의 음성 신호를 로컬에서 확인했다.
+앞선 50분 배포의 [운영 검사 준비 단계](https://github.com/chungchung234/English/actions/runs/43032815041)가 Ubuntu 미러 DNS 오류로 실패했다. 같은 실패가 예상되는 이번 첫 실행은 취소하고, 배포 후 검사에서 이미 제공되는 Chrome과 고정 합성 WAV를 사용하도록 수정했다. 브라우저·폰트·TTS를 매번 시스템 패키지로 설치하지 않는다. 접근 정책 검사와 승인된 테스트 계정이 있을 때의 음성·전사·저장 검사 경로를 유지한다. WAV의 PCM 형식·길이와 실제 브라우저 마이크 입력의 음성 신호를 로컬에서 확인했다.
 
-최종 소스 반영과 CI·공개 URL 검증이 완료되면 이 항목과 source-verification.json을 갱신한다.
+- 배포 소스: `ea6024ae7bf8dedd1bd93014c91e96ded49b85e8` (사용성 구현 `26347cf`와 최신 통화 변경 포함).
+- [배포 CI](https://github.com/chungchung234/English/actions/runs/43036951735): build·deploy 모두 성공. 기능 310개, 전체 브라우저, 캐릭터 렌더링, 합성 평가와 배포 빌드를 통과했다. [실행 메타데이터](release-ci.json)
+- 2026-11-11 23:25 KST에 [공개 URL](https://chungchung234.github.io/English/)을 새 익명 브라우저로 열어 로그인·이메일 화면을 확인했다. 메일은 보내지 않았다. [로그인](after/47-public-login.png), [이메일](after/48-public-email.png)
+- 공개 JS: `assets/app.d3edaa33f7b6.js`, SHA-256 `d3edaa33f7b6e217be3653334e4f4fa01bc635b96d7f989c03dc71c216d9888f`. 번들 안의 `git:ea6024…`와 배포 소스가 일치했다. 보조 로그인 링크의 밑줄·새 HTML과 브라우저 pageerror 0건을 확인했다. [공개 확인 기록](public-verification.json)
+- 운영 검사는 임시 미승인 계정이 실제 Supabase에서 개인 기록·학습·기억·음성 API에 접근하지 못함을 확인했다. **승인된 운영 음성 통화는 실행하지 않았다.** 음성·전사·저장 흐름의 이번 검증 근거는 로컬 합성 전송/데이터를 사용한 브라우저 검사다. [운영 검사 범위 원문](release-live-checks.txt)

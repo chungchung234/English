@@ -590,7 +590,7 @@ try {
     const delayedSessionId = transport.voice.at(-1).sessionId;
     await delayed.locator('#end-call').click();
     await delayed.locator('#wrapup-home').waitFor({ state: 'visible', timeout: 15000 });
-    assert.match(await delayed.locator('#call-status').innerText(), /전사와 저장|저장/);
+    assert.match(await delayed.locator('[data-post-call-transcript] [data-transcript-status]').innerText(), /전사와 저장|저장/, 'the visible post-call view distinguishes ended audio from pending storage');
     assert.equal((await query('select status from public.sessions where id=$1', [delayedSessionId])).rows[0].status, 'active', 'waiting does not invent server completion');
     await delayed.locator('#wrapup-home').click();
     assert.match(await delayed.locator('#notice').innerText(), /서버 저장 완료 전/);

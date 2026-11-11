@@ -29,7 +29,7 @@ export function createAIPresence(root = document) {
   const weights=Object.fromEntries(stateNames.map(key=>[key,key==='idle'?1:0]));
   const motion=matchMedia('(prefers-reduced-motion: reduce)');
   let profile='alex',state='idle',inputLevel=0,outputLevel=0,clock=0,idleClock=0,ambientClock=0;
-  let context,raf=0,last=0,destroyed=false;
+  let context,raf=0,last=0,destroyed=false,paused=false;
   const sources=new Map(),analysers=new Map(),revisions={input:0,output:0};
   const artwork=new Map();
   const vertex='attribute vec2 position;varying vec2 uv;void main(){uv=position*.5+.5;gl_Position=vec4(position,0.,1.);}';
@@ -101,7 +101,7 @@ export function createAIPresence(root = document) {
     }
     const name=nameFor(s.canvas);
     updatePoster(s,name);
-    s.poster.style.animationPlayState=document.hidden?'paused':'running';
+    s.poster.style.animationPlayState=document.hidden||paused?'paused':'running';
     s.poster.hidden=false;s.canvas.hidden=true;
     if(failed)s.canvas.classList.add('ai-presence-fallback');
   }
@@ -137,7 +137,7 @@ export function createAIPresence(root = document) {
   }
   function approach(value,target,rate,dt){return value+(target-value)*(1-Math.exp(-rate*dt));}
   function draw(now){
-    raf=0;if(destroyed||document.hidden)return;
+    raf=0;if(destroyed||paused||document.hidden)return;
     if(last&&now-last<32&&!motion.matches){raf=requestAnimationFrame(draw);return;}
     const dt=last?Math.min(.06,(now-last)/1000):0;last=now;
     const input=rms('input'),output=rms('output');
@@ -181,7 +181,7 @@ export function createAIPresence(root = document) {
     }
     if(!motion.matches&&drewSurface)raf=requestAnimationFrame(draw);
   }
-  function refresh(){if(!raf&&!destroyed)raf=requestAnimationFrame(draw);}
+  function refresh(){if(!raf&&!destroyed&&!paused)raf=requestAnimationFrame(draw);}
   const pendingArtwork=new Map();
   function ensureArtwork(name){
     if(!pendingArtwork.has(name))pendingArtwork.set(name,loadAIArtwork(name).then(image=>{
@@ -201,6 +201,7 @@ export function createAIPresence(root = document) {
       copy.getContext('2d').drawImage(source,0,0,copy.width,copy.height);return copy;
     }catch{return null;}
   }
+  function setPaused(value){paused=Boolean(value);cancelAnimationFrame(raf);raf=0;last=0;for(const s of surfaces){s.canvas.dataset.paused=String(paused);if(s.poster)s.poster.style.animationPlayState=document.hidden||paused?'paused':'running';}if(!paused)refresh();}
   function setProfile(value){profile=Object.hasOwn(profiles,value)?value:'alex';refresh();}
   function setState(value){state=stateNames.includes(value)?value:'idle';refresh();}
   async function attachAudio(stream,kind){
@@ -221,10 +222,10 @@ export function createAIPresence(root = document) {
     sources.clear();analysers.clear();inputLevel=outputLevel=0;
     const old=context;context=null;old?.close().catch(()=>{});setState('idle');
   }
-  const visibility=()=>{for(const s of surfaces)if(s.poster)s.poster.style.animationPlayState=document.hidden?'paused':'running';if(document.hidden){cancelAnimationFrame(raf);raf=0;last=0;}else refresh();};
+  const visibility=()=>{for(const s of surfaces)if(s.poster)s.poster.style.animationPlayState=document.hidden||paused?'paused':'running';if(document.hidden){cancelAnimationFrame(raf);raf=0;last=0;}else refresh();};
   const changed=()=>{cancelAnimationFrame(raf);raf=0;last=0;refresh();};
   document.addEventListener('visibilitychange',visibility);motion.addEventListener('change',changed);refresh();
-  return {get ready(){return Promise.all([...new Set(surfaces.length?surfaces.map(s=>nameFor(s.canvas)):[profile])].map(ensureArtwork));},async posterSource(name){return (await ensureArtwork(Object.hasOwn(profiles,name)?name:'alex'))?.posterSrc||EMPTY_ART;},snapshot,setProfile,setState,attachAudio,detachAudio,refresh,destroy(){
+  return {get ready(){return Promise.all([...new Set(surfaces.length?surfaces.map(s=>nameFor(s.canvas)):[profile])].map(ensureArtwork));},async posterSource(name){return (await ensureArtwork(Object.hasOwn(profiles,name)?name:'alex'))?.posterSrc||EMPTY_ART;},snapshot,setProfile,setState,setPaused,attachAudio,detachAudio,refresh,destroy(){
     destroyed=true;cancelAnimationFrame(raf);detachAudio();document.removeEventListener('visibilitychange',visibility);motion.removeEventListener('change',changed);
     for(const s of surfaces){s.canvas.removeEventListener('webglcontextlost',s.lostHandler);s.poster?.remove();if(s.gl){s.gl.deleteTexture(s.texture);s.gl.deleteBuffer(s.buffer);s.gl.deleteProgram(s.program);}}
   }};

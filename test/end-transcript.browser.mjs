@@ -33,7 +33,7 @@ try {
     window.testMessages = [];
     window.RTCPeerConnection = class {
       constructor() { window.testPeer = this; this.connectionState = 'new'; }
-      addTrack() {}
+      addTrack(track) { this.input = track; }
       createDataChannel() { return this.dc = { readyState: 'open', send: value => window.testMessages.push(JSON.parse(value)) }; }
       async createOffer() { return { type: 'offer', sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n' }; }
       async setLocalDescription() {}
@@ -226,6 +226,11 @@ try {
     };
   });
   await emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'device-failed-user', transcript: 'Show this received text even when device storage fails.' });
+  await page.waitForFunction(() => !window.testPeer.input.enabled && document.querySelector('#notice').textContent.includes('저장 실패'));
+  await page.evaluate(() => { const peer = window.testPeer; peer.connectionState = 'disconnected'; peer.onconnectionstatechange(); peer.connectionState = 'connected'; peer.onconnectionstatechange(); });
+  assert.equal(await page.evaluate(() => window.testPeer.input.enabled), false, 'reconnection cannot reopen a microphone blocked by device-save failure');
+  assert(await page.locator('#mute-call').isDisabled(), 'muting controls cannot bypass the storage-failure block');
+  assert.match(await page.locator('#call-status').textContent(), /저장 오류/, 'reconnection must not invite speech while the microphone remains blocked');
   await page.locator('#end-call').click(); await transcript().waitFor({ state: 'visible', timeout: 1500 });
   assert.match(await textRows().innerText(), /Show this received text even when device storage fails\./);
   await transcript().locator('[data-transcript-event-id][data-storage="failed"]').waitFor();

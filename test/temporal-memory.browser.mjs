@@ -93,12 +93,15 @@ try {
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' });
   await page.locator('[data-view="history"]').click();
   await page.locator(`[data-session-id="${first}"] .history-open`).click();
-  assert.match(await page.locator('#call-detail-meta').textContent(), /2026\. 11\. 10\. 23:59.*종료.*2026\. 11\. 11\. 00:02.*Asia\/Seoul/);
+  assert.equal(await page.locator('#call-detail-meta').textContent(), '2026. 11. 10. 23:59');
+  await page.locator('.call-record-info > summary').click();
+  assert.match(await page.locator('.call-record-info').innerText(), /2026\. 11\. 10\. 23:59.*종료.*2026\. 11\. 11\. 00:02.*Asia\/Seoul/);
   await page.locator('#call-detail-content .transcript-record-time').waitFor({ state: 'visible' });
   assert.match(await page.locator('#call-detail-content .transcript-record-time').textContent(), /기록 시각.*00:00/);
   await page.locator('[data-close="call-detail-dialog"]').click();
   await page.locator(`[data-session-id="${legacy}"] .history-open`).click();
-  assert.match(await page.locator('#call-detail-meta').textContent(), /Asia\/Seoul 표시 · 당시 시간대 미저장/);
+  await page.locator('.call-record-info > summary').click();
+  assert.match(await page.locator('.call-record-info').innerText(), /Asia\/Seoul 표시 · 당시 시간대 미저장/);
   await page.locator('[data-close="call-detail-dialog"]').click();
   await page.locator('[data-view="contacts"]').click();
   await page.locator('[data-companion="juno"]').click(); reply = 'legacy';

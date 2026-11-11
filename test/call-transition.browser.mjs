@@ -127,7 +127,7 @@ try {
   await emit({ type: 'response.done', response: { status: 'completed' } });
   await emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'first-user', transcript: 'I would like to talk for a moment.' });
   await page.waitForFunction(() => document.querySelector('#turn-count').textContent === '1개 발화');
-  await page.waitForFunction(() => document.querySelector('#save-status').textContent === '클라우드 저장 확인됨');
+  await page.waitForFunction(() => document.querySelector('#save-status').textContent === '저장 완료');
   await page.setViewportSize({ width: 320, height: 568 });
   await page.clock.install(); await page.clock.pauseAt(new Date(Date.now() + 1000));
   const starts = await page.evaluate(() => window.audioNodes.length); await page.clock.fastForward(4000);

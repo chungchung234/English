@@ -62,7 +62,7 @@ export function renderSessionFeedback(target, analysis, { getRows = () => [], on
             quote.append(text('p', shown + (clipped ? '…' : '')));
             remaining -= Math.min(characters.length, remaining); partial ||= clipped;
           }
-          if (partial) quote.prepend(text('small', '발화 일부', 'feedback-source-excerpt'));
+          if (partial) quote.prepend(text('small', '대화 일부', 'feedback-source-excerpt'));
           quote.hidden = false;
         });
       }).catch(() => { /* The source link remains usable if quotes are unavailable. */ });
@@ -79,7 +79,7 @@ export function renderSessionFeedback(target, analysis, { getRows = () => [], on
   for (const item of content.corrections || []) {
     if (!item?.improved || excluded.has(expressionKey(item.improved)) || !item.evidence_ids?.some(validId)) continue;
     const card = text('section', '', 'session-feedback-card'); card.dataset.feedbackKind = 'correction'; card.dataset.correctionExpression = item.improved;
-    if (item.reconsidered) card.append(text('small', '내가 수락한 재검토', 'feedback-reconsidered'));
+    if (item.reconsidered) card.append(text('small', '내 설명을 반영한 표현', 'feedback-reconsidered'));
     const conciseReason = typeof item.reason === 'string' && item.reason.length <= 90 ? item.reason : '';
     card.append(text('h2', conciseReason || (item.category === 'error' ? '이렇게 말하면 더 정확해요' : '이렇게도 말할 수 있어요')));
     const original = text('div', '', 'feedback-sentence'); original.append(text('span', '원문', 'feedback-sentence-label'), text('p', item.original, 'original'));

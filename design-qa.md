@@ -178,3 +178,15 @@ Comparison history:
 Primary browser verification: optional guide/skip/replay, Escape/focus return, account-specific browser persistence, initial loading/confirmed empty/error recovery, retained history during refresh, permission denial/retry, cancellation during a pending microphone grant and voice response, immediate retry isolation, and first-learning-note acknowledgement. Actual voice providers and auth are fixtures; no claim of real-device microphone or AI voice quality verification is made.
 
 Release limitation: Google-hosted OAuth app/domain branding requires the provider console and is not changed by this frontend release. Invite/approval policy and backend authorization remain intact. Guidance preferences are scoped per account in this browser and do not claim cross-device sync.
+
+## 전체 사용자 문구·보조 기능 검수 — 2026-11-11
+
+기준은 `origin/main b2e91c179560a96893efdc30506cc235f77680a2`이다. 로그인부터 통화 종료·최근 통화·학습 노트·복습·기억·계정·백업 복원까지 점검했다. 내부 저장 방식/연구 용어/모델명/연결 진단 ID를 사용자 행동과 결과로 바꾸고, 사용할 수 없는 로그인 연결 영역은 숨겼다. 검색 업데이트는 선택적으로 펼치는 영역에 배치했다. 저장 대기·실패·부분 기록·개인정보 고지·명시적 충돌 해결은 유지한다.
+
+[전후 비교](docs/design/product-copy-20261111/comparison.png)를 실제로 열어 확인했다. 각 화면은 320×568 CSS px, DPR1이고 위는 수정 전, 아래는 수정 후다. 계정/개인정보/기억 관리의 동일한 fixture 상태를 비교했다. [상세 범위·검증 경계](docs/design/product-copy-20261111/review.txt)에 기록했다. 기존 시스템 글꼴·남색/블루/연녹색 토큰·캐릭터 자산·44px 이상 주요 컨트롤과 내비게이션은 유지했다. 문구 삭제로 계정 화면의 스크롤을 줄이고 개인정보 안내가 작은 화면에 들어온다.
+
+브라우저 검증에는 첫 방문·빈 상태·지연·실패·재시도·권한 거부/취소, 통화 종료와 부분 기록, 복습 선택/보류/재제안, 정확한 주간 기간, 계정 분리, 백업 중단/재시도가 포함된다. 인증·음성 전송은 fixture이며 실제 승인 계정 음성이나 학습 효과를 검증했다고 주장하지 않는다.
+
+최종 확인: 문법/타입 검사, 255개 단위·DB 테스트, 기존 13개 브라우저 스위트 모두 통과했다. 문구가 바뀐 기존 검증은 새 문구와 연결했고 저장 ACK·원문 보존·계정 격리·정확한 기간 검증은 유지했다. ‘기록 정보’의 기본 마커가 기존 화살표와 겹치는 시각 문제는 공통 disclosure 스타일을 적용한 뒤 재캡처해 해결했다. 검수한 범위에서 남은 실행 가능한 P0/P1/P2 없음.
+
+final result: passed

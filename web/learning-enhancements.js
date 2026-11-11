@@ -1,6 +1,6 @@
-const ratings = { hard: '어려움', assisted: '도움이 필요함', independent: '스스로 말해봄' };
-const modes = { repetition: '예문 반복 근거', after_hint: '힌트 뒤 사용 근거', new_context: '새 상황의 사용 근거', undetermined: '사용 맥락 판단 불가' };
-const reasons = { delayed_recall: '내가 예약한 회상 시점이 됐어요.', selected_goal: '내가 저장한 연습 목표가 있는 표현이에요.', repeated_source: '유효한 여러 통화 출처에서 확인한 표현이에요.', recent_source: '최근 통화에서 선택한 표현이에요.' };
+const ratings = { hard: '어려웠어요', assisted: '도움이 필요했어요', independent: '스스로 말했어요' };
+const modes = { repetition: '같은 문장', after_hint: '힌트 뒤 사용', new_context: '다른 상황', undetermined: '상황 확인이 필요해요' };
+const reasons = { delayed_recall: '다시 연습할 날이 됐어요.', selected_goal: '내가 저장한 연습 목표가 있는 표현이에요.', repeated_source: '여러 통화에서 나온 표현이에요.', recent_source: '최근 통화에서 선택한 표현이에요.' };
 const empty = () => ({ reviews: [], schedules: [], recalls: [], usage: [], weekly_goals: [], imports: [], personalized_item_ids: [], recommendation_reasons: {} });
 const stamp = value => value ? new Date(value).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) + ' KST' : '시각 확인 필요';
 
@@ -13,8 +13,8 @@ export function practiceCue(item, goal = '') {
   const safe = value => { const key = cueKey(value); return key && target && !key.includes(target); };
   const choices = [
     { kind: 'goal', label: '내가 정한 연습 목표', value: goal },
-    { kind: 'source', label: '지난 통화에서 말한 내용 · 자동 전사', value: item.original },
-    { kind: 'scenario', label: '다음에 이야기할 상황 · 제안', value: item.next_scenario }
+    { kind: 'source', label: '지난 통화에서 내가 한 말', value: item.original },
+    { kind: 'scenario', label: '다음에 이야기할 상황', value: item.next_scenario }
   ];
   return choices.find(cue => safe(cue.value)) || { kind: 'choice', label: '내가 정하는 연습 상황', value: '이 표현을 쓰고 싶었던 상황을 떠올려 보세요. 뜻이 기억나지 않으면 표현을 다시 봐도 괜찮아요.' };
 }
@@ -44,14 +44,14 @@ export function createLearningEnhancements(host) {
     const review = data.reviews.filter(row => row.item_id === item.id).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))[0];
     if (!review && item.status !== 'held' && !item.quality_hold && item.has_valid_source !== false) return;
     if (item.status === 'excluded' || host.pending(item.id).some(row => ['exclude', 'known'].includes(row.body?.p_action))) return;
-    const section = detail('의도 보충·교정 재검토');
-    section.append(text('p', '추가 설명은 내 의도에 대한 보충이며, 저장된 원래 녹취를 바꾸지 않아요. 제안을 직접 수락하기 전에는 보류된 교정을 다시 추천하지 않아요.', 'help'));
+    const section = detail('말하려던 뜻 설명하기');
+    section.append(text('p', '말하려던 뜻을 적으면 표현을 다시 제안해 드려요. 원래 대화문은 그대로 남아요.', 'help'));
     if (review) {
       section.dataset.reviewId = review.id;
-      section.append(text('small', '내가 추가한 의도 설명'), text('p', review.explanation));
-      if (review.source_current === false) section.append(status('원래 발화나 학습 노트가 바뀌어 지금은 재검토를 계속할 수 없어요. 최신 학습 노트를 확인해 주세요. 보충 설명은 보관돼요.'));
+      section.append(text('small', '내가 덧붙인 설명'), text('p', review.explanation));
+      if (review.source_current === false) section.append(status('대화나 학습 노트가 바뀌었어요. 최신 학습 노트를 확인해 주세요. 덧붙인 설명은 남아 있어요.'));
       else if (review.status === 'pending') {
-        section.append(status('의도 설명 서버 저장 확인 · 재검토 제안은 아직 확인되지 않았어요.'));
+        section.append(status('설명을 저장했어요. 새 표현을 제안받을 수 있어요.'));
         const reconsider = button(requests.has(review.id) ? '재검토 준비 중…' : '이 설명으로 재검토', async () => {
           if (requests.has(review.id)) return;
           const scope = host.token(); requests.add(review.id); host.render();
@@ -61,10 +61,10 @@ export function createLearningEnhancements(host) {
           } finally { requests.delete(review.id); if (host.same(scope)) host.render(); }
         }); reconsider.dataset.action = 'reconsider'; reconsider.disabled = pending(item) || requests.has(review.id); section.append(reconsider);
       } else if (review.status === 'proposed' && review.proposal) {
-        section.append(text('small', '서버의 재검토 제안 · 원래 녹취와 구분'), text('p', review.proposal.expression || review.proposal.improved, 'improved'), text('p', review.proposal.reason));
+        section.append(text('small', '다시 제안한 표현'), text('p', review.proposal.expression || review.proposal.improved, 'improved'), text('p', review.proposal.reason));
         host.appendEvidence(section, review.proposal.evidence_ids, review.source_session_id);
         section.append(action('이 제안을 복습에 포함', 'accept-reconsideration', item, 'learning_review_decide', { p_review_id: review.id, p_expected_revision: review.revision, p_decision: 'accept' }), action('제안 닫고 보류 유지', 'dismiss-reconsideration', item, 'learning_review_decide', { p_review_id: review.id, p_expected_revision: review.revision, p_decision: 'dismiss' }));
-      } else section.append(status(review.status === 'accepted' ? '제안 수락을 서버에 저장했어요. 유효한 출처와 추천 한도 안에서 복습에 포함돼요.' : '제안 닫기를 서버에 저장했어요. 원래 보류는 유지돼요.'));
+      } else section.append(status(review.status === 'accepted' ? '제안을 수락했어요.' : '제안을 닫았어요. 기존 표현은 추천하지 않아요.'));
     }
     if (!review || ['dismissed', 'accepted'].includes(review.status)) {
       const source = attribution?.analysisId || item.sources?.find(row => !row.valid)?.analysis_id || item.source_analysis_id;
@@ -75,7 +75,7 @@ export function createLearningEnhancements(host) {
         if (!value) { host.notify('말하려던 뜻을 짧게 적어 주세요.'); explanation.control.focus(); return; }
         await act('learning_review_submit', item, { p_item_id: item.id, p_expected_revision: item.revision, p_source_analysis_id: source, p_explanation: value });
       }); save.dataset.action = 'submit-intent'; save.disabled = pending(item) || !source;
-      if (!source) section.append(text('p', '현재 유효한 원본 학습 노트를 확인한 뒤 의도 설명을 보낼 수 있어요.', 'help'));
+      if (!source) section.append(text('p', '학습 노트를 다시 확인한 뒤 설명을 적어 주세요.', 'help'));
       section.append(explanation.field, save);
     }
     article.append(section);
@@ -83,27 +83,27 @@ export function createLearningEnhancements(host) {
   function renderSchedule(article, item) {
     if (host.suppressed(item) || !item.enrolled || item.status === 'candidate') return;
     const schedule = scheduleFor(item.id), recalls = data.recalls.filter(row => row.item_id === item.id);
-    const section = detail('시간 두고 회상 · 선택');
-    section.append(text('p', '원할 때 1·3·7일 뒤 가리고 회상을 선택해요. 즉시 따라 말하기와 별도로 자기보고를 저장하며 자동 숙달 평가를 하지 않아요.', 'help'));
-    if (schedule?.enabled) section.append(status(`${schedule.days}일 간격 · 다음 회상 ${stamp(schedule.due_at)} · 서버 확인`));
-    else section.append(text('p', '시간을 둔 회상은 아직 켜지 않았어요.', 'help'));
+    const section = detail('며칠 뒤 다시 연습하기');
+    section.append(text('p', '1·3·7일 뒤에 표현을 가리고 다시 말해 보세요.', 'help'));
+    if (schedule?.enabled) section.append(status(`${schedule.days}일 간격 · 다음 연습 ${stamp(schedule.due_at)}`));
+    else section.append(text('p', '아직 다음 연습일을 정하지 않았어요.', 'help'));
     const goal = input('이 표현으로 연습할 목표 · 선택', `goal-${item.id}`, schedule?.goal || '', false, 240);
     section.append(goal.field);
     const actions = document.createElement('div'); actions.className = 'learning-actions';
     for (const days of [1, 3, 7]) {
-      const choose = button(`${days}일 뒤 회상`, () => act('learning_schedule_config', item, { p_item_id: item.id, p_expected_revision: schedule?.revision || 0, p_days: days, p_goal: goal.control.value.trim() }));
+      const choose = button(`${days}일 뒤 연습`, () => act('learning_schedule_config', item, { p_item_id: item.id, p_expected_revision: schedule?.revision || 0, p_days: days, p_goal: goal.control.value.trim() }));
       choose.dataset.action = `recall-${days}-days`; choose.disabled = pending(item); actions.append(choose);
     }
     if (schedule?.enabled) {
       const due = Number.isFinite(Date.parse(schedule.due_at)) && Date.parse(schedule.due_at) <= Date.now();
-      const recall = button(due ? '가리고 회상하기' : '회상 예정 · 시간이 되면 열려요', () => host.startRecall(item.id, recall));
+      const recall = button(due ? '가리고 말해보기' : '연습일이 되면 시작할 수 있어요', () => host.startRecall(item.id, recall));
       recall.dataset.action = 'start-delayed-recall'; recall.disabled = pending(item) || !due;
       if (!article.querySelector('[data-action="start-delayed-recall"]')) actions.append(recall);
       actions.append(action('예약 끄기', 'disable-recall', item, 'learning_schedule_config', { p_item_id: item.id, p_expected_revision: schedule.revision, p_days: null, p_goal: schedule.goal || '' }));
     }
     section.append(actions);
     if (recalls.length) {
-      section.append(text('small', `시간을 둔 회상 자기보고 ${recalls.length}회 · 즉시 연습과 별도`));
+      section.append(text('small', `지난 연습 ${recalls.length}회`));
       for (const recall of recalls.slice().sort((a, b) => String(b.occurred_at).localeCompare(String(a.occurred_at))).slice(0, 3)) section.append(text('p', `${stamp(recall.occurred_at)} · ${ratings[recall.rating] || '기록 확인 필요'}`, 'help'));
     }
     article.append(section);
@@ -111,13 +111,13 @@ export function createLearningEnhancements(host) {
   function renderImports(article, item) {
     const rows = (data.imports || []).filter(row => row.item_id === item.id);
     if (!rows.length) return;
-    const section = detail('복원한 이전 이력 · 재검증 전');
-    section.append(text('p', '백업의 설명·자기보고·선택을 보관했어요. 현재 발화 근거와 재검토 제안은 다시 확인하며, 복원 기록으로 추천 포함이나 숙달을 판정하지 않아요.', 'help'));
+    const section = detail('가져온 연습 기록');
+    section.append(text('p', '백업에서 가져온 연습 기록이에요. 추천 표현은 대화 내용을 다시 확인해 골라요.', 'help'));
     for (const row of rows) {
       const value = row.payload || {};
-      const labels = { reviews: '의도 보충 설명', schedules: '선택한 회상 예약', recalls: '시간을 둔 회상 자기보고', usage: '활용 관찰 이력', weekly_goals: '선택했던 주간 목표' };
+      const labels = { reviews: '의도 보충 설명', schedules: '선택한 연습 예약', recalls: '다시 말하기 기록', usage: '표현 사용 기록', weekly_goals: '선택했던 주간 목표' };
       section.append(text('small', `${labels[row.kind] || '이전 이력'} · 복원 파일 기록`));
-      const description = value.explanation || value.goal || (value.rating ? ratings[value.rating] : value.days ? `${value.days}일 간격` : value.review_status ? ({ confirmed: '내가 근거를 확인했음', rejected: '내가 근거와 다르다고 표시했음', unreviewed: '내 확인 전' })[value.review_status] : '이전 선택을 보관했어요.');
+      const description = value.explanation || value.goal || (value.rating ? ratings[value.rating] : value.days ? `${value.days}일 간격` : value.review_status ? ({ confirmed: '내가 근거를 확인했음', rejected: '내가 근거와 다르다고 표시했음', unreviewed: '아직 확인하지 않았어요' })[value.review_status] : '이전 선택을 보관했어요.');
       section.append(text('p', description));
     }
     article.append(section);
@@ -125,22 +125,22 @@ export function createLearningEnhancements(host) {
   function renderUsage(target, sessionId = null) {
     const rows = data.usage.filter(row => (!sessionId || row.session_id === sessionId) && host.itemOf(row.item_id) && !host.suppressed(host.itemOf(row.item_id)));
     if (!rows.length) return;
-    const section = detail('다음 대화의 실제 발화 · 관찰용');
-    section.append(text('p', '표현이 나타난 발화를 확인하는 관찰 기록이에요. 사람의 표본 검토 전이며 사용할 기회와 학습 성과는 아직 판단하지 않았어요. 성공·실패나 숙달을 뜻하지 않아요.', 'help'));
+    const section = detail('통화에서 써본 표현');
+    section.append(text('p', '이 표현이 나온 대화를 확인하고, 실제로 쓴 표현이 맞는지 알려 주세요.', 'help'));
     for (const row of rows.slice(0, 12)) {
       const item = host.itemOf(row.item_id), card = text('article', '', 'feedback-item'); card.dataset.usageId = row.id; card.dataset.itemId = item.id;
       card.append(text('p', item.expression, 'improved'));
       const quotes = (row.evidence || []).filter(event => event.speaker === 'user' && row.evidence_ids?.includes(event.id));
       if (row.kind === 'observed' && quotes.length) {
-        card.append(text('small', '실제 사용자 발화'), text('blockquote', quotes.map(event => event.text).join(' / ')));
+        card.append(text('small', '내가 한 말'), text('blockquote', quotes.map(event => event.text).join(' / ')));
         card.append(text('p', modes[row.mode] || modes.undetermined, 'help'));
         if (row.mode !== 'undetermined' && row.mode_evidence_ids?.length) {
-          const evidence = detail('사용 맥락의 근거');
+          const evidence = detail('앞뒤 대화 보기');
           for (const event of row.mode_evidence || (row.evidence || []).filter(event => row.mode_evidence_ids.includes(event.id))) evidence.append(text('blockquote', `${event.speaker === 'user' ? '나' : '상대'}: ${event.text}`));
           card.append(evidence);
         }
-      } else card.append(text('p', '현재 확인 가능한 발화 근거가 부족해 판단 불가예요.', 'help'));
-      card.append(status(({ unreviewed: '내 확인 전', confirmed: '내가 근거를 확인함 · 자기 확인', rejected: '내가 근거와 맞지 않음을 표시함' })[row.review_status] || '내 확인 전'));
+      } else card.append(text('p', '어떤 상황에서 썼는지 확인하지 못했어요.', 'help'));
+      card.append(status(({ unreviewed: '아직 확인하지 않았어요', confirmed: '확인했어요', rejected: '실제 대화와 다르다고 표시했어요' })[row.review_status] || '아직 확인하지 않았어요'));
       card.append(action('근거가 맞아요', 'confirm-usage', item, 'learning_usage_review', { p_usage_id: row.id, p_expected_revision: row.revision, p_status: 'confirmed' }), action('근거와 달라요', 'reject-usage', item, 'learning_usage_review', { p_usage_id: row.id, p_expected_revision: row.revision, p_status: 'rejected' }));
       section.append(card);
     }
@@ -149,9 +149,9 @@ export function createLearningEnhancements(host) {
   function renderWeekly(target, analysis) {
     if (!analysis?.id || !analysis.content?.learning_plan) return;
     const scope = analysis.content.scope || {};
-    const section = detail('이번 주 한 가지 행동 선택'); section.dataset.weeklyAnalysisId = analysis.id;
-    section.append(text('p', `${stamp(scope.period_start)} ~ ${stamp(scope.period_end)} · 직전 168시간`, 'help'), text('p', `생성 ${stamp(analysis.generated_at || analysis.created_at)} · 이후 통화는 이 결과에 자동 포함되지 않아요.`, 'help'));
-    section.append(text('p', '시간을 둔 회상 자기보고와 확인한 발화 근거를 참고한 제안이에요. 다음 대화에서 해볼 목표를 직접 선택해 주세요.', 'help'));
+    const section = detail('다음 통화 목표'); section.dataset.weeklyAnalysisId = analysis.id;
+    section.append(text('p', `${stamp(scope.period_start)} ~ ${stamp(scope.period_end)} · 최근 7일`, 'help'), text('p', `생성 ${stamp(analysis.generated_at || analysis.created_at)}`, 'help'));
+    section.append(text('p', '이번 주 대화를 바탕으로 제안한 목표예요. 다음 통화에서 해볼 것을 골라 보세요.', 'help'));
     const selected = data.weekly_goals.slice().sort((a, b) => String(b.selected_at).localeCompare(String(a.selected_at)))[0];
     for (const [kind, title] of [['keep', '계속 연습할 한 가지'], ['try', '다음 주 시도할 한 가지']]) {
       const proposal = analysis.content.learning_plan[kind], item = host.itemOf(proposal?.item_id);
@@ -160,10 +160,10 @@ export function createLearningEnhancements(host) {
       card.append(text('h4', title), text('p', proposal.goal), text('p', item.expression, 'improved'));
       const chosen = selected?.analysis_id === analysis.id && selected?.kind === kind;
       if (chosen) {
-        card.append(status('선택한 목표 · 서버 확인'));
+        card.append(status('선택한 목표'));
         const prepare = button('이 목표로 다음 통화 준비', () => host.prepare(item.id)); prepare.dataset.action = 'prepare-weekly-goal'; prepare.disabled = pending(item); card.append(prepare);
-        if (selected.call_session_id) card.append(text('p', '이 목표를 준비한 후의 통화 기록이 연결됐어요. 활용·숙달을 뜻하지 않아요.', 'help'));
-        if (selected.recall_id) card.append(text('p', '이 목표의 시간을 둔 회상 자기보고가 연결됐어요.', 'help'));
+        if (selected.call_session_id) card.append(text('p', '이 목표를 준비한 뒤 통화했어요.', 'help'));
+        if (selected.recall_id) card.append(text('p', '이 목표로 다시 말하기를 연습했어요.', 'help'));
       } else card.append(action('이 목표 선택', `choose-weekly-${kind}`, item, 'learning_weekly_goal_select', { p_analysis_id: analysis.id, p_kind: kind, p_expected_revision: selected?.revision || 0 }));
       section.append(card);
     }
@@ -176,7 +176,7 @@ export function createLearningEnhancements(host) {
     const expression = text('p', item.expression, 'improved'); expression.hidden = true; expression.dataset.practiceExpression = '';
     const state = status(''); state.dataset.practiceStatus = '';
     const intro = text('p', '같은 뜻을 영어로 말해보고, 어땠는지 선택해요.', 'help');
-    const note = text('p', '혼자 소리 내어 연습해요 · 녹음·자동 채점 없음', 'help');
+    const note = text('p', '소리 내어 말한 뒤, 얼마나 기억났는지 선택해 주세요.', 'help');
     const finish = document.createElement('div'), actions = text('div', '', 'learning-actions');
     const gradeButtons = [];
     let revealed = false, submitting = false;
@@ -194,13 +194,13 @@ export function createLearningEnhancements(host) {
         if (node.disabled || !available() || submitting || rating === 'independent' && revealed) return;
         submitting = true; reveal.disabled = true;
         for (const grade of gradeButtons) grade.disabled = true;
-        state.textContent = '기기 보관과 서버 저장을 확인하고 있어요.';
+        state.textContent = '저장하고 있어요.';
         try {
           const result = await host.submit('learning_recall', item, { p_item_id: item.id, p_expected_revision: schedule?.revision || 0, p_rating: rating }, { attemptId: handlers.attemptId });
           if (!handlers.current()) return;
           if (result?.outcome === 'applied') handlers.confirm(result);
-          else state.textContent = host.pending(item.id).length ? '기기 보관 확인 · 회상 자기보고 서버 반영 대기' : '저장하지 못했어요. 다시 선택해 주세요.';
-        } catch { if (handlers.current()) state.textContent = '서버 저장을 확인하지 못했어요. 동기화 안내에서 다시 확인해 주세요.'; }
+          else state.textContent = host.pending(item.id).length ? '저장 대기 중이에요.' : '저장하지 못했어요. 다시 선택해 주세요.';
+        } catch { if (handlers.current()) state.textContent = '저장을 확인하지 못했어요. 저장 대기 항목에서 다시 시도해 주세요.'; }
         finally {
           submitting = false;
           if (available()) {
@@ -219,7 +219,7 @@ export function createLearningEnhancements(host) {
   return {
     clear() { data = empty(); unavailable = false; drafts.clear(); requests.clear(); },
     setSnapshot(value, failed = false) { data = value || empty(); unavailable = failed; },
-    renderItem(article, item, attribution) { if (unavailable) { article.append(text('p', '회상·재검토 상태를 확인하지 못했어요. 최신 상태를 다시 확인해 주세요.', 'help')); return; } renderReview(article, item, attribution); renderSchedule(article, item); renderImports(article, item); },
+    renderItem(article, item, attribution) { if (unavailable) { article.append(text('p', '연습 상태를 확인하지 못했어요. 잠시 뒤 다시 확인해 주세요.', 'help')); return; } renderReview(article, item, attribution); renderSchedule(article, item); renderImports(article, item); },
     renderUsage, renderWeekly, buildRecall, scheduleFor,
     isDue(id) { const row = scheduleFor(id); return !unavailable && Boolean(row?.enabled && row.due_at && Date.parse(row.due_at) <= Date.now()); },
     acceptedProjection(item, analysis) { return data.reviews.filter(row => row.status === 'accepted' && row.accepted_item_id === item.id && row.source_analysis_id === analysis.id && row.source_current !== false).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0]?.proposal || null; },

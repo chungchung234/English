@@ -356,9 +356,8 @@ try {
   await page.waitForFunction(() => document.querySelector('#review-content h3')?.textContent === 'Alex · 최근 7일 분석');
   const expectedPeriod = await page.evaluate(({ start, end }) => [start, end].map(value => new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date(value))), { start: periodStart, end: periodEnd });
   for (const expected of expectedPeriod) assert((await page.locator('#review-content').innerText()).includes(expected));
-  assert.match(await page.locator('#review-content').innerText(), /직전 168시간/);
+  assert.match(await page.locator('#review-content').innerText(), /최근 7일/);
   assert.match(await page.locator('#review-content').innerText(), /생성:/);
-  assert.match(await page.locator('#review-content').innerText(), /이후 통화는 이 결과에 자동 포함되지/);
   await revealAndClick(page.locator('#learning-queue [data-action="choose-weekly-keep"]'));
   await waitUntil(async () => (await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' })).weekly_goals.some(row => row.analysis_id === weeklyId && row.kind === 'keep'), 'weekly goal selection persists');
   let selectedGoal = (await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' })).weekly_goals.find(row => row.analysis_id === weeklyId);

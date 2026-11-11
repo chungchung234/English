@@ -45,7 +45,7 @@ try {
   }, source);
   const action = name => page.locator(`[data-action="${name}"]`);
   assert.equal(await page.locator('[data-practice-cue]').textContent(), source.original);
-  assert.match(await page.locator('body').innerText(), /자동 전사/);
+  assert.match(await page.locator('body').innerText(), /지난 통화에서 내가 한 말/);
   assert(!(await page.locator('body').innerText()).includes(target));
   assert.equal(await page.evaluate(() => fixture.calls.length), 0, 'viewing the cue does not record learning');
   await action('reveal-delayed-expression').click();
@@ -65,7 +65,7 @@ try {
   assert.equal(await page.evaluate(() => fixture.calls.length), 1, 'in-flight duplicate cannot create another report');
   assert.deepEqual(await page.evaluate(() => fixture.calls[0]), ['learning_recall', source, { p_item_id: 'item', p_expected_revision: 7, p_rating: 'independent' }, { attemptId: 'attempt-1' }]);
   await page.evaluate(() => { fixture.pending.push({ id: 'durable-pending' }); fixture.resolve(null); });
-  await page.waitForFunction(() => document.body.innerText.includes('서버 반영 대기'));
+  await page.waitForFunction(() => document.body.innerText.includes('저장 대기 중이에요.'));
   assert(await action('recall-assisted').isDisabled(), 'pending durable action prevents a second rating');
   assert.equal(await page.evaluate(() => fixture.confirms), 0, 'pending is not server-confirmed success');
   await page.evaluate(() => { const node = document.querySelector('[data-action="recall-hard"]'); node.disabled = false; return node.onclick(); });

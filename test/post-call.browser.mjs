@@ -272,7 +272,7 @@ try {
   await refresh(page); await openFeedback(page, offlineFixture.session.scenario);
   transport.offline = true;
   await clickControl(page, itemCard(page, offlineItem.id).locator('[data-action="exclude"]'));
-  await openSessionActions(page); await itemCard(page,offlineItem.id).getByText(/기기 보관 확인.*서버 반영/).first().waitFor();
+  await openSessionActions(page); await itemCard(page,offlineItem.id).getByText(/저장 대기/).first().waitFor();
   assert.equal((await item(offlineItem.expression)).status, 'active', 'offline choice is not shown as server success');
   await waitUntil(async () => transport.actionBodies.some(body => body.p_item_id === offlineItem.id), 'durable offline action reaches the explicitly failing server transport');
   const action = transport.actionBodies.find(body => body.p_item_id === offlineItem.id);
@@ -397,7 +397,7 @@ try {
   transport.review = async () => ({ status: 413, json: { error: { code: 'ANALYSIS_TOO_LARGE', message: 'RAW_MODEL_REQUEST' } } });
   await refresh(page); await openFeedback(page, oversized.session.scenario);
   await page.locator('#session-feedback-retry').click();
-  await page.locator('#session-feedback-status-note').filter({hasText:/이번 기록은 자동 분석 크기 한도를/}).waitFor();
+  await page.locator('#session-feedback-status-note').filter({hasText:/대화가 길어 학습 노트를 만들지 못했어요/}).waitFor();
   assert(await page.locator('#session-feedback-retry').isHidden());
   assert.equal((await query('select text from public.transcript_events where id=$1', [oversized.event.id])).rows[0].text, oversized.event.text);
   assert(!await page.locator('body').innerText().then(text => text.includes('RAW_MODEL_REQUEST')));
@@ -460,9 +460,8 @@ try {
   await page.locator('#weekly').click();
   await page.waitForFunction(()=>document.querySelector('#review-content h3')?.textContent==='Alex · 최근 7일 분석');
   const weekly = page.locator('#review-content');
-  assert.match(await weekly.innerText(), /직전 168시간/);
+  assert.match(await weekly.innerText(), /최근 7일/);
   assert.match(await weekly.innerText(), /생성:/);
-  assert.match(await weekly.innerText(), /이후 통화는 이 결과에 자동 포함되지/);
   const expectedPeriod = await page.evaluate(({ start, end }) => [start, end].map(value => new Intl.DateTimeFormat('ko-KR', {dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Seoul'}).format(new Date(value))), { start: periodStart, end: periodEnd });
   for (const expected of expectedPeriod) assert((await weekly.innerText()).includes(expected));
   console.log('PASS T28: stored weekly result displays exact 168-hour period and generation time without including later calls.');
@@ -497,14 +496,14 @@ try {
   transport.failRestore = true;
   const upload = { name: 'v2-acceptance.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(backup)) };
   await page.locator('#restore').setInputFiles(upload);
-  await page.waitForFunction(() => /배치.*확인하지 못/.test(document.querySelector('#notice').textContent));
+  await page.waitForFunction(() => /가져오기를 끝내지 못/.test(document.querySelector('#notice').textContent));
   assert.equal((await query('select count(*)::integer as n from public.transcript_events')).rows[0].n, originalEventCount, 'earlier source batches are safely repeatable');
   await page.locator('#restore').setInputFiles(upload);
-  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('대화와 복습 이력을 복원했습니다'));
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('대화와 복습 기록을 가져왔어요'));
   assert.equal((await item(longExpression)).status, 'excluded', 'old backup cannot replace newer server exclusion');
   const legacy = { schema_version: 1, sessions: backup.sessions, events: backup.events };
   await page.locator('#restore').setInputFiles({ name: 'legacy.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(legacy)) });
-  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('대화와 복습 이력을 복원했습니다'));
+  await page.waitForFunction(() => document.querySelector('#notice').textContent.includes('대화와 복습 기록을 가져왔어요'));
   assert.equal((await item(longExpression)).practice_count, 1);
   await page.locator('[data-close="account-dialog"]').click();
   console.log('PASS T21: v2 export includes source and learning history; interrupted learning batch is retryable, v1 remains accepted, older backup preserves latest state.');
@@ -551,7 +550,7 @@ try {
     assert(html.includes("script-src 'sha256-"), 'production output declares hashed CSP');
     assert(!html.includes('src="app.js"'));
     const built = await browser.newPage(); await attachRoutes(built, html); await login(built, '/built/');
-    assert.match(await built.locator('#privacy-dialog .privacy-copy').first().textContent(), /복습 수행·미루기·제외·보류/);
+    assert.match(await built.locator('#privacy-dialog .privacy-copy').first().textContent(), /복습한 내용과 선택/);
     await openFeedback(built, deferredFixture.session.scenario);
     await built.locator('#session-feedback-content').waitFor({state:'visible'});
     assert.match(await built.locator('#session-feedback-content').innerText(),/I am waiting for you/);

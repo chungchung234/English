@@ -150,10 +150,10 @@ try {
   assert.match(await textRows().innerText(), /I would like to review what we said\./);
   assert.match(await textRows().innerText(), /Of course\. What stood out to you\?/);
   await openTranscript();
-  assert.match(await transcript().innerText(), /중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요/);
+  assert.match(await transcript().innerText(), /중간에 멈춘 답변은 들은 내용과 다를 수 있어요/);
   assert.equal(saved.size, 0, 'readable received turns precede append acknowledgement');
   assert.equal(finishes.length, 0, 'immediate transcript does not wait for finish RPC');
-  assert.match(await transcriptStatus().innerText(), /전사|전송|저장.*확인|대기/);
+  assert.match(await transcriptStatus().innerText(), /마지막 대화를 정리하고 있어요/);
   assert.doesNotMatch(await transcriptStatus().innerText(), /서버 저장 완료|통화 저장 완료/);
   assert.equal(await transcript().locator('[data-transcript-status]').getAttribute('role'), 'status');
   const focusBeforeLate=await page.evaluate(()=>document.activeElement?.dataset.action||document.activeElement?.id);
@@ -188,10 +188,10 @@ try {
     const restored = [...(host?.querySelectorAll('[data-transcript-event-id][data-storage="server"]') || [])].map(row => row.dataset.transcriptEventId).sort();
     return host?.dataset.sessionId === sessionId && JSON.stringify(restored) === JSON.stringify(ids);
   }, { sessionId: firstId, ids: savedIds });
-  assert.match(await transcriptStatus().innerText(), /대화문 서버 저장 확인/, 'saved transcript is ready while optional session metadata remains held');
+  assert.match(await transcriptStatus().innerText(), /대화를 저장했어요/, 'saved transcript is ready while optional session metadata remains held');
   assert(await transcript().locator('[data-call-save-duration]').isHidden(), 'reload does not invent a client timing measurement that was not persisted');
   assert.match(await transcript().locator('[data-session-time]').innerText(), /확인하고 있어요/, 'pending metadata is not mislabeled as a legacy unstored time zone');
-  assert.match(await transcript().innerText(), /중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요/, 'reload retains the generated-versus-heard transcript limitation');
+  assert.match(await transcript().innerText(), /중간에 멈춘 답변은 들은 내용과 다를 수 있어요/, 'reload retains the generated-versus-heard transcript limitation');
   assert.match(await textRows().innerText(), /I would like to review what we said\./);
   assert.match(await textRows().innerText(), /This is my final sentence after hangup\./);
   sessionMetadataGate.release.resolve(); sessionMetadataGate = null;
@@ -208,7 +208,7 @@ try {
   const emptyId = await start(); await page.locator('#end-call').click();
   await transcript().waitFor({ state: 'visible' }); await openTranscript();
   assert.equal(await transcript().locator('[data-transcript-event-id]').count(), 0, 'a zero-turn call does not invent transcript rows');
-  assert.match(await transcript().innerText(), /발화.*없|대화.*없|0개/);
+  assert.match(await transcript().innerText(), /마지막 대화를 확인하고 있어요/);
   await waitUntil(() => sessions.find(session => session.id === emptyId).status === 'ended', 'zero-turn call can still finish honestly');
   await page.waitForFunction(() => !document.querySelector('[data-view="contacts"]').disabled);
   assert(!reviewRequests.includes(emptyId), 'zero-user-turn call does not request unsupported feedback');
@@ -229,10 +229,10 @@ try {
   console.log('PASS: transcription failure preserves received speech and visible partial/save recovery without claiming completion.');
   await page.locator('#session-feedback-retry').click();
   await waitUntil(() => sessions.find(session => session.id === partialId).record_incomplete === true, 'explicit received-only recovery completes the partial server session');
-  await page.waitForFunction(() => document.querySelector('[data-transcript-storage-detail]')?.textContent.includes('수신된 기록으로 마무리'));
+  await page.waitForFunction(() => document.querySelector('[data-transcript-storage-detail]')?.textContent.includes('확인된 대화만 남긴 기록'));
   assert.deepEqual(partialFinishes, [partialId], 'partial completion is an explicit distinct recovery request');
   assert.match(await textRows().innerText(), /Keep this received sentence/);
-  assert.match(await transcriptStatus().innerText(), /누락된 음성은 포함되지 않/);
+  assert.match(await transcriptStatus().innerText(), /빠진 내용이 있을 수 있어요/);
   assert.doesNotMatch(await transcriptStatus().innerText(), /전사 또는 통화 저장이 미완료/);
   await page.screenshot({ path: 'test-results/end-transcript-partial-recovered.png', fullPage: true });
   console.log('PASS: explicit received-only recovery updates partial status while preserving the missing-audio limitation.');
@@ -246,7 +246,7 @@ try {
     };
   });
   await emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'device-failed-user', transcript: 'Show this received text even when device storage fails.' });
-  await page.waitForFunction(() => !window.testPeer.input.enabled && document.querySelector('#notice').textContent.includes('저장 실패'));
+  await page.waitForFunction(() => !window.testPeer.input.enabled && document.querySelector('#notice').textContent.includes('대화를 저장하지 못했어요'));
   await page.evaluate(() => { const peer = window.testPeer; peer.connectionState = 'disconnected'; peer.onconnectionstatechange(); peer.connectionState = 'connected'; peer.onconnectionstatechange(); });
   assert.equal(await page.evaluate(() => window.testPeer.input.enabled), false, 'reconnection cannot reopen a microphone blocked by device-save failure');
   assert(await page.locator('#mute-call').isDisabled(), 'muting controls cannot bypass the storage-failure block');
@@ -254,7 +254,7 @@ try {
   await page.locator('#end-call').click(); await transcript().waitFor({ state: 'visible' }); await openTranscript();
   assert.match(await textRows().innerText(), /Show this received text even when device storage fails\./);
   await transcript().locator('[data-transcript-event-id][data-storage="failed"]').waitFor();
-  assert.match(await transcript().innerText(), /기기 보관과 서버 저장을 확인하지 못/);
+  assert.match(await transcript().innerText(), /저장을 확인하지 못/);
   await page.waitForFunction(() => !document.querySelector('[data-view="contacts"]').disabled);
   assert(![...saved.values()].some(row => row.sessionId === storageFailureId), 'device failure never invents server persistence');
   assert(!finishes.includes(storageFailureId), 'device failure never turns the call into completed storage');

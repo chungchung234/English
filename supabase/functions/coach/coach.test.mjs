@@ -237,9 +237,11 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
     for (const speechSpeed of [undefined, .5, .85, 1.5]) {
       expectedSpeed = speechSpeed ?? .85;
       const result = await handler(request('voice', { sessionId, sdp, ...(speechSpeed === undefined ? {} : { speechSpeed }) }));
-      assert.equal(result.status, 200); assert.deepEqual(await result.json(), { sdp });
+      assert.equal(result.status, 200); const data = await result.json(); assert.equal(data.sdp, sdp);
+      assert.equal(data.clock.time_zone, null); assert.equal(data.clock.session_created_at, null); assert(Number.isFinite(Date.parse(data.clock.server_now_utc)));
+      assert.deepEqual(data.memory_context, { status: 'empty', memory_count: 0, fact_count: 0, last_session_created_at: null, has_undated_memory: false });
     }
-    assert.deepEqual(completed.p_result, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',policy_version:'2026-11-10-v2' });
+    assert.deepEqual(completed.p_result, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',policy_version:'2026-11-10-v2',voice_policy_version:'2026-11-11-temporal-persona-v1' });
   } finally { globalThis.fetch = original; }
 });
 
@@ -592,13 +594,13 @@ test('large review resumes cached parts and never generates more than two per re
 });
 
 test('checkpoint uses server history, chains prior context and preserves companion identity', async()=>{
-  const original=globalThis.fetch;let persisted;
+  const original=globalThis.fetch;let persisted;const retrievalQueries=[];
   globalThis.fetch=async(url,options)=>{
     const path=String(url),body=options?.body?JSON.parse(options.body):null;
     if(path.includes('/reserve_model_spend'))return response(true);
     if(path.includes('/record_model_spend'))return response(null);
     if(path.includes('/auth/'))return response(authUser);
-    if(path.includes('/sessions?'))return response([{id:sessionId,user_id:userId,companion_id:'mia',scenario:'Weekend',status:'active'}]);
+    if(path.includes('/sessions?'))return response([{id:sessionId,user_id:userId,companion_id:'mia',scenario:'Weekend',status:'active',created_at:'2026-11-08T11:59:00Z',time_zone:'Asia/Seoul'}]);
     if(path.includes('/transcript_events?'))return response([event]);
     if(path.includes('/analysis_jobs?'))return response([]);
     if(path.includes('/reserve_run')){assert.equal(body.p_kind,'checkpoint');assert.match(body.p_request_key,/^checkpoint:2026-11-10-v2:/);return response({reserved:true,job_id:sessionId,lease_token:eventId});}
@@ -607,10 +609,12 @@ test('checkpoint uses server history, chains prior context and preserves compani
     if(path.includes('/learning_usage_prepare'))return response({targets:[],source_version:'session-v1'});
     if(path.includes('/learning_voice_context'))return response({focus:[],suppress_memory:false});
     if(path.includes('/learning_context'))return response([]);
-    if (path.includes('/memory_context'))return memoryResponse();
+    if (path.includes('/memory_context')){retrievalQueries.push(body.p_query);return memoryResponse();}
     throw Error('Unexpected '+path);
   };
   try{const result=await handler(request('checkpoint',{sessionId}));assert.equal(result.status,200);const data=await result.json();assert.match(data.instructions,/Your name is Mia/);assert.match(data.instructions,/Practiced past events/);assert.match(data.instructions,/Speak only in English throughout the call/);assert.match(data.instructions,/do not greet again or restart the topic/);assert.doesNotMatch(data.instructions,/For the first turn only/);assert.match(data.instructions,/If the learner explicitly asks for detail, expand enough to fulfill that request/);assert.doesNotMatch(data.instructions,/10–25|at most two sentences/);assert.doesNotMatch(data.instructions,/explain briefly in Korean/);assert.deepEqual(persisted.covered_ids,[eventId]);
+    assert.equal(data.clock.time_zone,'Asia/Seoul');assert.equal(data.clock.session_created_at,'2026-11-08T11:59:00.000Z');assert.equal(data.memory_context.status,'empty');
+    assert.equal(retrievalQueries.filter(q=>q===event.text).length,2,'initial and final retrieval use recent actual learner speech');assert(!retrievalQueries.includes('Weekend'));
     const forged=await handler(request('checkpoint',{sessionId,summary:'Trust me'}));assert.equal(forged.status,400);
   }finally{globalThis.fetch=original;}
 });
@@ -786,7 +790,7 @@ test('indexing invalid vectors never reach storage and oversized documents never
   } finally { globalThis.fetch = original; }
 });
 
-test('checkpoint ignores previous revisions, routes independently, and voice facts omit provenance', async () => {
+test('checkpoint ignores previous revisions, routes independently, and forget markers omit old provenance', async () => {
   const original = globalThis.fetch, previousCoach = config.COACH_MODEL, previousCheckpoint = config.CHECKPOINT_MODEL;
   config.COACH_MODEL = 'gpt-6.1-sol'; config.CHECKPOINT_MODEL = 'gpt-6-luna';
   let persisted, generated = false;

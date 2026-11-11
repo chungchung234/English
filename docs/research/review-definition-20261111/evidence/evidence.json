@@ -1,33 +1,29 @@
 {
-  "source": "Current repository code; synthetic authenticated transport and synthetic learner text. Not a live account session.",
-  "commit": "b2e91c179560a96893efdc30506cc235f77680a2",
+  "source": "Current repository code; synthetic auth, calls and learner expressions. Not a live account session.",
+  "commit": "6fc07277d4fe94d273bef7144b7b2c360dd9aa61",
+  "focus": {
+    "outline": "rgb(48, 56, 238) solid 3px",
+    "outlineOffset": "3px",
+    "borderRadius": "0px"
+  },
   "errors": [],
   "colors": {
-    "tokens": {
-      "brand": "#3038ee",
-      "brandStrong": "#252bb5",
-      "surface": "#f3f5fc"
-    },
     "footer": {
       "color": "rgb(8, 23, 68)",
       "background": "rgb(245, 245, 255)",
       "borderTop": "1px solid rgb(238, 238, 251)",
-      "outline": "rgb(8, 23, 68) none 3px",
       "borderRadius": "0px"
     },
     "primary": {
       "color": "rgb(255, 255, 255)",
       "background": "rgb(37, 43, 181)",
       "borderTop": "0px none rgb(255, 255, 255)",
-      "outline": "rgb(255, 255, 255) none 3px",
       "borderRadius": "14px"
     },
-    "summary": null,
     "body": {
       "color": "rgb(8, 23, 68)",
       "background": "rgb(255, 255, 255)",
       "borderTop": "0px none rgb(8, 23, 68)",
-      "outline": "rgb(8, 23, 68) none 3px",
       "borderRadius": "0px"
     },
     "horizontalOverflow": false

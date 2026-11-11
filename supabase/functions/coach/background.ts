@@ -8,6 +8,13 @@ export function requireBackground(req:Request,key:string){
   for(let i=0;i<expected.length;i++)difference|=(supplied.charCodeAt(i)||0)^expected.charCodeAt(i);
   if(!key||difference!==0)throw new AppError(401,'UNAUTHENTICATED','Server authentication is required.');
 }
+export async function authorizeBackground(req:Request,key:string,verify:(authorization:string)=>Promise<boolean>){
+  try{requireBackground(req,key);return;}catch(error){if(!(error instanceof AppError)||error.status!==401)throw error;}
+  const authorization=req.headers.get('authorization')||'';
+  let role;
+  try{const token=authorization.match(/^Bearer ([^\s]+)$/)?.[1],parts=token?.split('.');if(parts?.length===3)role=JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/'))).role;}catch{/* Untrusted claims are only a filter, never proof. */}
+  if(role!=='service_role'||await verify(authorization)!==true)throw new AppError(401,'UNAUTHENTICATED','Server authentication is required.');
+}
 export function recoveryOutcome(error:unknown){
   const code=error instanceof AppError?error.code:'WORKER_INTERNAL';
   if(code==='ANALYSIS_CONTINUE')return {outcome:'continue',code,seconds:5};

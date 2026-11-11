@@ -1,5 +1,5 @@
 import { weeklyLearningPlan } from './weekly.ts';
-import {requireBackground,drainPostCall,type PostCallTask} from './background.ts';
+import {authorizeBackground,drainPostCall,type PostCallTask} from './background.ts';
 import { HANDOFF_VERSION, HANDOFF_INSTRUCTIONS, handoffSchema, validateHandoff, handoffFailure } from './conversation-memory.ts';
 import { reconsiderContext, reconsiderSchema, validateReconsiderProposal, usageContext, observationalUsage, type ReviewContext, type UsageContext } from './enhancements.ts';
 import { POLICY_VERSION, reviewPolicy, usageEstimate, spendReservation } from './policy.ts';
@@ -606,7 +606,12 @@ export async function handler(req: Request): Promise<Response> {
     if (req.method !== 'POST' && !(endpoint === 'config' && req.method === 'GET')) throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Use POST for this endpoint.');
     const env = environment();
     if(endpoint==='background-work'){
-      requireBackground(req,env.serviceKey);allowKeys(await readBody(req),[]);
+      await authorizeBackground(req,env.serviceKey,async authorization=>{
+        const response=await request(`${env.supabase}/rest/v1/rpc/background_worker_authorized`,{method:'POST',headers:{apikey:authorization.slice(7),Authorization:authorization,'Content-Type':'application/json'},body:'{}'});
+        if(response.status===401||response.status===403)return false;
+        if(!response.ok)throw new AppError(503,'WORKER_AUTH_UNAVAILABLE','Server authorization could not be verified.');
+        return await response.json().catch(()=>false)===true;
+      });allowKeys(await readBody(req),[]);
       return json(await drainPostCall({rpc:(name,body)=>rpc(env,name,body),memory:task=>prepareConversationMemory(env,task.user_id,{sessionId:task.session_id,companionId:task.companion_id}),review:task=>review(env,task.user_id,{sessionId:task.session_id},'session',task)}),200,cors);
     }
     const userId = await authenticate(req, env);

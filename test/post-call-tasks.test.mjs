@@ -39,9 +39,9 @@ test('a changed source or replaced lease cannot publish an old feedback result o
  assert.equal((await db.query('select count(*)::int n from public.analyses')).rows[0].n,0);
 });
 test('partial, held, excluded and revoked sources cannot be claimed; ordinary users cannot read or invoke the queue',async t=>{
- const db=await setup(t);await call(db,{partial:true});await call(db,{hasSpeech:false});assert.equal((await db.query('select count(*)::int n from public.post_call_tasks')).rows[0].n,0);
+ const db=await setup(t);assert.equal(await rpc(db,'background_worker_authorized'),true);await call(db,{partial:true});await call(db,{hasSpeech:false});assert.equal((await db.query('select count(*)::int n from public.post_call_tasks')).rows[0].n,0);
  const s=await call(db);await rpc(db,'memory_manage',[user,'alex','excludeSession',null,null,s.id]);assert.equal(await claim(db),null);
- await db.exec('set role authenticated');try{await assert.rejects(db.query('select public.claim_post_call_task()'),/permission denied/);await assert.rejects(db.query('select * from public.post_call_tasks'),/permission denied/);}finally{await db.exec('reset role');}
+ await db.exec('set role authenticated');try{await assert.rejects(db.query('select public.background_worker_authorized()'),/permission denied/);await assert.rejects(db.query('select public.claim_post_call_task()'),/permission denied/);await assert.rejects(db.query('select * from public.post_call_tasks'),/permission denied/);}finally{await db.exec('reset role');}
  await call(db,{companion:'mia'});await db.exec("delete from loop_private.approved_emails where email='owner@example.com'");assert.equal(await claim(db),null);
 });
 test('expired workers can be replaced, while in-progress calls defer automatic work',async t=>{

@@ -178,4 +178,3 @@ Comparison history:
 Primary browser verification: optional guide/skip/replay, Escape/focus return, account-specific browser persistence, initial loading/confirmed empty/error recovery, retained history during refresh, permission denial/retry, cancellation during a pending microphone grant and voice response, immediate retry isolation, and first-learning-note acknowledgement. Actual voice providers and auth are fixtures; no claim of real-device microphone or AI voice quality verification is made.
 
 Release limitation: Google-hosted OAuth app/domain branding requires the provider console and is not changed by this frontend release. Invite/approval policy and backend authorization remain intact. Guidance preferences are scoped per account in this browser and do not claim cross-device sync.
-

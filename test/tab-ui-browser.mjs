@@ -18,6 +18,7 @@ export async function testTabUI(browser,base){
  await page.route('**/public-config.js',route=>route.fulfill({contentType:'text/javascript',body:'globalThis.LOOP_PUBLIC_CONFIG={url:"https://test-project.supabase.co",key:"sb_publishable_test"};'}));
  await page.route('https://test-project.supabase.co/**',async route=>{
   const url=new URL(route.request().url()),body=route.request().postDataJSON?.();let data=[];
+    if(url.pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}}); // Background delivery is outside this fixture's scope.
   if(url.pathname==='/auth/v1/user')data={id:uid};
   else if(url.pathname==='/auth/v1/settings')data={external:{google:false,kakao:false}};
   else if(url.pathname.endsWith('/coach/config'))data={models:{voice:'fixture',coach:'fixture',analysis:'fixture'}};

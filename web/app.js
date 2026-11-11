@@ -345,7 +345,7 @@ function activateCall(current) {
 function openDialog(id) { const dialog=$(id); if(dialog && !dialog.open) {dialog.showModal();presence.refresh();} }
 function closeDialog(id) { const dialog=$(id); if(dialog?.open) dialog.close();if(id==='call-detail-dialog'){callDetailEpoch++;$('call-detail-content').replaceChildren();} }
 const memoryBusy=()=>Boolean(call||callStarting||callEnding);
-const firstUse=createFirstUse({document,getScope:()=>scope,isBusy:memoryBusy,home:()=>setView('contacts')});
+const firstUse=createFirstUse({document,getScope:()=>scope,isBusy:memoryBusy,home:()=>{$('call-help').hidden=true;return setView('contacts');}});
 const historyLoading=createContentLoading({root:$('history'),skeleton:$('history-loading'),status:$('history-load-state'),retry:$('history-load-retry')});
 const reviewLoading=createContentLoading({root:$('learning-queue'),skeleton:$('review-loading'),status:$('review-load-state'),retry:$('review-load-retry')});
 function memoryControlsDisabled(disabled){const busy=disabled||memoryBusy();document.querySelectorAll('#memory-dialog button').forEach(button=>button.disabled=busy||button.dataset.memoryDisabled==='true');document.querySelectorAll('#memory-dialog input').forEach(input=>input.disabled=busy);}

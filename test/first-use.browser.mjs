@@ -142,6 +142,9 @@ try {
   await page.evaluate(()=>micMode='delayed');await page.locator('#call-help-retry').click();await page.waitForFunction(()=>typeof releaseMic==='function');await page.locator('#cancel-connection').click();
   await page.evaluate(()=>releaseMic());await page.waitForFunction(()=>auditStreams.at(-1).getTracks().every(t=>t.readyState==='ended'));
   assert.equal(sessions.length,0,'late microphone grant cannot create a session after cancel');assert(await page.locator('#start-call').isEnabled());
+  await page.evaluate(()=>micMode='denied');await page.locator('#start-call').click();await page.locator('#call-help').waitFor({state:'visible'});
+  const requestsBeforeGuide=await page.evaluate(()=>micRequests);await page.locator('#usage-guide-open').click();await page.locator('#guide-next').click();
+  assert(await page.locator('#start-call').isVisible(),'guide from an error restores its actual call target');assert.equal(await page.evaluate(()=>micRequests),requestsBeforeGuide);await page.locator('#guide-skip').click();
   await page.evaluate(()=>micMode='normal');
   voiceGate={started:defer(),release:defer()};const cancelledGate=voiceGate;
   await page.locator('#start-call').click();await milestone(cancelledGate.started.promise,'voice request is held');await shot('07-cancellable-connection');

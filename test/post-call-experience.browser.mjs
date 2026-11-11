@@ -36,7 +36,7 @@ async function rpc(name, body, user = uid) {
   });
   return asUser(async () => {
     const invocation = `public.${quote(name)}(${args.map(arg => arg.sql).join(',')})`;
-    const result = await db.query(signature.set ? `select * from ${invocation}` : `select ${invocation} as result`, args.map(arg => arg.value));
+    const result = await db.query(signature.set ? `select * from ${invocation}` : `select to_jsonb(${invocation}) as result`, args.map(arg => arg.value));
     return signature.set ? result.rows : result.rows[0]?.result;
   }, user);
 }
@@ -271,13 +271,16 @@ try {
     'That sounds like a lovely plan.'
   ];
   for (let i = 0; i < turns.length; i++) await emit(i % 2 ? 'assistant' : 'user', turns[i], `first-${i}`);
-  await page.locator('#end-call').click(); await page.locator('#review-panel').waitFor({ state: 'visible' });
+  await page.locator('#end-call').click();
+  assert.equal(await page.locator('body').getAttribute('data-call-phase'), 'ending');
+  assert.equal(await page.locator('#review-panel').isVisible(), false, 'the ended call waits for actual save acknowledgement');
+  await capture(page, '01-finishing-390');
+  finishGate.resolve(); transport.finishGate = null;
+  await page.locator('#review-panel').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#review-panel').getAttribute('data-mode'), 'session');
   assert.equal(await page.evaluate(() => document.activeElement.id), 'review-title');
   assert.equal(await transcript.evaluate(node => node.open), false, 'long transcript defaults to optional exploration');
   assert.equal(await page.locator('#learning-queue [data-session-id]:visible').count(), 0, 'previous reports do not compete with this call');
-  await capture(page, '01-finishing-390');
-  finishGate.resolve(); transport.finishGate = null;
   await page.waitForFunction(() => !document.querySelector('[data-view="contacts"]').disabled);
   await waitUntil(() => transport.calls.some(row => row.path.endsWith('/coach/review') && row.body.sessionId === first), 'analysis starts only after call save');
   await capture(page, '02-analysis-pending-390');

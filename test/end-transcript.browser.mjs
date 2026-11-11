@@ -115,16 +115,17 @@ try {
   await page.evaluate(({ project, uid }) => localStorage.setItem('loop.auth:' + project, JSON.stringify({ access_token: 'fixture-jwt', refresh_token: 'fixture-refresh', expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: uid } })), { project, uid });
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' });
   const emit = event => page.evaluate(event => window.testPeer.dc.onmessage({ data: JSON.stringify(event) }), event);
-  const start = async () => { await page.locator('[data-view="contacts"]').click(); await page.locator('#start-call').click(); await page.locator('#end-call').waitFor({ state: 'visible' }); await page.waitForFunction(() => !document.querySelector('#end-call').disabled); return sessions[0].id; };
+  const leaveReview = async () => { if(await page.locator('#session-review-exit').isVisible())await page.locator('#session-review-exit').click(); };
+  const start = async () => { await leaveReview(); await page.locator('[data-view="contacts"]').click(); await page.locator('#start-call').click(); await page.locator('#end-call').waitFor({ state: 'visible' }); await page.waitForFunction(() => !document.querySelector('#end-call').disabled); return sessions[0].id; };
   const transcript = () => page.locator('[data-post-call-transcript]');
   const textRows = () => transcript().locator('[data-transcript-events]');
-  const transcriptStatus = () => transcript().locator('[data-transcript-status]');
+  const transcriptStatus = () => transcript().locator('[data-transcript-storage-detail]');
   const openTranscript = async () => {
-    const details = transcript().locator('details.call-transcript');
+    const details = transcript().locator('details.transcript-record-info');
     if (!await details.evaluate(node => node.open)) await details.locator('summary').click();
   };
   const openFeedback = async sessionId => {
-    await page.locator('[data-view="history"]').click();
+    await leaveReview(); await page.locator('[data-view="history"]').click();
     await page.locator(`.history-entry[data-session-id="${sessionId}"] .history-open`).click();
     await page.locator('.call-feedback').click();
     await transcript().waitFor({ state: 'visible' });
@@ -142,23 +143,23 @@ try {
   // The last committed input is still being transcribed while the slow-save
   // escape appears; its completion may update the already open transcript.
   await emit({ type: 'input_audio_buffer.committed', item_id: 'late-final-user' });
-  await page.locator('#view-ending-transcript').waitFor({ state: 'visible', timeout: 5000 });
-  await page.locator('#view-ending-transcript').click();
+  // The short hangup cue reveals the transcript independently of storage.
   await page.locator('[data-panel="review"]').waitFor({ state: 'visible' });
   await transcript().waitFor({ state: 'visible' });
   assert.match(await textRows().innerText(), /I would like to review what we said\./);
   assert.match(await textRows().innerText(), /Of course\. What stood out to you\?/);
+  await openTranscript();
   assert.match(await transcript().innerText(), /중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요/);
   assert.equal(saved.size, 0, 'readable received turns precede append acknowledgement');
   assert.equal(finishes.length, 0, 'immediate transcript does not wait for finish RPC');
   assert.match(await transcriptStatus().innerText(), /전사|전송|저장.*확인|대기/);
   assert.doesNotMatch(await transcriptStatus().innerText(), /서버 저장 완료|통화 저장 완료/);
-  assert.equal(await transcriptStatus().getAttribute('role'), 'status');
-  assert.equal(await page.evaluate(() => document.activeElement?.dataset.action), 'toggle-post-call-transcript', 'hangup moves keyboard focus to the newly opened transcript');
+  assert.equal(await transcript().locator('[data-transcript-status]').getAttribute('role'), 'status');
+  const focusBeforeLate=await page.evaluate(()=>document.activeElement?.dataset.action||document.activeElement?.id);
   await emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'late-final-user', transcript: 'This is my final sentence after hangup.' });
   await textRows().getByText('This is my final sentence after hangup.', { exact: false }).waitFor();
   assert.equal(await transcript().locator('[data-transcript-event-id]').count(), 3, 'late final completion updates the same open transcript without duplicate rows');
-  assert.equal(await page.evaluate(() => document.activeElement?.dataset.action), 'toggle-post-call-transcript', 'late speech updates preserve transcript focus');
+  assert.equal(await page.evaluate(()=>document.activeElement?.dataset.action||document.activeElement?.id),focusBeforeLate,'late speech preserves current focus');
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'the open mobile transcript fits the existing layout');
   await mkdir('test-results', { recursive: true }); await page.screenshot({ path: 'test-results/end-transcript-pending.png', fullPage: true });
   appendGate.release.resolve(); appendGate = null;
@@ -174,7 +175,7 @@ try {
   assert.match(await textRows().innerText(), /This is my final sentence after hangup\./);
   await page.screenshot({ path: 'test-results/end-transcript-saved.png', fullPage: true });
   await page.screenshot({ path: 'test-results/end-transcript-feedback-failed.png', fullPage: true });
-  console.log('PASS: slow-save transcript escape exposes received and late-final speech during held append/finish; failed feedback keeps the full transcript.');
+  console.log('PASS: automatic transcript reveal exposes received and late-final speech during held append/finish; failed feedback keeps the full transcript.');
 
   sessionMetadataGate = { sessionId: firstId, started: defer(), release: defer() };
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' });
@@ -187,7 +188,7 @@ try {
     return host?.dataset.sessionId === sessionId && JSON.stringify(restored) === JSON.stringify(ids);
   }, { sessionId: firstId, ids: savedIds });
   assert.match(await transcriptStatus().innerText(), /대화문 서버 저장 확인/, 'saved transcript is ready while optional session metadata remains held');
-  assert.equal(await transcript().locator('[data-call-save-duration]').count(), 0, 'reload does not invent a client timing measurement that was not persisted');
+  assert(await transcript().locator('[data-call-save-duration]').isHidden(), 'reload does not invent a client timing measurement that was not persisted');
   assert.match(await transcript().locator('[data-session-time]').innerText(), /확인하고 있어요/, 'pending metadata is not mislabeled as a legacy unstored time zone');
   assert.match(await transcript().innerText(), /중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요/, 'reload retains the generated-versus-heard transcript limitation');
   assert.match(await textRows().innerText(), /I would like to review what we said\./);
@@ -195,7 +196,7 @@ try {
   sessionMetadataGate.release.resolve(); sessionMetadataGate = null;
   await page.waitForFunction(zone => document.querySelector('[data-post-call-transcript] [data-session-time]')?.textContent.includes(zone), sessions.find(session => session.id === firstId).time_zone);
   await page.screenshot({ path: 'test-results/end-transcript-reloaded.png', fullPage: true });
-  await page.locator('[data-view="history"]').click();
+  await leaveReview(); await page.locator('[data-view="history"]').click();
   await page.locator(`.history-entry[data-session-id="${firstId}"] .history-open`).click();
   const historyTranscript = page.locator('#call-detail-content .call-transcript');
   assert(await historyTranscript.evaluate(node => node.open), 'opening ended-call details opens transcript without another disclosure click');
@@ -225,9 +226,9 @@ try {
   assert.equal(await page.locator('[data-panel="review"]').isVisible(), true, 'partial failure keeps the already-open readable transcript');
   await page.screenshot({ path: 'test-results/end-transcript-partial.png', fullPage: true });
   console.log('PASS: transcription failure preserves received speech and visible partial/save recovery without claiming completion.');
-  await page.locator('#learning-session [data-action="finish-partial"]').click();
+  await page.locator('#session-feedback-retry').click();
   await waitUntil(() => sessions.find(session => session.id === partialId).record_incomplete === true, 'explicit received-only recovery completes the partial server session');
-  await page.waitForFunction(() => document.querySelector('[data-transcript-status]')?.textContent.includes('수신된 기록으로 마무리'));
+  await page.waitForFunction(() => document.querySelector('[data-transcript-storage-detail]')?.textContent.includes('수신된 기록으로 마무리'));
   assert.deepEqual(partialFinishes, [partialId], 'partial completion is an explicit distinct recovery request');
   assert.match(await textRows().innerText(), /Keep this received sentence/);
   assert.match(await transcriptStatus().innerText(), /누락된 음성은 포함되지 않/);
@@ -252,7 +253,7 @@ try {
   await page.locator('#end-call').click(); await transcript().waitFor({ state: 'visible' }); await openTranscript();
   assert.match(await textRows().innerText(), /Show this received text even when device storage fails\./);
   await transcript().locator('[data-transcript-event-id][data-storage="failed"]').waitFor();
-  assert.match(await textRows().innerText(), /기기 보관과 서버 저장을 확인하지 못/);
+  assert.match(await transcript().innerText(), /기기 보관과 서버 저장을 확인하지 못/);
   await page.waitForFunction(() => !document.querySelector('[data-view="contacts"]').disabled);
   assert(![...saved.values()].some(row => row.sessionId === storageFailureId), 'device failure never invents server persistence');
   assert(!finishes.includes(storageFailureId), 'device failure never turns the call into completed storage');

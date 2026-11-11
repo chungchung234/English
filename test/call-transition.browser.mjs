@@ -105,7 +105,7 @@ try {
   await milestone(voiceGate.started.promise, 'voice request reaches the held provider response');
   assert.equal(await phase(), 'connecting');
   assert.equal(await page.locator('#call-timer').textContent(), '00:00');
-  for (const id of ['mute-call', 'speed-call', 'hint-call', 'hold-call']) assert(await page.locator('#' + id).isDisabled(), 'connection preparation locks ' + id);
+  for (const id of ['mute-call', 'speed-call', 'hint-call']) assert(await page.locator('#' + id).isDisabled(), 'connection preparation locks ' + id);
   assert(await page.evaluate(() => window.testTracks.length > 0 && window.testTracks.every(track => !track.enabled)), 'pending microphone tracks do not transmit connecting cues');
   await page.waitForFunction(() => window.audioNodes.some(record => record.started));
   await mkdir('test-results', { recursive: true }); await page.screenshot({ path: 'test-results/call-transition-connecting.png', fullPage: true });
@@ -140,8 +140,9 @@ try {
   assert.equal(await page.locator('#review-panel').isVisible(), false, 'end cue retains the call view for its short transition');
   assert(await page.evaluate(() => window.testTracks.every(track => track.readyState === 'ended')), 'microphone stops before the end transition');
   assert(await page.evaluate(() => document.querySelector('#remote-audio').paused && !document.querySelector('#remote-audio').srcObject), 'remote audio is detached synchronously');
-  assert(await page.evaluate(() => ['.live-actions', '.call-floor-controls', '.transcript-details'].every(selector => document.querySelector(selector).inert)), 'call controls including transcript disclosure are inert');
+  assert(await page.evaluate(() => ['.live-actions', '.transcript-details'].every(selector => document.querySelector(selector).inert)), 'call controls including transcript disclosure are inert');
   assert(await page.locator('#end-call').isDisabled());
+  assert.equal(await page.locator('#hold-call').isVisible(), false, 'the removed hold control is not offered');
   const draws = await page.evaluate(() => window.liveDraws);
   await emit({ type: 'output_audio_buffer.started' });
   await page.clock.fastForward(300);
@@ -153,18 +154,14 @@ try {
   await page.screenshot({ path: 'test-results/call-transition-ending.png', fullPage: true });
   assert.equal(finishes.length, 0, 'UI transition does not skip final speech collection');
   await page.clock.fastForward(350);
-  assert.equal(await phase(), 'ending', 'the short cue window alone does not claim that server storage is finished');
-  assert.equal(await page.locator('#review-panel').isVisible(), false);
-  await page.clock.fastForward(2500);
-  await eventually(() => page.locator('#view-ending-transcript').isVisible(), 'slow storage exposes a transcript escape');
-  await page.locator('#view-ending-transcript').click();
   await page.locator('#review-panel').waitFor({ state: 'visible' });
-  assert.equal(await page.evaluate(() => document.activeElement?.dataset.action), 'toggle-post-call-transcript', 'the explicit transcript escape focuses the requested conversation');
-  const transcript = page.locator('[data-post-call-transcript] details.call-transcript');
-  assert.equal(await transcript.evaluate(node => node.open), true, 'the explicit transcript escape opens the requested conversation');
+  assert.equal(await page.locator('#review-panel').getAttribute('data-session-view'), 'transcript');
+  assert(await page.locator('[data-transcript-events]').isVisible(), 'the short cue exposes received source without a manual escape');
+  assert.equal(await page.locator('[data-call-save-duration]:not([hidden])').count(), 0, 'the cue never claims that server storage is finished');
+  await page.clock.fastForward(2500);
   await eventually(() => page.locator('[data-post-call-transcript]').innerText().then(text => text.includes('One last thought after hangup.')), 'late transcription appears before storage acknowledgement');
   await milestone(appendGate.started.promise, 'late transcription reaches the held append request');
-  assert.equal(finishes.length, 0, 'explicit transcript escape remains available before server storage acknowledgement');
+  assert.equal(finishes.length, 0, 'reading the source never acknowledges pending server writes');
   assert.equal(await page.evaluate(() => window.testMessages.filter(event => event.type === 'response.create').length), 1, 'late speech after hangup does not trigger another reply');
   await eventually(() => page.evaluate(() => window.audioContexts.every(audio => audio.state === 'closed')), 'all cue and presence contexts close');
   appendGate.release.resolve(); appendGate = null;
@@ -173,9 +170,9 @@ try {
   assert.equal(finishes.length, 1); assert.equal([...saved.values()].length, 2, 'the final utterance is saved once');
   await page.clock.resume();
   console.log('PASS: real pending connection cues, two-part readiness, no artificial connect delay, and one greeting.');
-  console.log('PASS: immediate microphone/audio/control/avatar stop, acknowledgement-driven ended frame, transcript escape and parallel late-transcript preservation.');
+  console.log('PASS: immediate microphone/audio/control/avatar stop, short ended frame, automatic transcript reading and parallel late-transcript preservation.');
 
-  await page.locator('[data-view="contacts"]').click(); failVoice = true;
+  await page.locator('#session-review-exit').click(); failVoice = true;
   await page.locator('#start-call').click(); await page.locator('#contacts-panel').waitFor({ state: 'visible' });
   assert(await page.locator('#start-call').isEnabled());
   await eventually(() => page.evaluate(() => window.audioContexts.every(audio => audio.state === 'closed')), 'all cue and presence contexts close');

@@ -20,17 +20,19 @@ function harness({ initialClock = 0, startedAt } = {}) {
   return { control, advance, timers, callbacks, updates, reviews };
 }
 
-test('a normal close waits for actual save acknowledgement instead of the former fixed visual delay', async () => {
+test('received text opens after the cue while save acknowledgement remains independent', async () => {
   const h = harness();
   assert.deepEqual(h.control.state, { elapsedMs: 0, stage: 'transcribing', status: 'pending', reviewOpened: false, canReview: false });
-  h.advance(600); assert.equal(h.reviews.length, 0);
+  h.advance(599); assert.equal(h.reviews.length, 0);
+  h.advance(1); await h.control.reviewed; assert.equal(h.reviews.length, 1);
+  assert.equal(h.reviews[0].status, 'pending', 'revealing text never claims storage succeeded');
   h.advance(1200); h.control.setStage('saving');
   h.advance(425);
-  assert.equal(h.reviews.length, 0, 'a prepared transcript is not a server acknowledgement');
+  assert.equal(h.reviews.length, 1, 'the source stays readable during saving');
   assert.equal(h.control.state.elapsedMs, 2225);
   h.control.settle('saved'); await h.control.reviewed;
-  assert.equal(h.reviews.length, 1); assert.equal(h.reviews[0].status, 'saved');
-  assert.equal(h.reviews[0].elapsedMs, 2225);
+  assert.equal(h.reviews.length, 1); assert.equal(h.control.state.status, 'saved');
+  assert.equal(h.control.state.elapsedMs, 2225);
   h.advance(8000); assert.equal(h.control.state.elapsedMs, 2225, 'saved duration does not continue during feedback');
   assert.equal(h.timers.size, 0);
 });
@@ -54,22 +56,23 @@ test('an explicit hangup timestamp includes synchronous shutdown and anchors the
   assert.equal(h.reviews.length, 1, 'the minimum ends 600 ms after hangup, not after construction');
   assert.equal(h.reviews[0].elapsedMs, 280, 'the cue remainder does not inflate save latency');
   const pending = harness({ initialClock: 1235, startedAt: 1000 });
-  pending.advance(2764); assert.equal(pending.control.openReview(), false);
-  pending.advance(1); assert.equal(pending.control.openReview(), true, 'manual review is offered 3 seconds after hangup');
+  pending.advance(364); assert.equal(pending.reviews.length, 0);
+  pending.advance(1); assert.equal(pending.reviews.length, 1, 'pending text opens 600 ms after hangup');
+  assert.equal(pending.control.openReview(), false, 'manual opening cannot duplicate automatic navigation');
   pending.control.dispose();
   const invalid = harness({ initialClock: 1235, startedAt: Infinity });
   assert.equal(invalid.control.state.elapsedMs, 0, 'non-finite timestamps use the construction clock');
   invalid.control.dispose();
 });
 
-test('slow saving offers optional review but never navigates or claims success on a timer', async () => {
-  const h = harness(); h.advance(2999);
+test('slow saving opens text once and never repeats navigation on acknowledgement', async () => {
+  const h = harness(); h.advance(599);
   assert.equal(h.control.openReview(), false); assert.equal(h.reviews.length, 0);
-  h.advance(1); assert.equal(h.control.state.canReview, true);
-  h.advance(9000);
-  assert.equal(h.control.state.status, 'pending'); assert.equal(h.reviews.length, 0);
-  assert.equal(h.control.openReview(), true); await h.control.reviewed;
+  h.advance(1); await h.control.reviewed;
   assert.equal(h.reviews.length, 1); assert.equal(h.reviews[0].status, 'pending');
+  assert.equal(h.control.state.canReview, false);
+  h.advance(11400);
+  assert.equal(h.control.state.status, 'pending'); assert.equal(h.reviews.length, 1);
   assert.equal(h.control.openReview(), false);
   h.control.setStage('saving'); h.advance(2375);
   h.control.settle('saved');
@@ -80,7 +83,8 @@ test('slow saving offers optional review but never navigates or claims success o
 
 test('a failed or incomplete close is partial and cannot be changed by a duplicate late success', async () => {
   const h = harness(); h.advance(9750); h.control.settle('partial'); await h.control.reviewed;
-  assert.equal(h.reviews.length, 1); assert.equal(h.reviews[0].status, 'partial');
+  assert.equal(h.reviews.length, 1); assert.equal(h.reviews[0].status, 'pending');
+  assert.equal(h.control.state.status, 'partial');
   assert.equal(h.control.state.elapsedMs, 9750);
   assert.equal(h.control.settle('saved'), false); assert.equal(h.control.setStage('saving'), false);
   assert.equal(h.control.state.status, 'partial');

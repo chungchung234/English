@@ -1,3 +1,4 @@
+import { createSessionReview } from './session-review.js';
 import { createLearningReview } from '../src/learning-review.mjs';
 import { createCallCompletion } from './call-completion.js';
 import { createCallCues } from './call-cues.js';
@@ -5,7 +6,7 @@ import { createAIPresence } from './ai-presence.js';
 import { createSpeechSpeed, validSpeed, formatSpeed, SPEED } from './speech-speed.js';
 import { createPostCallTranscript } from './post-call-transcript.js';
 import { createVoiceTurnControls } from './voice-turn-controls.js';
-import { createConversationClock, deviceTimeZone, formatInstant, memoryReceiptLabel, recordTimeLabel, sessionTimeLabel, sessionTimeZone } from './conversation-time.js';
+import { createConversationClock, deviceTimeZone, formatInstant, recordTimeLabel, sessionTimeLabel, sessionTimeZone } from './conversation-time.js';
 import { createOutbox, flushOutbox } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
 import { mountEmailLogin } from '../src/email-login.mjs';
@@ -34,14 +35,21 @@ const transcriptReview=createPostCallTranscript({
  context:()=>({scope,companionId,sessionId:selectedReviewSessionId}),
  allRows,pendingRows:account=>outbox.list(account)
 });
+const sessionReview=createSessionReview({
+ context:()=>({scope,sessionId:selectedReviewSessionId,active:currentView==='review'}),
+ getRows:async ids=>{const rows=transcriptReview.getRows(),missing=ids?.filter(id=>!rows.some(row=>row.id===id));if(!missing?.length)return rows;const owner=scope,session=selectedReviewSessionId;const fetched=await allRows('transcript_events',`session_id=eq.${session}&id=in.(${missing.join(',')})&order=timestamp.asc,id.asc`);return owner===scope&&session===selectedReviewSessionId?[...rows,...fetched]:[];},
+ showSource:(ids,options)=>transcriptReview.showSource(ids,options),
+ onViewed:node=>learning.feedbackViewed?.(node),
+ onExit:()=>{learning.closePractice?.();if(call?.ending){call.wrapupHome=true;call.nextView='contacts';}setView('contacts',true);}
+});
 const learning=createLearningReview({document,rpc,edge,allRows,sync,isBusy:()=>memoryBusy(),
  getEventMetadata:()=>releaseMetadata,onTelemetryStage:event=>telemetryDiagnostics.record(event),
  getScope:()=>auth&&scope?{key:scope+'|'+companionId,companionId,name:companionName()}:null,
- onNotice:message=>notice(message),setView,setReviewMode,navigationKey:()=>viewEpoch,onPlan:()=>loadPlan().catch(error=>notice(error.message)),
+ onFeedbackState:state=>sessionReview.update(state),onNotice:message=>notice(message),setView,setReviewMode,navigationKey:()=>viewEpoch,onPlan:()=>loadPlan().catch(error=>notice(error.message)),
  refresh:()=>loadHistory(),onAnalysis:analysis=>{
   if(selectedReviewSessionId!==analysis.session_id||companionId!==(analysis.companion_id||analysis.content?.scope?.companionId)||callStarting||call&&call.id!==analysis.session_id)return;
   $('review-content').replaceChildren();showAnalysis($('review-content'),analysis);
-  if(currentView==='review'&&$('review-panel').dataset.mode==='session')$('review-announcement').textContent='이번 통화의 표현이 준비됐어요.';
+  if(currentView==='review'&&$('review-panel').dataset.mode==='session')$('review-announcement').textContent='이번 대화 피드백이 준비됐어요.';
  },onSession:async(sessionId,analysis)=>{
   if(memoryBusy())return;
   const requestScope=scope,selected=companionId,navigation=viewEpoch;
@@ -71,6 +79,7 @@ const companionStorageKey = () => 'loop.companion:' + config.url + '|' + auth.us
 function setReviewMode(mode) {
   const panel=$('review-panel');if(!panel)return;
   panel.dataset.mode=mode;
+  sessionReview.sync();$('session-feedback-context').textContent=companionName()+'와의 대화';
   $('review-announcement').textContent='';
   $('review-title').textContent=mode==='session'?'통화 돌아보기':mode==='weekly'?'최근 7일':'복습';
   $('review-context').textContent=mode==='session'?companionName()+'와의 통화':companionName()+'와 이어가기';
@@ -100,7 +109,7 @@ function setView(view,allowWrapup=false) {
     const selected = button.dataset.view === view;
     if(selected) button.setAttribute('aria-current','page'); else button.removeAttribute('aria-current');
   });
-  presence.refresh();if(typeof learning!=='undefined')learning.viewed();return true;
+  sessionReview.sync();presence.refresh();if(typeof learning!=='undefined')learning.viewed();return true;
 }
 function navigationControls() {
   const busy=memoryBusy();
@@ -250,14 +259,8 @@ function updateCallControls() {
   renderFloor(current);
 }
 function renderFloor(current) {
-  const state=current?.floor?.state, connected=Boolean(current?.ready&&current.pc.connectionState==='connected');
-  const button=$('hold-call'), note=$('hold-status');
-  button.disabled=!current||current.ending||current.compacting||callStarting||!connected||!state?.ready||state.pending||Boolean(state.held&&state.inputBusy);
-  button.setAttribute('aria-pressed',String(Boolean(state?.held)));
-  button.textContent=state?.phase==='error'?'응답 제어 다시 확인':state?.held?'다시 대화':'생각 중';
-  note.hidden=!state?.held;
-  note.textContent=state?.phase==='error'?'응답 제어를 확인하지 못했어요. 다시 확인하거나 통화를 마쳐 주세요.':state?.pending?(state.desiredHold?'AI 응답을 멈추고 있어요…':'대화를 다시 연결하고 있어요…'):current?.muted?'AI가 기다려요. 마이크는 음소거 상태예요.':state?.inputBusy?'듣고 있어요. 말을 마치면 다시 대화를 누를 수 있어요.':'AI가 기다려요. 내 말은 계속 기록돼요. 말을 마친 뒤 다시 대화를 누르세요.';
-  if(state?.held&&!current.ending){presence.setState('listening');$('call-status').textContent=state.pending?'응답 제어 확인 중':state.phase==='error'?'응답 제어 확인 필요':'생각할 시간 · AI가 기다려요';}
+  const state=current?.floor?.state;
+  if(state?.held&&!current.ending){presence.setState('listening');$('call-status').textContent=state.pending?'응답 제어 확인 중':state.phase==='error'?'응답 제어 확인 필요':'듣고 있어요 · 편하게 말씀하세요';}
 }
 function savedSpeechSpeed() {
   try { const value=Number(localStorage.getItem('loop.speech-speed:'+scope));return validSpeed(value)?value:SPEED.default; } catch { return SPEED.default; }
@@ -281,7 +284,7 @@ function renderSpeedDraft(value) {
 }
 function setCallPhase(phase) {
   document.body.dataset.callPhase=phase;presence.setPaused(phase==='ending');
-  for(const selector of ['.live-actions','.call-floor-controls','.transcript-details'])document.querySelector(selector).inert=phase==='ending';
+  for(const selector of ['.live-actions','.call-floor-controls','.transcript-details']){const node=document.querySelector(selector);if(node)node.inert=phase==='ending';}
 }
 function setCallLayout(active) {
   if(!active){setCallPhase('');$('call-completion-status').hidden=true;$('view-ending-transcript').hidden=true;}
@@ -296,26 +299,16 @@ function callElapsed(current) {return current.startedAt===null?0:Math.max(0,perf
 const clockText=value=>`${String(Math.floor(value/60000)).padStart(2,'0')}:${String(Math.floor(value/1000)%60).padStart(2,'0')}`;
 function updateCallClock(current) {
   if(call!==current||current.ending)return;
-  renderConversationContext(current);
   const elapsed=Math.min(CALL_DURATION,callElapsed(current)),remaining=Math.max(0,CALL_DURATION-elapsed);
   if($('call-timer'))$('call-timer').textContent=clockText(elapsed);
   if($('call-remaining')){$('call-remaining').textContent=clockText(remaining)+' 남음';$('call-remaining').hidden=current.startedAt===null||remaining>60000;}
   if(current.startedAt!==null&&remaining<=0){current.durationReached=true;notice('20분이 되어 통화를 종료하고 저장합니다.');endCall().catch(e=>notice(e.message));}
 }
-function renderConversationContext(current) {
-  if(call!==current||current.ending)return;
-  const value=current.clock?.snapshot();
-  if(value){const label=$('call-local-time');if(label.textContent!==value.label)label.textContent=value.label;label.dataset.clockSource=value.source;label.dateTime=value.utc;}
-  const memory=$('call-memory-context'),copy=memoryReceiptLabel(current.memoryContext);memory.hidden=!copy;
-  if(memory.textContent!==copy)memory.textContent=copy;
-  memory.title=copy?'통화 모델에 전달한 기록이에요. 실제 답변에서 언급했다는 뜻은 아니에요.':'';
-  if(copy)memory.setAttribute('aria-label',copy+'. '+memory.title);else memory.removeAttribute('aria-label');
-}
+
 function applyConversationContext(current, response) {
   if(call!==current||current.ending)return;
   if(response.clock){current.clock=createConversationClock({clock:response.clock,timeZone:current.time_zone});if(response.clock.session_created_at)current.created_at=response.clock.session_created_at;}
   if(response.memory_context)current.memoryContext=response.memory_context;
-  renderConversationContext(current);
 }
 function startCallClock(current) {
   if(call!==current||current.ending)return;
@@ -535,7 +528,6 @@ async function startCall() {
   $('transcript').replaceChildren();$('turn-count').textContent='0개 발화';$('empty-transcript').hidden=false;
   if($('call-timer'))$('call-timer').textContent='00:00';if($('call-remaining'))$('call-remaining').hidden=true;
   $('call-completion-status').hidden=true;$('call-completion-status').textContent='';$('view-ending-transcript').hidden=true;
-  $('call-local-time').textContent='현재 시각 확인 중';$('call-local-time').removeAttribute('datetime');$('call-local-time').removeAttribute('data-clock-source');$('call-memory-context').textContent='';$('call-memory-context').hidden=true;
   $('call-status').textContent=companionName()+'와 연결하고 있어요';presence.setState('connecting');setCallPhase('connecting');
   const cues=createCallCues();callCues=cues;cues.startConnecting();
   const callScope=scope, callUserId=auth.user.id, selectedCompanion=companionId;
@@ -553,7 +545,7 @@ async function startCall() {
     const pc=new RTCPeerConnection();
     current={cues,ready:false,dataOpen:false,greeted:false,omitLearningContext,id:session.id,companionId:selectedCompanion,scope:callScope,pc,stream,remoteStream:null,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,acceptingFinalEvents:false,speaking:false,responding:false,aiSpeaking:false,muted:false,awaitingCommit:false,items:[],lastCompact:Date.now(),lastCompactAttempt:0,needsCompact:false,compacting:false,compactFailures:0,startedAt:null,startedMono:null,deadline:null,durationTimer:null,clockInterval:null};
     current.transcript=new Map();current.itemTimes=new Map();call=current;
-    current.time_zone=session.time_zone??callTimeZone;current.created_at=session.created_at;current.clock=createConversationClock({timeZone:current.time_zone});renderConversationContext(current);
+    current.time_zone=session.time_zone??callTimeZone;current.created_at=session.created_at;current.clock=createConversationClock({timeZone:current.time_zone});
     current.floor=createVoiceTurnControls({send:event=>{const wasResponding=current.responding;if(event.type==='response.create')current.responding=true;try{current.dc.send(JSON.stringify(event));}catch(error){current.responding=wasResponding;throw error;}},
       blockOutput:blocked=>{if(call===current&&!current.ending)$('remote-audio').muted=blocked;},
       changed:state=>{if(call!==current||current.ending)return;if(current.floorHeld&&!state.held){presence.setState(current.aiSpeaking?'speaking':current.responding?'thinking':'listening');$('call-status').textContent=current.aiSpeaking?companionName()+'가 말하고 있어요':current.responding?'답변을 준비하고 있어요':'듣고 있어요 · 편하게 말씀하세요';}current.floorHeld=state.held;renderFloor(current);},
@@ -653,15 +645,15 @@ function endCall() {
   if(current.ending)return current.endingPromise||Promise.resolve();
   const endRequestedAt=performance.now();
   // Reserve the end synchronously before any transcription/network awaits.
-  current.ending=true;current.connectedTelemetry?.stop();current.acceptingFinalEvents=true;callEnding=true;clearCallClock(current);navigationControls();updateCallControls();$('end-call').disabled=true;
+  current.durationMs=Math.min(CALL_DURATION,callElapsed(current));current.ending=true;current.connectedTelemetry?.stop();current.acceptingFinalEvents=true;callEnding=true;clearCallClock(current);navigationControls();updateCallControls();$('end-call').disabled=true;
   current.speed?.dispose();current.floor?.dispose();closeDialog('speed-dialog');
   current.stream.getTracks().forEach(track=>track.stop());
   presence.detachAudio();$('remote-audio').pause();$('remote-audio').srcObject=null;
   current.remoteStream?.getAudioTracks().forEach(track=>track.enabled=false);
-  setCallPhase('ending');$('hold-status').hidden=true;$('speed-pending').hidden=true;$('save-status').textContent='마지막 대화는 계속 저장해요';$('call-status').textContent='통화가 종료됐어요';$('call-status').tabIndex=-1;$('call-status').focus({preventScroll:true});current.cues.end();
+  setCallPhase('ending');$('speed-pending').hidden=true;$('save-status').textContent='마지막 대화는 계속 저장해요';$('call-status').textContent='통화가 종료됐어요';$('call-status').tabIndex=-1;$('call-status').focus({preventScroll:true});current.cues.end();
   current.assistantInterrupted=Boolean(current.responding||current.aiSpeaking);
   current.transcriptPhase='finalizing';current.nextView='review';selectedReviewSessionId=current.id;historyFilter=null;
-  setReviewMode('session');showWrapup();if(!current.durationReached)notice('');
+  setReviewMode('session');showWrapup();sessionReview.update({sessionId:current.id,status:'finalizing'});if(!current.durationReached)notice('');
   selectTranscript({id:current.id,companion_id:current.companionId,status:'active',created_at:current.created_at,time_zone:current.time_zone},current);
   const cueCleanup=setTimeout(()=>{current.cues.dispose();if(callCues===current.cues)callCues=null;},600);
   current.completion=createCallCompletion({startedAt:endRequestedAt,
@@ -676,9 +668,7 @@ function endCall() {
     onReview:state=>{
       if(scope===current.scope&&selectedReviewSessionId===current.id&&!current.wrapupHome){
         setCallLayout(false);setView('review',true);
-        const transcript=$('post-call-transcript')?.querySelector('details');
-        if(state.status==='pending'&&transcript){transcript.open=true;transcript.querySelector('summary')?.focus({preventScroll:true});}
-        else $('review-title')?.focus({preventScroll:true});
+        $('session-record-title')?.focus({preventScroll:true});
       }
     }
   });
@@ -690,7 +680,7 @@ function endCall() {
   current.endingPromise=(async()=>{
     try {
       presence.detachAudio();current.stream.getTracks().forEach(track=>track.stop());
-      // Finish acknowledgement governs the view transition; feedback runs separately.
+      // The end cue reveals received text; only finish acknowledgement allows feedback.
       if(current.dc.readyState==='open') {
         current.dc.send(JSON.stringify({type:'session.update',session:{type:'realtime',audio:{input:{turn_detection:current.floor?.shutdownPolicy()??null}}}}));
         if(current.speaking){current.awaitingCommit=true;current.finalCommitId='final-commit-'+crypto.randomUUID();current.dc.send(JSON.stringify({type:'input_audio_buffer.commit',event_id:current.finalCommitId}));}
@@ -743,6 +733,10 @@ async function prepareFeedback(sessionId,id){
 }
 function formatDate(value){return new Intl.DateTimeFormat('ko-KR',{dateStyle:'medium',timeStyle:'short',timeZone:'Asia/Seoul'}).format(new Date(value));}
 function showAnalysis(target,analysis){
+  if(analysis.kind==='session'&&target.id==='review-content'){
+    selectTranscript({id:analysis.session_id,companion_id:analysis.companion_id||analysis.content?.scope?.companionId||companionId,status:'ended'});
+    const host=document.createElement('div');host.id='learning-session';target.replaceChildren(host);learning.show(analysis);return;
+  }
   const div=document.createElement('div');div.className='analysis';
   const title=document.createElement('h3');const reviewedName=companions[analysis.companion_id||analysis.content?.scope?.companionId]?.name;title.textContent=(reviewedName?reviewedName+' · ':'')+(analysis.kind==='weekly'?'최근 7일 분석':'통화 피드백');div.append(title);
   const content=analysis.content;
@@ -1082,7 +1076,7 @@ if($('memory-manage-open'))$('memory-manage-open').onclick=openMemory;if($('acco
 if($('memory-index'))$('memory-index').onclick=protect(indexMemory);if($('memory-index-more'))$('memory-index-more').onclick=protect(indexMemory);
 if($('practice-preview'))$('practice-preview').onclick=protect(()=>learning.openPreview());
 if($('mute-call'))$('mute-call').onclick=()=>{const current=call;if(!current||!current.ready||current.ending||current.compacting||current.inputBlocked)return;current.muted=!current.muted;current.stream.getAudioTracks().forEach(track=>track.enabled=!current.muted);updateCallControls();};
-$('hold-call').onclick=()=>{const current=call;if(!current||current.ending||current.compacting||callStarting)return;const state=current.floor.state;if(state.phase==='error')current.floor.retry();else current.floor.request(!state.held);updateCallControls();};
+
 updateCompanion();setView('contacts');
 async function initializeLogin(){
   if(!config){await ready();return;}

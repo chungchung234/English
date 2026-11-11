@@ -890,7 +890,7 @@ async function loadHistory(){
   const analyses=await api('/rest/v1/analyses?select=*&user_id=eq.'+auth.user.id+'&order=created_at.desc&limit=100');
   const weeklySessions=await api('/rest/v1/sessions?select=companion_id,status,ended_at&user_id=eq.'+auth.user.id+'&status=eq.ended&ended_at=gte.'+new Date(since).toISOString()+'&and=(ended_at.lte.'+new Date(through).toISOString()+')&order=ended_at.desc&limit=1000').catch(()=>[]);
   const sessionCompanions=[...new Set(sessions.map(session=>session.companion_id).filter(id=>Object.hasOwn(companions,id)))];
-  if(epoch===historyEpoch&&requestScope===scope)conversationMemory.wake(Object.keys(companions));
+  if(sessions.length&&epoch===historyEpoch&&requestScope===scope)conversationMemory.wake(Object.keys(companions));
   const exclusions=new Set();
   await Promise.all(sessionCompanions.map(async id=>{try{const controls=await edge('memory-manage',{companionId:id,action:'list'});for(const row of controls.excluded_sessions||[])exclusions.add(row.session_id);}catch(error){if(scope===requestScope&&epoch===historyEpoch)notice(error.message);}}));
   if(epoch!==historyEpoch||requestScope!==scope||filter!==historyFilter)return;

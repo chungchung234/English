@@ -510,7 +510,8 @@ async function prepareConversationMemory(env: Env, userId: string, body: Record<
   }
   try{
     const events=await transcript(env,userId,[session.id]);
-    const input=boundedJson({source_call:session,transcript_events:events});
+    const metadata=owned??await ownedSession(env,userId,session.id);
+    const input=boundedJson({source_call:{...session,scenario:metadata.scenario},transcript_events:events});
     const instructions=HANDOFF_INSTRUCTIONS+(run.attempts&&run.attempts>1?' Previous generation did not produce a committed handoff. Use fewer threads if necessary. Check exact USER IDs, verbatim quotations, time phrases and JSON size before responding.':'');
     const requestBody={model:policy.model,store:false,max_output_tokens:policy.maxOutput,reasoning:{effort:policy.effort},service_tier:'default',
       input:[{role:'developer',content:[{type:'input_text',text:instructions}]},{role:'user',content:[{type:'input_text',text:input}]}],

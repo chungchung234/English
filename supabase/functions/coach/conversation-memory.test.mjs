@@ -35,6 +35,7 @@ async function withProvider(t,{http=200,output=handoff(),budget=true,changed=fal
  globalThis.fetch=async(url,options)=>{
   const path=String(url),body=options?.body?JSON.parse(options.body):null;seen.requests.push(path);
   if(path.includes('/auth/'))return json({id:uid,email:'owner@example.com',email_confirmed_at:'2026-01-01T00:00:00Z'});
+  if(path.includes('/sessions?'))return json([{...session,user_id:uid,status:'ended',scenario:'Optional roleplay exercise'}]);
   if(path.includes('/conversation_memory_source')){seen.source++;return json({status:cached?'ready':'pending',session,revision:0,source_version:changed&&seen.source>1?'changed':'digest',request_key:'handoff-fixture'});}
   if(path.includes('/reserve_run')){assert.equal(body.p_kind,'handoff');return json({reserved:!busy,reason:busy?'in_progress':'reserved',job_id:sid,lease_token:eid,attempts:1});}
   if(path.includes('/transcript_events?'))return json([event,{...event,id:aid,speaker:'assistant',text:'Thanks for talking. Goodbye.'}]);
@@ -51,7 +52,7 @@ async function withProvider(t,{http=200,output=handoff(),budget=true,changed=fal
 test('memory generation uses the whole source call, saves independently, and returns no private text',async t=>withProvider(t,{},async seen=>{
  const result=await handler(req());assert.equal(result.status,200);assert.deepEqual(await result.json(),{status:'ready',session_id:sid,thread_count:1});
  assert.equal(seen.provider,1);assert.equal(seen.sent.model,'gpt-6-luna');assert.equal(seen.sent.max_output_tokens,1800);assert.equal(seen.sent.text.format.name,'conversation_handoff');
- assert.equal(JSON.parse(seen.sent.input[1].content[0].text).transcript_events[0].id,eid);assert.deepEqual(seen.commit.p_content,handoff());assert(seen.accounting.p_usage);
+ const input=JSON.parse(seen.sent.input[1].content[0].text);assert.equal(input.transcript_events[0].id,eid);assert.equal(input.source_call.scenario,'Optional roleplay exercise');assert.deepEqual(seen.commit.p_content,handoff());assert(seen.accounting.p_usage);
  assert(!seen.requests.some(path=>path.includes('complete_analysis_run')));
 }));
 

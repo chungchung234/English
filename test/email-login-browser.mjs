@@ -95,7 +95,7 @@ export async function testEmailLogin(browser, base) {
     await page.waitForFunction(()=>/\d+초 후 로그인/.test(document.querySelector('#verify-code').textContent));
     await page.clock.fastForward(21000);assert.equal(verifyCount,2);
     verifyMode='success';await page.locator('#verify-code').click();
-    await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('승인된 이메일'));
+    await page.locator('#access-help').waitFor({state:'visible'});
     assert.equal(await page.locator('#workspace').isVisible(),false,'authentication still enforces account approval');
     assert.equal(await page.locator('#otp').inputValue(),'');
     const stored=await page.evaluate(()=>localStorage.getItem('loop.email-login:https://login-fixture.supabase.co'));

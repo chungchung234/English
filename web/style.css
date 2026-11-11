@@ -286,6 +286,53 @@ dialog::backdrop{background:rgba(8,23,68,.24)}
 .file-button{position:relative;overflow:hidden;cursor:pointer;text-align:center}
 .file-button input{position:absolute;inset:0;opacity:0;cursor:pointer}
 .privacy-copy{color:var(--secondary);font-size:14px;line-height:1.85}
+.access-note{margin:-16px 0 22px;color:var(--secondary);font-size:13px;line-height:1.7}
+.access-help,.call-help{margin:18px 0;padding:18px;border:1px solid var(--line);border-radius:18px;background:var(--surface);text-align:left}
+.access-help h2,.call-help h2{margin:0 0 8px;font-size:17px;line-height:1.5}
+.access-help p,.call-help p{margin:0 0 12px;color:var(--secondary);font-size:14px;line-height:1.7}
+#contacts-panel:has(#call-help:not([hidden])) .home-identity,#contacts-panel:has(#call-help:not([hidden])) #start-call,#contacts-panel:has(#call-help:not([hidden])) .microphone-note{display:none}
+#contacts-panel:has(#call-help:not([hidden])) .home-actions{margin-top:28px}
+#contacts-panel:has(#call-help:not([hidden])) .home-help-links{margin-top:16px}
+#call-help-retry{width:100%;min-height:48px;background:var(--brand);color:#fff}
+.first-use-copy{margin:10px 0 0;color:var(--secondary);font-size:13px;line-height:1.7;text-align:center}
+.microphone-note{margin:10px 0 0;color:var(--secondary);font-size:12px;line-height:1.7;text-align:center}
+.home-help-links{display:flex;justify-content:center;gap:16px;flex-wrap:wrap}
+.home-help-links .text-button{font-size:12px}
+.guide-storage-note{margin:0;color:var(--secondary);font-size:12px;line-height:1.6}
+.connection-cancel{display:block;min-width:120px;margin:18px auto;color:var(--ink)}
+.call-quick-help{max-width:340px;margin:12px auto 0;text-align:center;color:#cad6ec;font-size:13px}
+.call-quick-help summary{min-height:44px;padding:10px;cursor:pointer}
+.call-quick-help p{margin:0;line-height:1.7}
+body[data-call-phase=connecting] .call-quick-help,body[data-call-phase=ending] .call-quick-help{display:none}
+body[data-call-phase=connected] .connection-cancel{display:none}
+.empty-call-button{display:block;margin:0 auto 24px;color:var(--brand-strong)}
+.loading-copy{margin:12px 0;color:var(--secondary);font-size:14px;line-height:1.7}
+.content-skeleton{margin:24px 0}
+.skeleton-row{display:flex;align-items:center;gap:14px;padding:20px 0;border-bottom:1px solid var(--line)}
+.skeleton-avatar,.skeleton-action,.skeleton-copy i{display:block;border-radius:20px;background:var(--selection)}
+.skeleton-avatar{width:44px;height:44px;flex-shrink:0}
+.skeleton-action{width:38px;height:38px;flex-shrink:0}
+.skeleton-copy{display:grid;gap:10px;flex:1}
+.skeleton-copy i{height:12px;width:90%}
+.skeleton-copy i:first-child{width:44%}
+#learning-queue[data-initial-loading=true]{display:none}
+#review-panel[data-mode=hub]:has(#learning-queue[data-initial-loading=true]) #review-content{display:none}
+#review-panel:not([data-mode=hub]) #review-loading,#review-panel:not([data-mode=hub]) #review-load-state,#review-panel:not([data-mode=hub]) #review-load-retry,#review-panel:not([data-mode=hub]) #review-first-call{display:none}
+.first-note-guide{margin:16px 0 24px;padding:16px 0;border-bottom:1px solid var(--line);color:var(--secondary);font-size:14px;line-height:1.7}
+.first-note-guide p{margin:0}
+.first-note-guide .text-button{color:var(--brand-strong)}
+dialog.usage-guide{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;overflow:hidden}
+dialog.usage-guide::backdrop{background:transparent}
+.guide-spotlight{position:fixed;border-radius:30px;box-shadow:0 0 0 100vmax rgba(8,23,68,.27);pointer-events:none}
+.guide-bubble{position:fixed;padding:20px;border:1px solid var(--line);border-radius:24px;background:var(--canvas);box-shadow:0 12px 40px rgba(8,23,68,.18);overflow:auto}
+.guide-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.guide-step{margin:0;color:var(--brand-strong);font-size:13px;font-weight:650}
+.guide-bubble h2{margin:0 0 12px;font-size:22px;line-height:1.4;letter-spacing:-.5px}
+#guide-copy{margin:0;color:var(--secondary);font-size:15px;line-height:1.7}
+.guide-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:20px}
+#guide-skip{margin-right:auto}
+#guide-next{min-width:82px;background:var(--brand);color:#fff}
+@media(max-height:700px){.first-use-copy{font-size:12px}#contacts-panel:has(#first-use-intro:not([hidden])) .home-actions{margin-top:12px}.home-actions{display:flex;flex-direction:column}.microphone-note{order:-1;margin:0 0 8px}.home-help-links{gap:10px}.guide-bubble{padding:16px}.guide-bubble h2{font-size:19px}}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
 @media(max-width:360px){
   .app-shell{padding-right:16px;padding-left:16px}

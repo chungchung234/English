@@ -295,7 +295,7 @@ try{
  // A failed start returns to the selected contact and can retry. Its incomplete
  // attempt stays in history instead of being falsely represented as a call.
  await openContact('alex');voiceFailure=true;await page.locator('#start-call').click();await page.locator('#contacts-panel').waitFor({state:'visible'});assert.equal(await page.locator('#start-call').isEnabled(),true);
- await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});assert.equal(sessions[0].companion_id,'alex');
+ await page.locator('#call-help-retry').click();await page.locator('#end-call').waitFor({state:'visible'});assert.equal(sessions[0].companion_id,'alex');
  assert.equal(voiceSpeeds.at(-1),.7,'the next call starts at the acknowledged saved speed');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'alex-turn',transcript:'I am ready to speak again.'})}));await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.locator('#end-call').click();await page.clock.fastForward(2000);await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='통화와 학습 노트 서버 저장 확인');
  // Redial a Mia row while Alex was selected. The new session and final review
@@ -311,7 +311,7 @@ try{
  await page.waitForLoadState('networkidle');
  const deniedRequests=[];page.on('request',request=>{if(new URL(request.url()).pathname.startsWith('/rest/v1/'))deniedRequests.push(request.url());});
  page.once('framenavigated',()=>{deniedRequests.length=0;});
- await page.reload();await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('승인된 이메일'));
+ await page.reload();await page.locator('#access-help').waitFor({state:'visible'});
  assert.equal(await page.locator('#workspace').isVisible(),false);assert.deepEqual(deniedRequests,[]);
  console.log('PASS: unapproved accounts stay on login and never attempt history reads or queued uploads.');
  await context.close();

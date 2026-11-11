@@ -67,6 +67,7 @@ try {
   await page.route('**/public-config.js', route => route.fulfill({ contentType: 'text/javascript', body: `globalThis.LOOP_PUBLIC_CONFIG=${JSON.stringify({ url: project, key: 'sb_publishable_fixture' })};` }));
   await page.route(project + '/**', async route => {
     const request = route.request(), url = new URL(request.url()), body = request.postData() ? request.postDataJSON() : {};
+    if(url.pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}}); // Background delivery is outside this fixture's scope.
     try {
       let data = [];
       if (url.pathname === '/auth/v1/settings') data = { external: { google: false, kakao: false } };
@@ -178,7 +179,7 @@ try {
   await eventually(() => page.evaluate(() => window.audioContexts.every(audio => audio.state === 'closed')), 'all cue and presence contexts close');
   assert(await page.evaluate(() => window.testTracks.every(track => track.readyState === 'ended')), 'failed connections release all microphone tracks');
   failVoice = false; await page.evaluate(() => { window.blockAudio = true; window.autoReady = true; });
-  await page.locator('#start-call').click(); await page.waitForFunction(() => document.body.dataset.callPhase === 'connected');
+  await page.locator('#call-help-retry').click(); await page.waitForFunction(() => document.body.dataset.callPhase === 'connected');
   assert(await page.locator('#end-call').isEnabled(), 'unavailable cue audio never blocks the call');
   const beforeClosed = finishes.length;
   await page.evaluate(() => { window.testPeer.dc.readyState = 'closed'; window.testPeer.dc.onclose(); window.testPeer.dc.onclose(); });

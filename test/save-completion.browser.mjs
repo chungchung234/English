@@ -33,6 +33,7 @@ async function harness() {
   await page.route('**/public-config.js', route => route.fulfill({ contentType: 'text/javascript', body: `globalThis.LOOP_PUBLIC_CONFIG=${JSON.stringify({ url: project, key: 'sb_publishable_local_fixture' })}` }));
   await page.route(project + '/**', async route => {
     const request = route.request(), url = new URL(request.url()), body = request.postData() ? request.postDataJSON() : undefined;
+    if(url.pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}}); // Background delivery is outside this fixture's scope.
     try {
       let data = [];
       if (url.pathname === '/auth/v1/settings') data = { external: { google: false, kakao: false } };

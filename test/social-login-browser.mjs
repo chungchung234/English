@@ -121,7 +121,7 @@ export async function testSocialLogin(browser,base){
   const page=await denied.context.newPage();await page.clock.install();await page.goto(base);await page.waitForFunction(()=>!document.querySelector('[data-oauth="kakao"]').disabled);
   await page.evaluate(async({endpoint,uid})=>{const {createOutbox}=await import('/src/outbox.js');const id='22222222-2222-4222-8222-222222222222';await createOutbox().put({id,scope:endpoint+'|'+uid,sessionId:'11111111-1111-4111-8111-111111111111',event:{id,event_key:'denied-fixture',speaker:'user',text:'Fixture pending record',occurred_at:new Date().toISOString()}});},{endpoint,uid});
   await page.locator('[data-oauth="kakao"]').click();await page.waitForURL(endpoint+'/auth/v1/authorize?**');
-  await page.goto(base+'/?code=unapproved-account');await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('승인된 이메일'));
+  await page.goto(base+'/?code=unapproved-account');await page.locator('#access-help').waitFor({state:'visible'});
   await page.clock.fastForward(6000);
   assert.equal(denied.state.history,0);assert.equal(await page.locator('#workspace').isVisible(),false);
   await page.locator('#auth-reset').click();await page.waitForFunction(()=>document.querySelector('#auth-reset').hidden);

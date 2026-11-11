@@ -34,7 +34,6 @@ try{
  await page.route('https://test-project.supabase.co/**',async route=>{
     if(new URL(route.request().url()).pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}});
   const url=new URL(route.request().url());const body=route.request().postDataJSON?.();let data=[];
-    if(url.pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}}); // Background delivery is outside this fixture's scope.
   if(url.pathname==='/auth/v1/user')data={id:uid};
   else if(url.pathname==='/auth/v1/settings')data={external:{google:false,kakao:false}};
   else if(url.pathname.endsWith('/rpc/append_events')){

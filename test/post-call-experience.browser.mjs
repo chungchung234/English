@@ -110,7 +110,6 @@ async function attachRoutes(page, html) {
   await page.route(project + '/**', async route => {
     if(new URL(route.request().url()).pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}});
     const request = route.request(), url = new URL(request.url());
-    if(url.pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}}); // Background delivery is outside this fixture's scope.
     let body = request.postData() ? request.postDataJSON() : undefined;
     transport.calls.push({ path: url.pathname, body });
     try {

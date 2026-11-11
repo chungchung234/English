@@ -146,7 +146,6 @@ async function attachRoutes(page) {
   await page.route(project + '/**', async route => {
     if(new URL(route.request().url()).pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}});
     const request = route.request(), url = new URL(request.url()), body = request.postData() ? request.postDataJSON() : undefined;
-    if(url.pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}}); // Background delivery is outside this fixture's scope.
     transport.calls.push({ path: url.pathname, body });
     try {
       if (url.pathname === '/auth/v1/settings') return route.fulfill({ json: { external: { google: false, kakao: false } } });

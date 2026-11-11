@@ -15,7 +15,6 @@ async function fixture(browser,{approved=true,gates={},started={}}={}){
  await context.route(endpoint+'/**',async route=>{
     if(new URL(route.request().url()).pathname.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}});
   const request=route.request(),url=new URL(request.url()),path=url.pathname;
-    if(path.endsWith('/coach/memory-prepare'))return route.fulfill({json:{status:'unavailable'}}); // Background delivery is outside this fixture's scope.
   if(path==='/auth/v1/settings'){started.settings?.();await gates.settings;return route.fulfill({json:{external:{google:true,kakao:true}}});}
   if(path==='/auth/v1/authorize'){
    state.authorizations.push(url);

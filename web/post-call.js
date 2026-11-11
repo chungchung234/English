@@ -45,7 +45,7 @@ export function createPostCallFlow(deps) {
   let exposureObserver = null, exposureTimer = null, exposed = new Set();
   let practiceObserver = null;
   const practiceHidden = new Map();
-  let previousFocus = null, previousFocusKey = null, pendingFocusRestore = null, planApplied = '', requests = new Set(), panelOpen = false;
+  let previousFocus = null, previousFocusKey = null, pendingFocusRestore = null, planApplied = '', requests = new Set(), startingReviews = new Set(), panelOpen = false;
   const ctx = () => deps.context();
   const token = () => ({ generation, identity, scope: accountScope, companion });
   const same = t => t.generation === generation && t.identity === identity && identity === currentIdentity();
@@ -122,7 +122,7 @@ export function createPostCallFlow(deps) {
       if (!practiceHidden.has(node)) practiceHidden.set(node, node.hidden);
       node.hidden = true;
     };
-    for (const node of document.querySelectorAll('#review-content, #post-call-transcript, [data-practice-surrounding], [data-weekly-analysis-id], #learning-queue, #review-back')) conceal(node);
+    for (const node of document.querySelectorAll('#review-content, #session-feedback-content, #post-call-transcript, [data-practice-surrounding], [data-weekly-analysis-id], #learning-queue, #review-back')) conceal(node);
     for (const node of $('learning-session')?.children || []) conceal(node);
     syncPracticeRecovery(activePractice);
     if (!practiceObserver && typeof MutationObserver !== 'undefined') {
@@ -171,7 +171,7 @@ export function createPostCallFlow(deps) {
     sessions = []; analyses = []; weekly = null; snapshot = null;
     pending = []; volatile = new Map(); actionStates = new Map(); actionResults = new Map(); errors = new Map(); attempts = new Map(); exposed = new Set();
     snapshotError = false; localQueueError = false; queueReady = false;
-    planApplied = ''; panelOpen = false; requests = new Set();pendingFocusRestore=null;
+    planApplied = ''; panelOpen = false; requests = new Set();startingReviews = new Set();pendingFocusRestore=null;
     enhancements.clear();
     for (const id of ['learning-queue', 'learning-session']) $(id)?.replaceChildren();
     if ($('practice-preview')) $('practice-preview').disabled = true;
@@ -519,9 +519,12 @@ export function createPostCallFlow(deps) {
     const advanced=document.createElement('details');advanced.className='feedback-context';advanced.append(text('summary','표현 관리'));const management=document.createElement('div');management.className='learning-actions';advanced.append(management);
     if (!suppressed(item)) {
       if (candidate || item.status === 'candidate' || !item.enrolled) actions.append(actionButton('이 표현도 등록', item, 'enroll'));
-      const start = button(delayed ? '가리고 회상하기' : '표현 하나 연습', () => delayed ? startRecall(item.id, start) : startPractice(item.id, attribution, start)); start.dataset.action = delayed ? 'start-delayed-recall' : 'practice';
-      start.disabled = itemPending(item.id).length > 0 || snapshotError || candidate || item.status === 'candidate' || !item.enrolled;
-      actions.append(start, actionButton('나중에 하기', item, 'defer'));management.append(actionButton('이미 아는 표현이에요', item, 'known'), actionButton('그만 보기', item, 'exclude'));
+      if (delayed) {
+        const start = button('가리고 회상하기', () => startRecall(item.id, start)); start.dataset.action = 'start-delayed-recall';
+        start.disabled = itemPending(item.id).length > 0 || snapshotError || candidate || item.status === 'candidate' || !item.enrolled;
+        actions.append(start, actionButton('나중에 하기', item, 'defer'));
+      }
+      management.append(actionButton('이미 아는 표현이에요', item, 'known'), actionButton('그만 보기', item, 'exclude'));
       if (item.status === 'practiced' || item.status === 'deferred') management.append(actionButton('다시 보고 싶어요', item, 'review_again'));
       if (attribution?.sessionId && attribution?.analysisId) {
         const payload = { source_session_id: attribution.sessionId, source_analysis_id: attribution.analysisId };
@@ -542,7 +545,7 @@ export function createPostCallFlow(deps) {
     const delayed = !attribution && enhancements.isDue(item.id);
     const sourceSelection = selected;
     const article = text('article', '', 'feedback-item review-takeaway'); article.dataset.itemId = item.id;
-    const heading = text('h3', delayed ? '지난 표현, 다시 떠올려 볼까요?' : attribution ? '이번 통화에서 가져갈 말' : '남겨둔 표현 하나');
+    const heading = text('h3', delayed ? '지난 표현, 다시 떠올려 볼까요?' : '지난 대화에서 남겨둔 표현');
     article.append(heading);
     if (delayed) {
       const cue = practiceCue(item, enhancements.scheduleFor(item.id)?.goal);
@@ -554,10 +557,11 @@ export function createPostCallFlow(deps) {
       if (item.reason) article.append(text('p', item.reason, 'takeaway-reason'));
     }
     const actions = text('div', '', 'learning-actions takeaway-actions');
-    const start = button(delayed ? '가리고 회상하기' : '한 번 말해보기', () => delayed ? startRecall(item.id, start) : startPractice(item.id, attribution, start), true);
-    start.className = 'primary-button'; start.dataset.action = delayed ? 'start-delayed-recall' : 'practice';
+    const sourceSession = attribution?.sessionId || item.source_session_id;
+    const start = button(delayed ? '가리고 회상하기' : '대화와 피드백 보기', () => delayed ? startRecall(item.id, start) : sourceSession ? openSession(sourceSession) : undefined, true);
+    start.className = 'primary-button'; start.dataset.action = delayed ? 'start-delayed-recall' : 'open-source-feedback';
     start.disabled = itemPending(item.id).length > 0 || snapshotError || !queueReady;
-    actions.append(start);
+    if (delayed || sourceSession) actions.append(start);
     const later = button(attribution ? '오늘은 여기까지' : '나중에 하기', async () => {
       const t = token(), navigation = deps.navigationKey?.();
       if (attribution && itemOf(item.id)?.status === 'practiced') { deps.setView('contacts'); return; }
@@ -565,7 +569,7 @@ export function createPostCallFlow(deps) {
       if (!same(t)) return;
       if (confirmed && attribution && navigation === deps.navigationKey?.() && selected === sourceSelection && reviewMode() === 'session' && panelOpen && !busy()) { closePractice(); panelOpen = false; deps.setView('contacts'); }
       else if (confirmed) notify('나중에 하기로 저장했어요.');
-    }); later.dataset.action = 'defer'; later.disabled = itemPending(item.id).length > 0; actions.append(later);
+    }); later.dataset.action = 'defer'; later.disabled = itemPending(item.id).length > 0; if (delayed) actions.append(later);
     article.append(actions);
     if (item.practice_count) article.append(text('small', '직접 연습한 기록이 있는 표현이에요.', 'help'));
     const pendingItems = itemPending(item.id);
@@ -644,18 +648,18 @@ export function createPostCallFlow(deps) {
     if (!snapshot) return;
     const recommended = enhancements.recommendedIds(snapshot.recommended_item_ids || []).slice(0, (snapshot.recommended_item_ids || []).length).map(itemOf).filter(canRecommend);
     if (recommended[0]) { const next = takeawayCard(recommended[0]); next.dataset.practiceSurrounding = ''; target.append(next); }
-    else if (!unseen.length) { const empty = text('p', sessions.length ? '남겨둔 표현이 없어요. 다음 통화에서 이어가요.' : '통화를 마치면 여기서 표현 하나를 다시 말해볼 수 있어요.', 'empty-state'); empty.dataset.practiceSurrounding = ''; target.append(empty); }
+    else if (!unseen.length) { const empty = text('p', sessions.length ? '남겨둔 표현이 없어요. 다음 통화에서 이어가요.' : '통화를 마치면 대화 기록과 피드백을 볼 수 있어요.', 'empty-state'); empty.dataset.practiceSurrounding = ''; target.append(empty); }
     if (unseen.length) { if (!recommended.length) unseenList.open=true; target.append(unseenList); }
     const collection=document.createElement('details');collection.className='feedback-context';collection.dataset.practiceSurrounding='';collection.append(text('summary','복습 보관함'));target.append(collection);
     const content=document.createElement('div');collection.append(content);
     const heading = text('h4', '오늘 추천 표현'); content.append(heading);
-    if (!recommended.length) content.append(text('p', '지금 권할 표현이 없어요. 원하면 보관함에서 직접 연습하거나 다음에 대화해요.', 'help'));
+    if (!recommended.length) content.append(text('p', '지금 권할 표현이 없어요. 보관함에서 지난 피드백을 볼 수 있어요.', 'help'));
     for (const item of recommended.slice(1, 3)) {
       const reason = enhancements.reason(item);
       if (reason) content.append(text('p', `추천 이유: ${reason}`, 'help'));
       content.append(itemCard(item));
     }
-    const more = button('오늘 더 연습하기 · 최대 3개', async () => {
+    const more = button('추천 표현 더 보기 · 최대 3개', async () => {
       const t = token();
       await deps.rpc('learning_recommend_more', { p_companion_id: t.companion });
       if (same(t)) await refreshSnapshot(t);
@@ -738,77 +742,72 @@ export function createPostCallFlow(deps) {
     const target = $('learning-session'); if (!target) return;
     target.replaceChildren();
     if (!selected || reviewMode() !== 'session') return;
-    const session=sessionFor(selected), job=feedback(selected), analysis=analysisFor(selected), error=errors.get(selected);
-    target.dataset.feedbackSession=selected;
-    if(session?.record_incomplete || job?.record_incomplete) target.append(status('수신된 기록으로 마무리한 통화예요. 누락된 음성은 포함되지 않아요.'));
-    const showState = (title, message, phase) => {
+    const id=selected, session=sessionFor(id), job=feedback(id), analysis=analysisFor(id), error=errors.get(id);
+    target.dataset.feedbackSession=id;
+    const emit = state => deps.onFeedbackState?.({sessionId:id, ...state});
+    const showState = (message, phase) => {
       const box = text('section', '', 'review-state'); box.dataset.feedbackState = phase;
-      box.append(text('h3', title), status(message)); target.append(box); return box;
+      box.append(status(message)); target.append(box); return box;
     };
-    if(snapshotError) {const box=showState('연결을 다시 확인해 주세요', '최신 복습 상태를 가져오지 못했어요. 저장된 대화와 피드백은 아래에서 볼 수 있어요.', 'unavailable');box.append(button('학습 상태 다시 확인',()=>refreshSnapshot()));return;}
+    if(snapshotError) {
+      const retry=()=>refreshSnapshot();
+      const detail='피드백의 최신 상태를 확인하지 못했어요. 대화 원문은 계속 볼 수 있어요.';
+      const box=showState(detail,'unavailable'); box.append(button('피드백 상태 다시 확인',retry));
+      emit({status:'failed',message:detail,retry,retryLabel:'상태 다시 확인'});return;
+    }
     if(session && session.status!=='ended') {
-      if (busy()) { showState('통화를 마무리하고 있어요', '마지막 말과 서버 저장을 확인하고 있어요.', 'finalizing'); return; }
-      showState('저장 확인이 필요해요', '받아온 대화문은 아래에서 확인할 수 있어요. 수신되지 않은 음성은 포함되지 않아요.', 'partial');
-      const finish=button('수신된 기록으로 마무리',async()=>{if(busy())return;const t=token();await ctx().sync();if(!same(t))return;await deps.rpc('learning_finish_partial',{p_session_id:session.id});if(!same(t))return;await deps.refresh();if(same(t))await requestReview(session.id);});finish.dataset.action='finish-partial';target.append(finish);return;
+      if (busy()) { emit({status:'finalizing',message:'마지막 대화를 확인하고 있어요.'});return; }
+      const message='일부 기록의 저장을 확인하지 못했어요. 수신된 대화는 계속 볼 수 있어요.';
+      const retry=async()=>{if(busy())return;const t=token();await ctx().sync();if(!same(t))return;await deps.rpc('learning_finish_partial',{p_session_id:id});if(!same(t))return;await deps.refresh();if(same(t))await requestReview(id);};
+      const box=showState(message,'partial');const finish=button('수신된 기록으로 마무리',retry);finish.dataset.action='finish-partial';box.append(finish);
+      emit({status:'partial',message,retry,retryLabel:'수신된 기록으로 마무리'});return;
     }
     if(analysis && job?.current===true) {
-      const sourceItems=(snapshot?.items||[]).filter(item=>belongsToAnalysis(item,selected,analysis.id)).map(item=>sourceProjection(item,analysis));
-      // The historical source, rather than another merged source, determines the
-      // controls available on this feedback screen.
-      for(const row of document.querySelectorAll('#review-content [data-correction-expression]')) {
-        const item=sourceItems.find(item=>expressionKey(item.expression)===expressionKey(row.dataset.correctionExpression));
-        const held=item && suppressed(item);
-        const hiddenRecall=activePractice?.mode==='delayed'&&!activePractice.saved&&expressionKey(itemOf(activePractice.itemId)?.expression)===expressionKey(row.dataset.correctionExpression);
-        row.hidden=Boolean(held||hiddenRecall);
+      const sourceItems=(snapshot?.items||[]).filter(item=>belongsToAnalysis(item,id,analysis.id)).map(item=>sourceProjection(item,analysis));
+      const excludedExpressions=sourceItems.filter(suppressed).map(item=>item.expression);
+      const accepted=sourceItems.filter(item=>!suppressed(item)&&enhancements.acceptedProjection(item,analysis));
+      const corrections=(analysis.content?.corrections||[]).map(correction=>{
+        const item=accepted.find(item=>expressionKey(item.expression)===expressionKey(correction.improved));
+        return item?{...correction,reason:item.reason,category:item.category,evidence_ids:item.evidence_ids,reconsidered:true}:correction;
+      });
+      for(const item of accepted) if(!corrections.some(correction=>expressionKey(correction.improved)===expressionKey(item.expression))) {
+        corrections.push({original:item.original,improved:item.expression,reason:item.reason,category:item.category,evidence_ids:item.evidence_ids,reconsidered:true});
       }
-      const eligible=sourceItems.filter(item=>item.enrolled && item.status!=='candidate' && !suppressed(item));
-      const primary=(activePractice?.source?.sessionId===selected && eligible.find(item=>item.id===activePractice.itemId))||eligible.find(canRecommend)||eligible[0];
-      if(primary) {
-        if(activePractice?.source?.sessionId===selected && activePractice.itemId===primary.id) target.append(activePractice.box);
-        else {
-          const takeaway=takeawayCard(primary,{sessionId:selected,analysisId:analysis.id});
-          takeaway.dataset.feedbackCore=''; target.append(takeaway);
-          if(!job.exposed_at) observeExposure(takeaway,selected,analysis.id);
-        }
-      } else if (activePractice?.source?.sessionId !== selected) {
-        const box=showState('이번 통화는 여기까지', '지금 권할 연습 표현은 없어요. 전체 피드백에서 대화를 돌아볼 수 있어요.', 'no-expression');
-        box.dataset.feedbackCore=''; if(!job.exposed_at) observeExposure(box,selected,analysis.id);
-        box.append(button('마치기',()=>deps.setView('contacts'),true));
+      const displayAnalysis={...analysis,content:{...analysis.content,corrections}};
+      // Historical corrections retain source-specific exclusion, enrollment and
+      // quality controls. Reading feedback itself never records practice/defer.
+      if(sourceItems.length) {
+        const management=document.createElement('details');management.className='feedback-context feedback-management';management.append(text('summary','피드백 관리'));
+        for(const item of sourceItems) management.append(itemCard(item,{sessionId:id,analysisId:analysis.id},item.status==='candidate'||!item.enrolled));
+        target.append(management);
       }
-      if(activePractice?.source?.sessionId===selected&&activePractice.itemId!==primary?.id){
-        // Keep an already-open attempt readable when another device excludes its
-        // item. Saving stays blocked until the user resolves the queued action.
-        const attempt=activePractice,details=document.createElement('details');details.className='feedback-context';details.open=true;details.append(text('summary','연습 저장 상태 확인'),attempt.box);target.append(details);
-        if (!attempt.saved) { attempt.save.disabled=true;attempt.save.dataset.keepDisabled='true';
-        attempt.state.textContent=itemPending(attempt.itemId).some(record=>record.state==='conflict')?'최신 상태가 달라 저장하지 않았어요. 연습을 닫고 동기화 안내에서 다시 선택해 주세요.':'이 표현은 현재 추천 제외 또는 품질 보류 상태예요. 새 연습 기록을 저장하지 않았어요.'; }
-      }
-      const candidates=sourceItems.filter(item=>(item.status==='candidate'||!item.enrolled)&&!suppressed(item));
-      if(candidates.length){const choices=document.createElement('details');choices.className='feedback-context';choices.append(text('summary','원하면 추가 표현 선택 · 후보 최대 3개'));for(const item of candidates.slice(0,3))choices.append(itemCard(item,{sessionId:selected,analysisId:analysis.id},true));target.append(choices);}
-      const withheld=sourceItems.filter(suppressed);if(withheld.length){const details=document.createElement('details');details.className='feedback-context';details.append(text('summary','제외·보류한 표현'));for(const item of withheld)details.append(itemCard(item,{sessionId:selected,analysisId:analysis.id}));target.append(details);}
-      enhancements.renderUsage(target, selected);
+      if(session?.record_incomplete||job?.record_incomplete) target.append(status('수신된 기록으로 마무리한 통화예요. 누락된 음성은 포함되지 않아요.'));
+      emit({status:'ready',message:'피드백이 준비됐어요.',analysis:displayAnalysis,excludedExpressions});
       return;
     }
-    let phase, title, message;
-    if(job?.has_user_speech===false) {
-      phase='no-speech'; title='이번 통화는 여기까지'; message='대화는 저장됐어요. 확인된 내 발화가 없어 연습 표현을 정리하지 않았어요.';
-    } else if(running(job)||requests.has(selected)) {
-      phase='preparing'; title='통화를 마쳤어요'; message='대화 저장됨 · 표현을 정리하고 있어요.';
-    } else if(error) {
-      phase='failed'; title='대화는 저장됐어요'; message=error.message;
-    } else if(analysis) {
-      phase='stale'; title='새로 정리할 내용이 있어요'; message='대화문이 달라졌거나 최신 여부를 확인하지 못했어요. 새 피드백을 확인해 주세요.';
-    } else {
-      phase='pending'; title='통화를 마쳤어요'; message='대화는 저장됐어요. 이번 통화의 표현을 정리할 수 있어요.';
+    if(job?.has_user_speech===false || error?.code==='no_speech') {
+      const message='확인된 내 발화가 없어 피드백을 만들지 않았어요.';
+      emit({status:'empty',message});return;
     }
-    const area=showState(title,message,phase);
-    if(phase!=='no-speech') {
-      const check=button('상태 새로고침',async()=>{const t=token();await refreshSnapshot(t);if(same(t))await deps.refresh();});check.dataset.action='check-feedback';area.append(check);
-      if(!running(job)&&!requests.has(selected)) {
-        const request=button(error||analysis?'피드백 다시 준비':'표현 정리하기',()=>requestReview(selected),true);request.className='primary-button';request.dataset.action='request-feedback';request.disabled=Boolean(error?.blocked&&(!error.until||Date.now()<error.until));area.append(request);
-        if(!request.disabled) {const note=document.createElement('details');note.className='feedback-context';note.append(text('summary','피드백 생성 안내'),text('p','다시 준비하면 오늘의 생성 한도를 사용할 수 있어요.','help'));area.append(note);}
-      }
+    if(running(job)||requests.has(id)||startingReviews.has(id)) {
+      emit({status:'pending',message:'피드백 준비 중',retry:async()=>{const t=token();await refreshSnapshot(t);if(same(t))await deps.refresh();},retryLabel:'상태 확인'});return;
     }
-    const home=button(phase==='preparing'?'나중에 확인하기':'마치기',()=>deps.setView('contacts'));home.dataset.action='home';area.append(home);
+    if(!snapshot||!session) {emit({status:'loading',message:'피드백 상태를 확인하고 있어요.'});return;}
+    const blocked=Boolean(error?.blocked&&(!error.until||Date.now()<error.until));
+    const message=error?.message || (analysis?'대화 기록이 바뀌었어요. 최신 피드백을 다시 준비해 주세요.':'대화는 저장됐어요. 피드백을 준비할 수 있어요.');
+    const retry=()=>requestReview(id);
+    const box=showState(message,error?'failed':analysis?'stale':'pending');
+    const request=button(error||analysis?'피드백 다시 준비':'피드백 준비하기',retry,true);request.dataset.action='request-feedback';request.disabled=blocked;box.append(request);
+    emit({status:error||analysis?'failed':'loading',message,retry:blocked?undefined:retry,retryLabel:error||analysis?'피드백 다시 준비':'피드백 준비하기',blocked});
+  }
+
+  function feedbackViewed(node) {
+    stopExposure();
+    if (!ensureIdentity() || !selected || reviewMode()!=='session' || !node?.isConnected || node.closest('[hidden]')) return;
+    const analysis=analysisFor(selected),job=feedback(selected);
+    if (!analysis || job?.current!==true || job.exposed_at) return;
+    const core=node.querySelector('[data-feedback-core]')||node;
+    observeExposure(core.querySelector('h2')||core,selected,analysis.id);
   }
 
   function renderWeekly() {
@@ -889,7 +888,7 @@ export function createPostCallFlow(deps) {
     const unseen = snapshot?.feedback?.find(job => job.current && !job.exposed_at && sessionFor(job.session_id));
     if (unseen) { await openSession(unseen.session_id); return; }
     const item = enhancements.recommendedIds(snapshot?.recommended_item_ids || []).slice(0,(snapshot?.recommended_item_ids || []).length).map(itemOf).find(canRecommend);
-    if (item) { deps.setReviewMode?.('hub'); deps.setView('review');if(enhancements.isDue(item.id))startRecall(item.id);else await startPractice(item.id, null); }
+    if (item) { if(enhancements.isDue(item.id)) { deps.setReviewMode?.('hub'); deps.setView('review');startRecall(item.id); } else if(item.source_session_id) await openSession(item.source_session_id);else { deps.setReviewMode?.('hub');deps.setView('review');viewed(); } }
     else { deps.setReviewMode?.('hub'); deps.setView('review'); viewed(); }
   }
   async function requestReview(id) {
@@ -934,10 +933,12 @@ export function createPostCallFlow(deps) {
   }
   async function saved(session) {
     if (!ensureIdentity() || session?.companion_id !== companion) return;
+    const t=token();startingReviews.add(session.id);
     if (!sessionFor(session.id)) sessions.unshift(session);
     else sessions = sessions.map(row => row.id === session.id ? session : row);
     render();
-    await requestReview(session.id);
+    try { await requestReview(session.id); }
+    finally { if(same(t)){startingReviews.delete(session.id);render();} }
   }
   function interrupted(session, warning) {
     if (!ensureIdentity() || session?.companion_id !== companion) return;
@@ -1152,10 +1153,10 @@ export function createPostCallFlow(deps) {
   document.addEventListener('visibilitychange', () => {
     clearTimeout(exposureTimer); exposureTimer = null;
     if (document.visibilityState === 'visible') {
-      const node = $('learning-session')?.querySelector('[data-feedback-core]'); node?._exposureVisibility?.();
+      const core = document.querySelector('[data-session-feedback] [data-feedback-core]'); const node=core?.querySelector('h2')||core;node?._exposureVisibility?.();
     }
   });
   window.addEventListener('online', () => { if (identity && identity === currentIdentity()) { void flush(); void refreshSnapshot(); } });
   function getPlan(){if(!identity||identity!==currentIdentity()||snapshotError||hasPendingExclusions())return null;const plan=snapshot?.next_plan;const item=itemOf(plan?.item_id||plan?.target_item_id);return plan&&item&&!suppressed(item)?plan:null;}
-  return { getPlan, show, selectSession, load, openSession, saved, interrupted, openPreview, clear, viewed, closePractice, hasPendingExclusions, flush, getBackup, restoreBackup, requestReview, prepareNext, recordConnected };
+  return { getPlan, show, selectSession, feedbackViewed, load, openSession, saved, interrupted, openPreview, clear, viewed, closePractice, hasPendingExclusions, flush, getBackup, restoreBackup, requestReview, prepareNext, recordConnected };
 }

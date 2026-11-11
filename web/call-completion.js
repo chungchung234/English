@@ -1,6 +1,6 @@
-// Product timing choices, not measured storage latency. Storage completion is
-// supplied by the caller after transcript sync and the server finish response.
-export const CALL_COMPLETION_TIMING = Object.freeze({ minEndMs: 600, offerReviewMs: 3000, updateMs: 250 });
+// The short cue only controls when received text becomes readable. It never
+// acknowledges storage: the caller supplies that after sync and server finish.
+export const CALL_COMPLETION_TIMING = Object.freeze({ minEndMs: 600, updateMs: 250 });
 
 export function createCallCompletion({ onUpdate = () => {}, onReview = () => {},
   now = () => performance.now(), startedAt, setTimeout: later = globalThis.setTimeout,
@@ -18,7 +18,7 @@ export function createCallCompletion({ onUpdate = () => {}, onReview = () => {},
   function snapshot() {
     const elapsedMs = measuredElapsed ?? liveElapsed();
     return { elapsedMs, stage, status, reviewOpened,
-      canReview: !disposed && !reviewOpened && status === 'pending' && elapsedMs >= CALL_COMPLETION_TIMING.offerReviewMs };
+      canReview: !disposed && !reviewOpened && liveElapsed() >= CALL_COMPLETION_TIMING.minEndMs };
   }
   function notify() {
     if (disposed) return;
@@ -47,9 +47,11 @@ export function createCallCompletion({ onUpdate = () => {}, onReview = () => {},
     return true;
   }
   function tick() {
-    if (disposed || status !== 'pending') return;
+    if (disposed || reviewOpened) return;
     notify();
-    if (!disposed && status === 'pending') schedule(CALL_COMPLETION_TIMING.updateMs, tick);
+    const remaining = CALL_COMPLETION_TIMING.minEndMs - liveElapsed();
+    if (remaining <= 0) reveal();
+    else if (!disposed) schedule(Math.min(CALL_COMPLETION_TIMING.updateMs, remaining), tick);
   }
   function setStage(value) {
     if (disposed || status !== 'pending' || !['transcribing', 'saving'].includes(value)) return false;
@@ -75,6 +77,6 @@ export function createCallCompletion({ onUpdate = () => {}, onReview = () => {},
     measuredElapsed ??= liveElapsed(); disposed = true; clearTimer(); resolveReviewed();
   }
   notify();
-  if (!disposed) schedule(CALL_COMPLETION_TIMING.updateMs, tick);
+  if (!disposed) schedule(Math.max(0, Math.min(CALL_COMPLETION_TIMING.updateMs, CALL_COMPLETION_TIMING.minEndMs - liveElapsed())), tick);
   return { setStage, settle, openReview, dispose, reviewed, get state() { return snapshot(); } };
 }

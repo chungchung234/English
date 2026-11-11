@@ -121,13 +121,15 @@ async function revealAndClick(control) {
   }
   await control.click();
 }
-async function refresh(page) { await page.locator('[data-view="history"]').click(); await page.locator('#refresh-history').click(); }
+async function leaveReview(page) { if(await page.locator('#session-review-exit').isVisible())await page.locator('#session-review-exit').click(); }
+async function refresh(page) { await leaveReview(page); await page.locator('[data-view="history"]').click(); await page.locator('#refresh-history').click(); }
 async function openFeedback(page, source) {
-  await page.locator('[data-view="history"]').click();
+  await leaveReview(page); await page.locator('[data-view="history"]').click();
   await page.locator(`.history-entry[data-session-id="${source.sessionId}"] .history-open`).click();
   await page.locator('.call-feedback').click();
   await page.locator('[data-panel="review"]').waitFor({ state: 'visible' });
-  await page.locator('#learning-session').waitFor();
+  if((await page.locator('#review-panel').getAttribute('data-session-view'))!=='feedback'){await page.locator('#session-feedback-open').waitFor({state:'visible'}); await page.locator('#session-feedback-open').click();}
+  await page.locator('#learning-session').waitFor({state:'attached'});
 }
 function itemCard(page, id, container = '#learning-session') { return page.locator(`${container} [data-item-id="${id}"]`).first(); }
 async function login(page) {
@@ -306,12 +308,12 @@ try {
     const expected = (await query("select (((now() at time zone 'Asia/Seoul')::date+$1::integer)::timestamp at time zone 'Asia/Seoul') as due", [days])).rows[0].due;
     assert.equal(new Date(schedule.due_at).toISOString(), new Date(expected).toISOString(), `${days}-day due time is KST midnight`);
   }
-  await revealAndClick(itemCard(page, recallItem.id).locator('[data-action="practice"]'));
-  await page.locator('.learning-practice [data-action="save-practice"]').click();
-  await waitUntil(async () => (await item(recallSource.expression)).practice_count === 1, 'immediate practice remains a self-report');
-  assert.equal((await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' })).recalls.filter(row => row.item_id === recallItem.id).length, 0, 'immediate practice cannot become delayed recall');
-  await page.locator('.learning-practice [data-action="home"]').click();
-  await openFeedback(page, recallSource);
+  // Existing manual-practice history remains compatible, but its removed UI is
+  // not recreated. The distinct delayed recall path below is exercised in-browser.
+  await rpc('learning_action',{p_item_id:recallItem.id,p_expected_revision:recallItem.revision,p_action_id:randomUUID(),p_action:'practice',p_payload:{attempt_id:randomUUID(),attribution:'library'}});
+  assert.equal((await item(recallSource.expression)).practice_count,1);
+  assert.equal((await rpc('learning_enhancement_snapshot',{p_companion_id:'alex'})).recalls.filter(row=>row.item_id===recallItem.id).length,0);
+  await refresh(page); await openFeedback(page,recallSource);
   assert(await itemCard(page, recallItem.id).locator('[data-action="start-delayed-recall"]').isDisabled(), 'future recall cannot be reported immediately');
   for (const rating of ['hard', 'assisted', 'independent']) {
     await query("update public.learning_schedules set due_at=now()-interval '1 day' where item_id=$1", [recallItem.id]);
@@ -405,14 +407,10 @@ try {
   await refresh(page); await openFeedback(page, followup);
   const observed = (await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' })).usage.find(row => row.session_id === followupSession);
   assert.equal(observed.kind, 'observed'); assert.equal(observed.mode, 'undetermined'); assert.equal(observed.review_status, 'unreviewed');
-  const usageCard = page.locator(`#learning-session [data-usage-id="${observed.id}"]`);
-  await revealAndClick(usageCard.locator('[data-action="confirm-usage"]'));
-  await waitUntil(async () => (await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' })).usage.find(row => row.id === observed.id)?.review_status === 'confirmed', 'user explicitly reviews the observed original speech evidence');
-  await usageCard.getByText(/자기 확인/).waitFor({ state: 'visible' });
-  assert.equal(await usageCard.locator('blockquote').first().innerText(), recallSource.expression);
-  assert.match(await usageCard.innerText(), /사용 맥락 판단 불가/);
-  assert.match(await usageCard.innerText(), /자기 확인/);
-  assert(!/활용 성공|숙달 완료|학습 완료|사용 실패/.test(await usageCard.innerText()), 'observation has no automatic learning success or mastery label');
+  await rpc('learning_usage_review',{p_usage_id:observed.id,p_expected_revision:observed.revision,p_action_id:randomUUID(),p_status:'confirmed'});
+  const reviewedUsage=(await rpc('learning_enhancement_snapshot',{p_companion_id:'alex'})).usage.find(row=>row.id===observed.id);
+  assert.equal(reviewedUsage.review_status,'confirmed'); assert.equal(reviewedUsage.mode,'undetermined');
+  assert.equal((await query('select text from public.transcript_events where id=$1',[observed.evidence_ids[0]])).rows[0].text,recallSource.expression);
   assert.equal((await item(recallSource.expression)).practice_count, 1, 'observed usage never increments immediate-practice mastery counters');
   pass('E04: a service-prepared actual connection binds original user evidence; observation requires explicit self-review, leaves context/opportunity unknown and never labels success/mastery.');
 

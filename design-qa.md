@@ -107,3 +107,43 @@ P3: 플랫폼에 따른 글자 두께와 웹 글래스의 광학적 차이는 �
 ## 게시 파일 확인
 
 [배포 검사](https://github.com/chungchung234/English/actions/runs/42755922694) 성공. 앱 릴리스 `caabb35fff8285d8f7cbd77669282490643d3564`의 공개 HTML과 세 AI 이미지의 검증된 HTTPS 다운로드를 확인했다. 세 이미지는 저장소의 승인 원본과 바이트 단위로 동일하다. 다운로드한 HTML과 이미지를 변형 없이 게시 URL·CSP에서 렌더링한 [390px 홈](docs/design/call-glass/deployed-home.png), [320px 홈](docs/design/call-glass/deployed-compact.png)을 직접 열어 확인했다. 보호 API만 합성 응답으로 대체했으며 가로 넘침 없음, 플랫 발신 버튼, Mia 선택, 실행 오류 0건이다. [메타데이터](docs/design/call-glass/deployed-verification.json).
+
+
+## 원문 우선·별도 피드백 2안 · 2026-11-11
+
+**Findings**
+
+- 첫 비교의 P2: 헤더 76px와 제목 위 20px 여백 때문에 시안보다 내용이 아래로 밀렸고 영어 본문 16px가 작았다. 헤더 64px, 제목 위 12px, 영어 17px로 수정했다. [수정 전 비교](docs/design/post-call-dual-review-20261111/implementation/comparison-feedback-before.png), [수정 후 전체 비교](docs/design/post-call-dual-review-20261111/implementation/comparison-feedback.png).
+- 첫 비교의 P2: 닫힌 ‘다시 쓸 표현’ 영역에 시안의 내용 미리보기가 없었다. 첫 두 표현의 2줄 미리보기를 추가하고, 펼치면 전체 목록을 표시한다. 학습할 개수는 제한하지 않는다. [수정 후 확대 비교](docs/design/post-call-dual-review-20261111/implementation/comparison-feedback-detail.png).
+- 큰 글자 검수의 P2: 320px·200%에서 ‘피드백’ 제목이 글자 중간에서 나뉘었다. 제목에 단어 줄바꿈을 적용했다. [수정 후 큰 글자](docs/design/post-call-dual-review-20261111/implementation/09-feedback-large-text-320.png)에서 ‘이번 대화 / 피드백’으로 표시되며 가로 넘침이 없다.
+- 비동기 검수: 처음 생성 요청 직전 재시도 버튼이 잠깐 나타나 예약 영역이 불필요하게 커지는 문제, 주간 분석까지 숨기는 선택자, 늦은 출처 조회의 잘못된 이동, 다른 회차 재시도 버튼 잠김, 무효화된 피드백 노출을 수정했다. 반복 수용/상태/원문 테스트로 확인했다.
+- 최종 비교에서 남은 실행 가능한 P0/P1/P2 없음.
+
+**비교 조건과 증거**
+
+- Source visual truth: [선택한 2안](docs/design/post-call-dual-review-20261111/async-states/02-separate-feedback.png), 1424×1105px 이미지 보드. 가운데 원문 프레임 438×864px, 오른쪽 피드백 프레임 440×864px를 잘라 폭390px로 비례 축소했다. 생성 보드의 프레임 높이는 약766–769px여서 비교 캔버스 하단을 흰색으로 채워390×844에 맞췄다. 원본에 정확한 CSS 폰 크기는 없으므로 하단 위치 차이를 구현 오차로 판정하지 않았다.
+- 구현: [13-aligned-ready-390.png](docs/design/post-call-dual-review-20261111/implementation/13-aligned-ready-390.png), [14-aligned-feedback-390.png](docs/design/post-call-dual-review-20261111/implementation/14-aligned-feedback-390.png). 실제 앱 렌더,390×844 CSS px/픽셀,deviceScaleFactor1. 같은6발화·4분32초·저장완료·사용자가 연 피드백. 통화 길이/서비스 전송은 합성 입력임을 명시했다.
+- [원문 전체 비교](docs/design/post-call-dual-review-20261111/implementation/comparison-ready.png)와 [피드백 전체 비교](docs/design/post-call-dual-review-20261111/implementation/comparison-feedback.png)는 출처와 구현을 같은 이미지에 나란히 놓아 실제로 열어 확인했다. 교정/표현 영역은 같은 비교에서340px높이를 잘라1.5배 확대했다.
+- 320×568,200% 루트 글자,지연/실패/빈 상태/복귀를 별도로 캡처하고 [측정값](docs/design/post-call-dual-review-20261111/implementation/metrics.json)을 남겼다.
+
+| 필수 표면 | 최종 판단 |
+| --- | --- |
+| 글꼴·타이포그래피 | 기존 시스템 한글 산세리프와 영문 폴백 사용. 원문17px/1.55,주제목24/28px,피드백 항목18px. 생성 이미지의 미확정 폰트를 베끼지 않고 기존 제품과 일치시켰다. 200%에서 한글 단어 줄바꿈·영문 넘침을 확인했다. |
+| 간격·배치 | 좌우22px,최소44px 터치,56px 주 버튼,하단96px+safe-area를 기본으로 한다. 시안의 읽기/준비완료/직접열기 구조 유지. 상단은 스크롤 중에도 뒤로/마치기에 접근하도록 고정했다. |
+| 색·토큰 | 화이트 #fff,남색 #081744,보조 #59647c,주 버튼 #252bb5. 시안의 래스터 광택 대신 현재 앱의 단색 토큰을 사용한 의도적 차이. |
+| 자산·이미지 | 새 장식이나 가짜 기기 프레임 없음. 기존 Phosphor chevron을 뒤로 아이콘으로 재사용. 생성 이미지 전체를 앱에 붙이지 않았다. |
+| 문구·내용 | 원문·피드백·출처 연결을 유지. 기존 분석 스키마에 별도 교정 제목이 없으므로 짧은 이유를 제목으로 쓰고 중복 본문은 생략한다. 기록 정보/피드백 관리는 안전한 복구·제외를 위한 닫힌 보조 영역이다. |
+
+**Implementation Checklist**
+
+- 원문/피드백이 동시에 펼쳐져 과밀해지지 않음.
+- 준비완료 자동이동 없음; 원문/피드백/출처 읽기 위치 보존.
+- 마치기에 연습·미루기 쓰기 없음; 실제 피드백 화면을 연 경우만 열람 기록.
+- 원문 늦은 도착,잘못된 저장ACK,생성실패,원문부족,재방문,계정/상대 전환 검증.
+- 브라우저 오류0,타입·228단위/SQL테스트·12브라우저스위트·빌드·캐릭터/합성 평가 통과.
+
+**Open Questions / Follow-up Polish**
+
+실제 승인 계정 음성 연결과 iOS Safari 실기기,실사용자 관찰은 이번 검증 범위 밖이다. 사람의 학습 효과나 교정 품질을 통과했다고 주장하지 않는다. 별도의 잔여 디자인 수정은 없다.
+
+final result: passed

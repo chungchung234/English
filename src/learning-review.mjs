@@ -9,7 +9,7 @@ export function createLearningReview(options) {
   notice:options.onNotice,setView:options.setView,setReviewMode:options.setReviewMode,navigationKey:options.navigationKey,
   getEventMetadata:options.getEventMetadata,onTelemetryStage:options.onTelemetryStage,
   chooseScenario:()=>options.onPlan?.(),
-  onAnalysis:options.onAnalysis,openSession:options.onSession
+  onFeedbackState:options.onFeedbackState,onAnalysis:options.onAnalysis,openSession:options.onSession
  });
  return {...flow,reset:flow.clear,resume:async()=>{await flow.load();flow.viewed();},show:flow.show};
 }

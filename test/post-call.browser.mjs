@@ -104,22 +104,27 @@ async function insertAnalysis(sessionId, eventId, content, user = uid) {
 }
 async function item(expression) { return (await query('select * from public.learning_state_items where user_id=$1 and expression=$2', [uid, expression])).rows[0]; }
 async function eventRows(name) { return (await query('select * from public.learning_events where user_id=$1 and name=$2 order by received_at', [uid, name])).rows; }
+async function leaveReview(page) { if (await page.locator('#session-review-exit').isVisible()) await page.locator('#session-review-exit').click(); }
 async function openFeedback(page, label) {
+  await leaveReview(page);
   await page.locator('[data-view="history"]').click();
   const sessionId = (await query('select id from public.sessions where scenario=$1 and user_id=$2 order by created_at desc limit 1', [label, uid])).rows[0].id;
   await page.locator(`.history-entry[data-session-id="${sessionId}"] .history-open`).click();
   await page.locator('.call-feedback').click();
   await page.locator('[data-panel="review"]').waitFor({ state: 'visible' });
-  await page.locator('#learning-session').waitFor();
+  await page.locator('#post-call-transcript').waitFor({state:'attached'});
+  const state=(await rpc('learning_snapshot',{p_companion_id:'alex'})).feedback.find(row=>row.session_id===sessionId);
+  if(state?.current&&(await page.locator('#review-panel').getAttribute('data-session-view'))!=='feedback'){await page.locator('#session-feedback-open').waitFor({state:'visible'});await page.locator('#session-feedback-open').click();}
+  else if(state?.has_user_speech===false)await page.waitForFunction(()=>document.querySelector('#session-feedback-status')?.dataset.state==='empty');
+  else if(!state?.current)await page.waitForFunction(()=>document.querySelector('#session-feedback-status')?.dataset.state!=='ready');
 }
+
 async function openSessionActions(page) {
-  const details = page.locator('#learning-session > details').filter({ has: page.locator('[data-action="practice"]') }).first();
+  const details = page.locator('#learning-session > details.feedback-management').first();
   if (await details.count() && !await details.evaluate(node => node.open)) await details.locator('summary').first().click();
 }
-async function refresh(page) { await page.locator('[data-view="history"]').click(); await page.locator('#refresh-history').click(); }
+async function refresh(page) { await leaveReview(page); await page.locator('[data-view="history"]').click(); await page.locator('#refresh-history').click(); }
 function itemCard(page, itemId, root = '#learning-session') { return page.locator(`${root} [data-item-id="${itemId}"]`).first(); }
-const practiceBox = page => page.locator('.learning-practice').filter({ has: page.locator('[data-practice-expression]') }).first();
-async function practice(page, itemId) { await openSessionActions(page); await clickControl(page, itemCard(page, itemId).locator('[data-action="practice"]')); await practiceBox(page).waitFor({ state: 'visible' }); }
 async function openQueue(page) { const fold=page.locator('#learning-queue > details').filter({has:page.getByText('복습 보관함',{exact:true})}); if(await fold.count()&&!await fold.evaluate(node=>node.open))await fold.locator('summary').first().click(); }
 async function clickControl(page, control) {
   // Keep locators live: acknowledging an earlier queued action may replace the
@@ -134,10 +139,6 @@ async function clickControl(page, control) {
     await folds.nth(index).locator('summary').first().click();
   }
   await control.click();
-}
-async function closePractice(page, {conflict=false} = {}) {
-  const close = practiceBox(page).locator('[data-action="close-practice"]');
-  if (await close.count()) { await close.focus(); await page.keyboard.press('Enter'); await page.waitForFunction(conflict=>conflict?['retry-conflict','discard-conflict','restore'].includes(document.activeElement?.dataset.action):document.activeElement?.dataset.action==='practice',conflict); } else await practiceBox(page).locator('[data-action="home"]').last().click();
 }
 const transport = { offline: false, calls: [], errors: [], review: null, voice: [], actionBodies: [], failRestore: false, finishGate: null };
 async function attachRoutes(page, html) {
@@ -214,82 +215,45 @@ try {
   assert.equal((await eventRows('feedback_exposed')).length, 0, 'home render does not expose feedback');
   const openedAt = Date.now();
   await openFeedback(page, normal.session.scenario);
-  const core = page.locator('#review-core');
-  const takeaway = page.locator('#learning-session [data-feedback-core]');
-  await takeaway.waitFor({ state: 'visible' });
-  await takeaway.evaluate(node => node.scrollIntoView({block: 'center'}));
-  assert.match(await takeaway.innerText(), /Yesterday I went/);
-  assert.match(await takeaway.innerText(), /오류|교정/);
-  await waitUntil(async () => (await eventRows('feedback_exposed')).some(event => event.analysis_id === normal.analysisId), 'one-second visible core emits exposure');
+  const core = page.locator('#session-feedback-content');
+  await core.waitFor({ state: 'visible' });
+  assert.match(await core.innerText(), /Yesterday I went/);
+  assert.match(await core.innerText(), /선택|대안/);
+  assert.match(await core.innerText(), /경험을 분명하게/);
+  assert.equal(await page.locator('[data-action="practice"]').count(), 0, 'removed solo practice has no entry point');
+  await waitUntil(async () => (await eventRows('feedback_exposed')).some(event => event.analysis_id === normal.analysisId), 'actually opened feedback emits exposure');
   const exposure = (await eventRows('feedback_exposed')).find(event => event.analysis_id === normal.analysisId);
   assert.equal(exposure.session_id, normal.session.id);
-  assert(new Date(exposure.occurred_at).getTime() - openedAt >= 1000, `actual foreground exposure waits at least one second (delta=${new Date(exposure.occurred_at).getTime()-openedAt}, occurred=${exposure.occurred_at}, opened=${new Date(openedAt).toISOString()})`);
-  assert(exposure.payload.visible_ratio >= 0.5);
-  await core.locator('summary').first().click();
-  assert.match(await core.innerText(), /오늘은 지난 경험/);
-  assert.match(await core.innerText(), /대안|선택/);
-  await core.getByRole('button', { name: '근거 발화', exact: true }).first().click();
-  await core.locator('blockquote').first().getByText(normal.event.text, { exact: true }).waitFor();
-  await core.evaluate(node => { const preserved = document.createElement('p'); preserved.hidden = true; preserved.dataset.preserveHidden = ''; node.append(preserved); });
-  await practice(page, main.id);
-  const expression = page.locator('.learning-practice [data-practice-expression]');
-  assert(await expression.isHidden(), 'rephrasing starts with the answer concealed');
-  assert.match(await page.locator('.learning-practice [data-practice-cue]').innerText(), /Yesterday I go/);
-  assert(!(await page.locator('body').innerText()).includes(main.expression), 'surrounding answer copies are concealed during rephrasing');
-  await page.evaluate(expression => { const transcript = document.createElement('section'); transcript.id = 'post-call-transcript'; transcript.dataset.lateTranscriptFixture = ''; transcript.textContent = expression; document.querySelector('#review-content').before(transcript); }, main.expression);
-  await page.locator('[data-late-transcript-fixture]').waitFor({ state: 'hidden' });
-  await page.locator('.learning-practice [data-action="toggle-expression"]').click();
-  assert(await expression.isVisible());
-  assert.match(await expression.innerText(), /Yesterday I went/);
-  await page.locator('.learning-practice [data-action="toggle-expression"]').click();
-  assert(await expression.evaluate(node => node.hidden || node.getAttribute('aria-hidden') === 'true'), 'hidden expression is hidden from assistive technology');
-  await closePractice(page);
-  await page.locator('.learning-practice').waitFor({ state: 'hidden' });
-  assert(await core.isVisible(), 'closing rephrasing restores the original feedback surface');
-  assert((await page.locator('body').innerText()).includes(main.expression), 'closing restores the concealed answer');
-  assert(await page.locator('[data-preserve-hidden]').isHidden(), 'previously hidden content remains hidden after practice');
-  assert(await page.locator('[data-late-transcript-fixture]').isVisible(), 'late transcript visibility is restored after practice');
-  await page.locator('[data-late-transcript-fixture]').evaluate(node => node.remove());
-  await openFeedback(page, normal.session.scenario);
-  assert.equal((await item(main.expression)).status, 'active', 'closing preserves the item state');
-
-  await practice(page, main.id);
-  await page.locator('.learning-practice [data-action="save-practice"]').click();
-  await waitUntil(async () => (await item(main.expression)).status === 'practiced', 'manual practice persists in SQL');
+  assert(new Date(exposure.occurred_at).getTime() - openedAt >= 1000);
+  await core.locator('[data-feedback-source]').first().click();
+  assert(await page.locator('#post-call-transcript').isVisible());
+  await page.locator('#session-feedback-open').click();
+  assert(await core.isVisible());
+  // Compatibility of previously saved manual-practice history is verified at the
+  // real RPC boundary; the removed solo-practice UI is not recreated for tests.
+  const attempt = randomUUID();
+  await rpc('learning_record_event', {p_event_id:randomUUID(),p_name:'practice_started',p_companion_id:'alex',p_session_id:normal.session.id,p_analysis_id:normal.analysisId,p_item_id:main.id,p_attempt_id:attempt,p_payload:{attribution:'session'}});
+  await rpc('learning_action', {p_item_id:main.id,p_expected_revision:main.revision,p_action_id:randomUUID(),p_action:'practice',p_payload:{attempt_id:attempt,attribution:'session',source_session_id:normal.session.id,source_analysis_id:normal.analysisId}});
   const saved = (await eventRows('practice_saved')).filter(event => event.item_id === main.id);
-  assert.equal(saved.length, 1); assert(saved[0].attempt_id); assert(saved[0].paired);
-  const started = (await eventRows('practice_started')).filter(event => event.item_id === main.id);
-  assert.equal(started.length, 2, 'close and new practice are different attempts');
-  assert.equal(started.filter(event => event.attempt_id === saved[0].attempt_id).length, 1);
-  assert.equal((await item(main.expression)).practice_count, 1);
-  await page.locator('.learning-practice [data-action="prepare-next"]').click();
-  await waitUntil(async () => (await query('select * from public.learning_next_plans where user_id=$1 and companion_id=$2', [uid, 'alex'])).rows.length === 1, 'optional next-call plan is saved');
-  assert.equal(transport.voice.length, 0, 'preparing next call does not connect a call');
-  await page.locator('[data-panel="contacts"]').waitFor({ state: 'visible' });
-  await page.locator('#next-plan').filter({ hasText: normal.content.next_scenario }).waitFor();
-  await page.keyboard.press('Escape');
-  await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' });
-  await openFeedback(page, normal.session.scenario);
-  await openSessionActions(page);
-  assert.match(await itemCard(page, main.id).innerText(), /연습|저장/);
-  assert.equal((await item(main.expression)).practice_count, 1, 'reload restores authoritative server progress');
-  console.log('PASS T01/T02/T05/T08/T09/T23/T25/T30: concise source-backed feedback, category distinction, one default, visibility exposure, keyboard close, manual save and exact attempt linkage.');
+  assert.equal(saved.length,1); assert.equal(saved[0].attempt_id,attempt); assert(saved[0].paired);
+  assert.equal((await item(main.expression)).practice_count,1);
+  await refresh(page); await openFeedback(page,normal.session.scenario);
+  console.log('PASS: separate source-backed feedback, explicit source navigation, real visibility exposure and preserved historical attempt linkage.');
 
   // Additional candidates require explicit enrollment; defer and source hold
   // use separate source-backed feedback to avoid conflating their meanings.
-  await page.getByText('원하면 추가 표현 선택 · 후보 최대 3개', { exact: true }).click();
   await clickControl(page, itemCard(page, alternate.id).locator('[data-action="enroll"]'));
   await waitUntil(async () => (await item(alternate.expression)).enrolled, 'candidate enrollment is saved');
   await clickControl(page, itemCard(page, extra.id).locator('[data-action="enroll"]'));
   await waitUntil(async () => (await item(extra.expression)).enrolled, 'third candidate enrollment is explicit');
-  await page.locator('[data-view="review"]').click();
+  await leaveReview(page); await page.locator('[data-view="review"]').click();
   await openQueue(page); await page.locator('#learning-queue [data-action="recommend-more"]').click();
   const moreSnapshot = await rpc('learning_snapshot', { p_companion_id: 'alex' });
   assert(moreSnapshot.recommended_item_ids.length <= 3);
   const deferredFixture = await fixture('Acceptance: explicit defer', [{ original: 'I am wait for you.', improved: 'I am waiting for you.' }]);
   const deferredItem = await item('I am waiting for you.');
   await refresh(page); await openFeedback(page, deferredFixture.session.scenario);
-  await clickControl(page, itemCard(page, deferredItem.id).locator('[data-action="defer"]'));
+  await rpc('learning_action',{p_item_id:deferredItem.id,p_expected_revision:deferredItem.revision,p_action_id:randomUUID(),p_action:'defer',p_payload:{}});
   await waitUntil(async () => (await item(deferredItem.expression)).status === 'deferred', 'defer is distinct from close');
   const deferred = await item(deferredItem.expression);
   assert(deferred.next_eligible_at); assert.equal(deferred.practice_count, 0); assert.equal(deferred.defer_count, 1);
@@ -307,7 +271,7 @@ try {
   await refresh(page); await openFeedback(page, offlineFixture.session.scenario);
   transport.offline = true;
   await clickControl(page, itemCard(page, offlineItem.id).locator('[data-action="exclude"]'));
-  await page.getByText(/기기 보관 확인.*서버 반영/).first().waitFor();
+  await openSessionActions(page); await itemCard(page,offlineItem.id).getByText(/기기 보관 확인.*서버 반영/).first().waitFor();
   assert.equal((await item(offlineItem.expression)).status, 'active', 'offline choice is not shown as server success');
   await waitUntil(async () => transport.actionBodies.some(body => body.p_item_id === offlineItem.id), 'durable offline action reaches the explicitly failing server transport');
   const action = transport.actionBodies.find(body => body.p_item_id === offlineItem.id);
@@ -348,42 +312,18 @@ try {
   await refresh(page); await openFeedback(page, conflictFixture.session.scenario);
   const secondContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const second = await secondContext.newPage(); await attachRoutes(second); await login(second); await openFeedback(second, conflictFixture.session.scenario);
-  await practice(page, conflictItem.id); await practice(second, conflictItem.id);
-  await page.locator('.learning-practice [data-action="save-practice"]').click();
-  await waitUntil(async () => (await item(conflictItem.expression)).practice_count === 1, 'one of two devices saves its own attempt');
-  await closePractice(page);
-  await page.locator('.learning-practice').waitFor({ state: 'hidden' });
-  await openFeedback(page, conflictFixture.session.scenario);
-  const twoStarts = (await eventRows('practice_started')).filter(event => event.item_id === conflictItem.id);
-  const oneSaved = (await eventRows('practice_saved')).filter(event => event.item_id === conflictItem.id);
-  assert.equal(twoStarts.length, 2); assert.equal(oneSaved.length, 1);
-  assert.equal(twoStarts.filter(event => event.attempt_id === oneSaved[0].attempt_id).length, 1);
-  assert.equal(twoStarts.filter(event => event.paired).length, 1);
-  await clickControl(page, itemCard(page, conflictItem.id).locator('[data-action="exclude"]'));
-  await waitUntil(async () => (await item(conflictItem.expression)).status === 'excluded', 'first device exclusion applies');
-  await second.locator('.learning-practice [data-action="save-practice"]').click();
-  await second.locator('[data-practice-status]').filter({hasText:'최신 상태가 달라'}).waitFor();
-  await closePractice(second,{conflict:true});
-  await second.locator('[data-view="review"]').click();
-  await second.locator('.learning-practice').waitFor({ state: 'hidden' });
-  await second.locator('#learning-queue [data-conflict-id]').waitFor();
-  assert.match(await second.locator('#learning-queue').innerText(), /다른 기기|최신 상태/);
-  assert.equal((await item(conflictItem.expression)).status, 'excluded', 'stale practice does not overwrite newer exclusion');
-  const stale = transport.actionBodies.filter(body => body.p_item_id === conflictItem.id && body.p_action === 'practice').at(-1);
-  const conflictResult = (await query('select result from public.learning_actions where action_id=$1', [stale.p_action_id])).rows[0].result;
-  assert.equal(conflictResult.outcome, 'conflict'); assert.equal(conflictResult.item.status, 'excluded');
-  const oldConflictId = await second.locator('#learning-queue [data-conflict-id]').getAttribute('data-conflict-id');
-  await second.locator('[data-action="retry-conflict"]').click();
-  assert.equal(await second.locator('#learning-queue [data-conflict-id]').getAttribute('data-conflict-id'), oldConflictId, 'excluded practice retry retains a resolvable conflict');
-  const secondQueue = await second.evaluate(async scope => { const { createLearningOutbox } = await import('/src/learning-outbox.js'); return createLearningOutbox().list(scope); }, project + '|' + uid);
-  assert(secondQueue.filter(row => row.kind === 'action').every(row => row.state === 'conflict'), 'invalid retry cannot create a wedged pending action');
-  await second.locator('[data-action="discard-conflict"]').click();
-  await second.locator('#learning-queue [data-conflict-id]').waitFor({ state: 'hidden' });
-  await openQueue(second); await second.getByText('지난 피드백·표현 보관함', { exact: true }).click();
-  await clickControl(second, itemCard(second, conflictItem.id, '#learning-queue').locator('[data-action="restore"]'));
-  await waitUntil(async () => (await item(conflictItem.expression)).status === 'active', 'explicit latest-version restore works after discarding stale practice');
+  const staleRevision=conflictItem.revision;
+  await clickControl(page,itemCard(page,conflictItem.id).locator('[data-action="exclude"]'));
+  await waitUntil(async()=> (await item(conflictItem.expression)).status==='excluded','first device exclusion applies');
+  const staleAction=randomUUID();
+  const conflictResult=await rpc('learning_action',{p_item_id:conflictItem.id,p_expected_revision:staleRevision,p_action_id:staleAction,p_action:'practice',p_payload:{attempt_id:randomUUID(),attribution:'library'}});
+  assert.equal(conflictResult.outcome,'conflict'); assert.equal(conflictResult.item.status,'excluded');
+  assert.equal((await item(conflictItem.expression)).practice_count,0,'stale historical client cannot overwrite newer exclusion');
+  assert.equal((await query('select result from public.learning_actions where action_id=$1',[staleAction])).rows[0].result.outcome,'conflict','conflict is durably recorded against its exact action ID');
+  await refresh(second); await openFeedback(second,conflictFixture.session.scenario);
+  assert(!(await second.locator('#session-feedback-content').innerText()).includes(conflictItem.expression),'second device suppresses excluded feedback after refresh');
   await secondContext.close();
-  console.log('PASS T11/T30: two devices start separate attempts, one save pairs only its attempt and daily count is1; stale intent returns CAS conflict/latest state and discard preserves exclusion.');
+  console.log('PASS: concurrent historical clients receive CAS conflicts and cannot resurrect excluded expressions.');
 
   // Late transcript source mutation invalidates recommendation without erasing practice.
   await query(`insert into public.transcript_events(user_id,session_id,event_key,speaker,text) values($1,$2,'late-user','user','One more thing.')`, [uid, normal.session.id]);
@@ -392,7 +332,7 @@ try {
   assert.equal(snapshot.items.find(row => row.id === main.id).has_valid_source, false);
   assert.equal(snapshot.items.find(row => row.id === main.id).practice_count, 1);
   await refresh(page); await openFeedback(page, normal.session.scenario);
-  assert.match(await page.locator('#review-content').innerText(), /대화문이 달라|원문|갱신|새.*발화/);
+  assert.match(await page.locator('#review-panel').innerText(), /대화문이 달라|기록이 바뀌|원문|갱신|새.*발화/);
   const reanalysisId = await insertAnalysis(normal.session.id, normal.event.id, normal.content);
   snapshot = await rpc('learning_snapshot', { p_companion_id: 'alex' });
   assert(snapshot.feedback.find(row => row.session_id === normal.session.id).current);
@@ -409,15 +349,15 @@ try {
   const background = await fixture('Acceptance: pending background analysis', [{ original: 'I am agree.', improved: 'I agree.' }], { analysis: false });
   await query(`insert into public.analysis_jobs(user_id,session_id,kind,request_key,state,lease_token,lease_expires_at) values($1,$2,'session',$3,'running',$4,now()+interval '5 minutes')`, [uid, background.session.id, 'acceptance:' + background.session.id, randomUUID()]);
   await refresh(page); await openFeedback(page, background.session.scenario);
-  assert.match(await page.locator('#review-content').innerText(), /준비하고|정리하고/);
-  assert.equal(await page.locator('#review-content [data-action="request-feedback"]').count(), 0, 'valid running lease prevents duplicate analysis');
+  assert.match(await page.locator('#review-panel').innerText(), /준비하고|정리하고|준비 중/);
+  assert.match(await page.locator('#session-feedback-retry').textContent(),/상태 확인/,'running lease only offers status checking, not duplicate analysis');
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' });
   await openFeedback(page, background.session.scenario);
-  assert.match(await page.locator('#review-content').innerText(), /준비하고|정리하고/);
+  assert.match(await page.locator('#review-panel').innerText(), /준비하고|정리하고|준비 중/);
   await openFeedback(page, normal.session.scenario);
   await insertAnalysis(background.session.id, background.event.id, background.content);
   await query(`update public.analysis_jobs set state='completed',updated_at=now() where session_id=$1`, [background.session.id]);
-  await page.locator('[data-view="history"]').click();
+  await leaveReview(page); await page.locator('[data-view="history"]').click();
   await page.locator('#refresh-history').click();
   assert.equal(await page.locator('#learning-session').getAttribute('data-feedback-session'), normal.session.id, 'background completion does not change selected feedback');
   assert(await page.locator('[data-panel="history"]').isVisible(), 'background completion does not force the review tab');
@@ -436,13 +376,13 @@ try {
     return { status: 429, json: { error: { code: 'BUDGET_EXCEEDED', message: 'RAW_UPSTREAM_DEBUG_SECRET' } } };
   };
   await refresh(page); await openFeedback(page, quota.session.scenario);
-  await page.locator('#review-content [data-action="request-feedback"]').click();
-  await page.locator('#review-content').getByText(/오늘 피드백 생성 한도를/).waitFor();
-  assert.match(await page.locator('#review-content').innerText(), /09:00|오전 9:00/);
-  assert(await page.locator('#review-content [data-action="request-feedback"]').isDisabled());
+  await page.locator('#session-feedback-retry').click();
+  await page.locator('#session-feedback-status-note').filter({hasText:/오늘 피드백 생성 한도를/}).waitFor();
+  assert.match(await page.locator('#review-panel').innerText(), /09:00|오전 9:00/);
+  assert(await page.locator('#session-feedback-retry').isHidden());
   assert(!await page.locator('body').innerText().then(text => text.includes('RAW_UPSTREAM_DEBUG_SECRET')));
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' }); await openFeedback(page, quota.session.scenario);
-  assert(await page.locator('#review-content [data-action="request-feedback"]').isDisabled(), 'server quota block survives reload');
+  assert(await page.locator('#session-feedback-retry').isHidden(), 'server quota block survives reload');
   const quotaState = (await rpc('learning_snapshot', { p_companion_id: 'alex' })).feedback.find(row => row.session_id === quota.session.id);
   assert.equal(quotaState.blocked_reason, 'quota'); assert.equal(new Date(quotaState.blocked_until).getUTCHours(), 0);
   assert.equal(new Date(quotaState.blocked_until).getUTCMinutes(), 0, 'UTC midnight is the precise KST09 reset');
@@ -450,29 +390,29 @@ try {
   await page.evaluate(({ project }) => { const key = 'loop.auth:' + project, auth = JSON.parse(localStorage.getItem(key)); auth.expires_at += 172800; localStorage.setItem(key, JSON.stringify(auth)); }, { project });
   await page.clock.install({ time: new Date(new Date(quotaState.blocked_until).getTime() + 1000) });
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' }); await openFeedback(page, quota.session.scenario);
-  assert(await page.locator('#review-content [data-action="request-feedback"]').isEnabled(), 'KST09 clock and server reset release quota blocker');
+  assert(await page.locator('#session-feedback-retry').isEnabled(), 'KST09 clock and server reset release quota blocker');
   await page.clock.setSystemTime(new Date());
   const oversized = await fixture('Acceptance: input error', [{ original: 'I do a reservation.', improved: 'I would like to make a reservation.' }], { analysis: false });
   transport.review = async () => ({ status: 413, json: { error: { code: 'ANALYSIS_TOO_LARGE', message: 'RAW_MODEL_REQUEST' } } });
   await refresh(page); await openFeedback(page, oversized.session.scenario);
-  await page.locator('#review-content [data-action="request-feedback"]').click();
-  await page.locator('#review-content').getByText(/이번 기록은 자동 분석 크기 한도를/).waitFor();
-  assert(await page.locator('#review-content [data-action="request-feedback"]').isDisabled());
+  await page.locator('#session-feedback-retry').click();
+  await page.locator('#session-feedback-status-note').filter({hasText:/이번 기록은 자동 분석 크기 한도를/}).waitFor();
+  assert(await page.locator('#session-feedback-retry').isHidden());
   assert.equal((await query('select text from public.transcript_events where id=$1', [oversized.event.id])).rows[0].text, oversized.event.text);
   assert(!await page.locator('body').innerText().then(text => text.includes('RAW_MODEL_REQUEST')));
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' }); await openFeedback(page, oversized.session.scenario);
-  assert(await page.locator('#review-content [data-action="request-feedback"]').isDisabled(), 'input-size block survives reload');
+  assert(await page.locator('#session-feedback-retry').isHidden(), 'input-size block survives reload');
   await query(`insert into public.transcript_events(user_id,session_id,event_key,speaker,text) values($1,$2,'changed-input','user','A new source version.')`, [uid, oversized.session.id]);
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' }); await openFeedback(page, oversized.session.scenario);
-  assert(await page.locator('#review-content [data-action="request-feedback"]').isEnabled(), 'source version change releases an old input blocker');
+  assert(await page.locator('#session-feedback-retry').isEnabled(), 'source version change releases an old input blocker');
   console.log('PASS T16/T18: quota shows KST reset and prevents repeated requests; oversized analysis preserves full source and hides raw errors.');
 
   const noSpeech = randomUUID();
   await query(`insert into public.sessions(id,user_id,scenario,companion_id,status,ended_at) values($1,$2,'Acceptance: no user speech','alex','ended',now())`, [noSpeech, uid]);
   await refresh(page); await openFeedback(page, 'Acceptance: no user speech');
-  assert.match(await page.locator('#review-content').innerText(), /확인된 (사용자|내) 발화가 없어/);
-  assert.equal(await page.locator('#review-content [data-action="request-feedback"]').count(), 0, 'no user speech cannot start analysis');
-  await page.locator('#review-content [data-action="home"]').click();
+  assert.match(await page.locator('#review-panel').innerText(), /확인된 (사용자|내) 발화가 없어/);
+  assert(await page.locator('#session-feedback-retry').isHidden(),'no user speech cannot start analysis');
+  await page.locator('#session-review-exit').click();
   await page.locator('[data-panel="contacts"]').waitFor({ state: 'visible' });
   console.log('PASS T03: no-user-speech record offers home without invented corrections or analysis request.');
 
@@ -484,11 +424,11 @@ try {
     return { json: { analysis: (await query('select * from public.analyses where id=$1',[id])).rows[0] } };
   };
   await refresh(page); await openFeedback(page, partial.session.scenario);
-  await page.locator('#review-content [data-action="finish-partial"]').click();
+  await page.locator('#session-feedback-retry').click();
   await waitUntil(async () => (await query('select record_incomplete from public.sessions where id=$1', [partial.session.id])).rows[0].record_incomplete, 'partial finalization flag persists on server');
   await waitUntil(async () => (await query('select * from public.analyses where session_id=$1', [partial.session.id])).rows.length === 1, 'received source is analyzed after explicit finalize');
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' }); await openFeedback(page, partial.session.scenario);
-  assert.match(await page.locator('#review-content').innerText(), /누락된 음성은 포함되지/);
+  assert.match(await page.locator('#review-panel').innerText(), /누락된 음성은 포함되지/);
   console.log('PASS T15: explicit partial finalization persists a missing-audio warning through reload and analysis.');
 
   const longExpression = 'Could you please help me understand ' + 'the details of this particular reservation '.repeat(32) + 'before I make a decision?';
@@ -496,36 +436,21 @@ try {
   const longItem = await item(longExpression);
   await refresh(page); await openFeedback(page, long.session.scenario);
   await mkdir('test-results', { recursive: true });
-  for (const width of [320, 390, 1280]) {
-    await page.setViewportSize({ width, height: width === 1280 ? 900 : 844 });
-    await practice(page, longItem.id);
-    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `no page overflow at ${width}px`);
-    assert(await practiceBox(page).evaluate(node => node.scrollWidth <= node.clientWidth + 1), `long expression fits inline practice at ${width}px`);
-    await page.locator('.learning-practice [data-action="save-practice"]').scrollIntoViewIfNeeded();
-    await page.screenshot({ path: `test-results/post-call-${width}.png`, fullPage: true });
-    await closePractice(page);
-    await openFeedback(page, long.session.scenario);
+  for (const width of [320,390,1280]) {
+    await page.setViewportSize({width,height:width===1280?900:844});
+    assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`no page overflow at ${width}px`);
+    assert.match(await page.locator('#session-feedback-content').innerText(),/Could you please/);
+    await page.screenshot({path:`test-results/post-call-${width}.png`,fullPage:true});
   }
-  assert.match(await page.locator('#review-content').innerText(), /자동 숙달|연습|말해보기/);
-  console.log('PASS T27: 320/390/desktop long-expression layout, accessible recall hiding, reachable save and keyboard close/focus return.');
-
-  const merged = await fixture('Acceptance: merged source library', [{ original: 'Help me with this reservation.', improved: longExpression }]);
-  assert.equal((await query('select * from public.learning_sources where item_id=$1', [longItem.id])).rows.length, 2, 'canonical expression merges sources for this companion');
-  await refresh(page); await page.locator('[data-view="review"]').click();
-  await openQueue(page); await page.getByText('지난 피드백·표현 보관함', { exact: true }).click();
-  await clickControl(page, itemCard(page, longItem.id, '#learning-queue').locator('[data-action="practice"]'));
-  await page.locator('.learning-practice').waitFor({ state: 'visible' });
-  await page.locator('.learning-practice [data-action="save-practice"]').click();
-  await waitUntil(async () => (await item(longExpression)).practice_count === 1, 'library practice stores progress');
-  const librarySave = (await eventRows('practice_saved')).find(event => event.item_id === longItem.id);
-  assert.equal(librarySave.attribution, 'library'); assert.equal(librarySave.session_id, null); assert.equal(librarySave.analysis_id, null);
-  const libraryStart = (await eventRows('practice_started')).find(event => event.attempt_id === librarySave.attempt_id);
-  assert.equal(libraryStart.attribution, 'library'); assert.equal(libraryStart.session_id, null);
-  for (const event of await query('select payload from public.learning_events').then(result => result.rows)) {
-    assert(!JSON.stringify(event.payload).includes('reservation'), 'analytics payload does not duplicate expression content');
-  }
-  await closePractice(page);
-  console.log('PASS T07/T31: same-companion merged expression retains two sources; library save/start share one attempt and remain unassigned to source sessions.');
+  const merged=await fixture('Acceptance: merged source library',[{original:'Help me with this reservation.',improved:longExpression}]);
+  assert.equal((await query('select * from public.learning_sources where item_id=$1',[longItem.id])).rows.length,2);
+  const libraryAttempt=randomUUID();
+  await rpc('learning_record_event',{p_event_id:randomUUID(),p_name:'practice_started',p_companion_id:'alex',p_session_id:null,p_analysis_id:null,p_item_id:longItem.id,p_attempt_id:libraryAttempt,p_payload:{attribution:'library'}});
+  await rpc('learning_action',{p_item_id:longItem.id,p_expected_revision:(await item(longExpression)).revision,p_action_id:randomUUID(),p_action:'practice',p_payload:{attempt_id:libraryAttempt,attribution:'library'}});
+  const librarySave=(await eventRows('practice_saved')).find(event=>event.item_id===longItem.id);
+  assert.equal(librarySave.attribution,'library'); assert.equal(librarySave.session_id,null); assert.equal(librarySave.analysis_id,null);
+  for(const event of await query('select payload from public.learning_events').then(result=>result.rows))assert(!JSON.stringify(event.payload).includes('reservation'),'analytics does not duplicate expression content');
+  console.log('PASS: long feedback fits 320/390/desktop, merged sources and historical library attribution remain intact.');
 
   const periodEnd = new Date(Date.now() - 24 * 3600000).toISOString();
   const periodStart = new Date(new Date(periodEnd).getTime() - 168 * 3600000).toISOString();
@@ -601,15 +526,10 @@ try {
     await delayed.locator('#start-call').click(); await delayed.locator('#end-call').waitFor({ state: 'visible' });
     const delayedSessionId = transport.voice.at(-1).sessionId;
     await delayed.locator('#end-call').click();
-    await delayed.locator('#view-ending-transcript').waitFor({ state: 'visible' });
-    await delayed.locator('#view-ending-transcript').click();
-    await delayed.locator('#wrapup-home').waitFor({ state: 'visible', timeout: 15000 });
-    const finalizing = delayed.locator('[data-review-state="finalizing"]');
-    assert(await finalizing.isVisible(), 'the post-call save state is visible without opening the transcript');
-    assert.match(await finalizing.innerText(), /끝났어요[\s\S]*저장.*확인/, 'the visible post-call view distinguishes ended audio from pending storage');
-    assert.equal((await query('select status from public.sessions where id=$1', [delayedSessionId])).rows[0].status, 'active', 'waiting does not invent server completion');
-    await delayed.locator('#wrapup-home').click();
-    assert.match(await delayed.locator('#notice').innerText(), /서버 저장 완료 전/);
+    await delayed.locator('#post-call-transcript').waitFor({state:'visible'});
+    assert.match(await delayed.locator('#session-review-footer').innerText(),/대화|저장|확인/);
+    assert.equal((await query('select status from public.sessions where id=$1',[delayedSessionId])).rows[0].status,'active');
+    await delayed.locator('#session-review-exit').click();
     assert(await delayed.locator('[data-panel="contacts"]').isVisible());
     assert(await delayed.locator('#start-call').isDisabled(), 'another call waits until previous resources are released');
     releaseFinish(); transport.finishGate = null;
@@ -619,7 +539,7 @@ try {
     assert.equal(transport.calls.filter(call => call.path.endsWith('/coach/review')).length, reviewCount, 'no-speech delayed finish never generates feedback');
     await delayed.locator('[data-call-save-duration]').waitFor({ state: 'attached' });
     assert.doesNotMatch(await delayed.locator('[data-transcript-status]').textContent(), /미완료|확인하지 못/, 'the client accepts the real completed session row, not only the database side effect');
-    console.log('PASS T14: real ten-second finish delay offers home, keeps save state honest, blocks overlap, releases start and avoids forced navigation.');
+    console.log('PASS T14: pending finish reveals transcript and allows explicit home exit, keeps save state honest, blocks overlap, releases start and avoids forced navigation.');
   } finally { releaseFinish?.(); transport.finishGate = null; await delayContext.close(); }
 
   await context.close();
@@ -632,13 +552,9 @@ try {
     const built = await browser.newPage(); await attachRoutes(built, html); await login(built, '/built/');
     assert.match(await built.locator('#privacy-dialog .privacy-copy').first().textContent(), /복습 수행·미루기·제외·보류/);
     await openFeedback(built, deferredFixture.session.scenario);
-    await built.locator('#learning-session').waitFor();
-    assert.match(await built.locator('#review-content').innerText(), /I am waiting for you/);
-    await practice(built, deferredItem.id);
-    assert(await built.locator('[data-practice-expression]').isHidden());
-    await built.locator('.learning-practice [data-action="toggle-expression"]').click();
-    assert(await built.locator('[data-practice-expression]').isVisible());
-    await closePractice(built);
+    await built.locator('#session-feedback-content').waitFor({state:'visible'});
+    assert.match(await built.locator('#session-feedback-content').innerText(),/I am waiting for you/);
+    assert.equal(await built.locator('[data-action="practice"]').count(),0);
     await built.close();
     console.log('PASS: production bundle runs post-call feedback under hashed CSP without JavaScript errors.');
   } finally {

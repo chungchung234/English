@@ -56,14 +56,14 @@ export function createSessionReview({ context, getRows, showSource, onExit, onVi
     const ready = status === 'ready';
     const failed = ['partial', 'failed', 'empty'].includes(status);
     $('session-feedback-open').hidden = !ready;
-    $('session-feedback-open').textContent = sourceReturn ? '피드백으로 돌아가기 →' : '피드백 보기 →';
+    $('session-feedback-open').textContent = sourceReturn ? '학습 노트로 돌아가기 →' : '학습 노트 보기 →';
     $('session-feedback-status').hidden = ready;
     $('session-feedback-status').dataset.state = status;
-    $('session-feedback-status-title').textContent = status === 'finalizing' ? '마지막 대화를 확인하고 있어요' : status === 'pending' ? '피드백 준비 중' : status === 'loading' ? '피드백 상태 확인 중' : status === 'partial' ? '대화 저장 확인이 필요해요' : status === 'empty' ? '피드백으로 살펴볼 내용이 없어요' : '피드백을 준비하지 못했어요';
+    $('session-feedback-status-title').textContent = status === 'finalizing' ? '마지막 대화를 확인하고 있어요' : status === 'pending' ? '학습 노트 준비 중' : status === 'loading' ? '학습 노트 상태 확인 중' : status === 'partial' ? '대화 저장 확인이 필요해요' : status === 'empty' ? '학습 노트에 담을 내용이 없어요' : '학습 노트를 준비하지 못했어요';
     $('session-feedback-status-note').textContent = failed ? (state?.message || '대화 기록은 계속 볼 수 있어요.') : '대화는 먼저 읽을 수 있어요.';
     const retry = $('session-feedback-retry');
     retry.hidden = !state?.retry || state.blocked === true || status === 'pending';
-    retry.textContent = state?.retryLabel || (status === 'partial' ? '저장 상태 확인' : '피드백 다시 준비');
+    retry.textContent = state?.retryLabel || (status === 'partial' ? '저장 상태 확인' : '학습 노트 다시 준비');
     $('session-feedback-unavailable').hidden = ready;
     $('session-feedback-content').hidden = !ready;
     $('session-feedback-page-status').textContent = failed ? state.message : $('session-feedback-status-title').textContent;

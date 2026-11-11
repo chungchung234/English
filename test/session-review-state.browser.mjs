@@ -58,8 +58,8 @@ try {
   await page.evaluate(() => window.reviewFixture.select('a', 'pending'));
   assert.equal(await view(), 'feedback', 'stale feedback refresh does not navigate');
   assert.equal(await page.locator('#session-feedback-content').isVisible(), false, 'old corrections are hidden while replacement feedback is pending');
-  assert.match(await page.locator('#session-feedback-page-status').innerText(), /피드백 준비 중/);
-  await page.evaluate(() => window.reviewFixture.select('a', 'failed', { message: '대화가 바뀌어 피드백을 다시 확인해야 해요.' }));
+  assert.match(await page.locator('#session-feedback-page-status').innerText(), /학습 노트 준비 중/);
+  await page.evaluate(() => window.reviewFixture.select('a', 'failed', { message: '대화가 바뀌어 학습 노트를 다시 확인해야 해요.' }));
   assert.equal(await view(), 'feedback', 'failed refresh does not navigate');
   assert.equal(await page.locator('#session-feedback-content').isVisible(), false);
   assert.match(await page.locator('#session-feedback-page-status').innerText(), /대화가 바뀌어/);
@@ -71,13 +71,13 @@ try {
   // different in-flight retry when the older promise eventually rejects.
   await page.evaluate(() => {
     const f = window.reviewFixture; f.retryA = f.deferred(); f.retryB = f.deferred();
-    f.select('a', 'failed', { message: 'A 피드백을 확인하지 못했어요.', retry: () => { f.retries.a++; return f.retryA.promise; } });
+    f.select('a', 'failed', { message: 'A 학습 노트를 확인하지 못했어요.', retry: () => { f.retries.a++; return f.retryA.promise; } });
   });
   await page.locator('#session-feedback-page-retry').click();
   assert(await page.locator('#session-feedback-page-retry').isDisabled());
   await page.evaluate(() => {
     const f = window.reviewFixture;
-    f.select('b', 'failed', { message: 'B 피드백을 확인하지 못했어요.', retry: () => { f.retries.b++; return f.retryB.promise; } });
+    f.select('b', 'failed', { message: 'B 학습 노트를 확인하지 못했어요.', retry: () => { f.retries.b++; return f.retryB.promise; } });
   });
   assert.equal(await view(), 'transcript', 'a new call starts on its own transcript');
   assert(await page.locator('#session-feedback-retry').isEnabled(), 'A pending retry does not disable B retry');

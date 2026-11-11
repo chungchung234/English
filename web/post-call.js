@@ -22,12 +22,12 @@ function quotaReset() {
 }
 function recovery(error) {
   const code = String(error?.code || '');
-  if (code === 'BUDGET_EXCEEDED' || error?.status === 429) return { message: `오늘 피드백 생성 한도를 사용했어요. ${quotaReset()}부터 다시 만들 수 있어요. 기존 기록과 복습은 계속 볼 수 있어요.`, blocked: true, until: new Date().setUTCHours(24, 0, 0, 0), code: 'quota' };
+  if (code === 'BUDGET_EXCEEDED' || error?.status === 429) return { message: `오늘 학습 노트 생성 한도를 사용했어요. ${quotaReset()}부터 다시 만들 수 있어요. 기존 기록과 복습은 계속 볼 수 있어요.`, blocked: true, until: new Date().setUTCHours(24, 0, 0, 0), code: 'quota' };
   if (['ANALYSIS_TOO_LARGE', 'BODY_TOO_LARGE'].includes(code)) return { message: '이번 기록은 자동 분석 크기 한도를 넘었어요. 원문은 유지됩니다. 다음에는 통화를 짧게 나누어 주세요.', blocked: true, code: 'input_too_large' };
-  if (['UNAUTHENTICATED', 'ACCOUNT_NOT_ALLOWED'].includes(code) || [401, 403].includes(error?.status)) return { message: '같은 계정으로 다시 로그인한 뒤 저장과 피드백 상태를 확인해 주세요.', blocked: true, code: 'auth' };
-  if (code === 'NO_TRANSCRIPT') return { message: '확인된 사용자 발화가 없어 피드백을 만들 수 없어요. 저장된 기록을 확인하거나 다음 대화를 시작해 주세요.', blocked: true, code: 'no_speech' };
-  if (code === 'JOB_IN_PROGRESS') return { message: '서버에서 피드백을 준비하고 있어요. 상태를 확인하거나 홈으로 이동할 수 있어요.', code: 'processing' };
-  if (['CONFIGURATION_REQUIRED', 'UPSTREAM_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(code)) return { message: '현재 피드백 서비스를 확인할 수 없어요. 기존 기록을 볼 수 있으며, 연결이 복구된 뒤 상태를 확인해 주세요.', code: 'service' };
+  if (['UNAUTHENTICATED', 'ACCOUNT_NOT_ALLOWED'].includes(code) || [401, 403].includes(error?.status)) return { message: '같은 계정으로 다시 로그인한 뒤 저장과 학습 노트 상태를 확인해 주세요.', blocked: true, code: 'auth' };
+  if (code === 'NO_TRANSCRIPT') return { message: '확인된 사용자 발화가 없어 학습 노트를 만들 수 없어요. 저장된 기록을 확인하거나 다음 대화를 시작해 주세요.', blocked: true, code: 'no_speech' };
+  if (code === 'JOB_IN_PROGRESS') return { message: '서버에서 학습 노트를 준비하고 있어요. 상태를 확인하거나 홈으로 이동할 수 있어요.', code: 'processing' };
+  if (['CONFIGURATION_REQUIRED', 'UPSTREAM_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(code)) return { message: '현재 학습 노트 서비스를 확인할 수 없어요. 기존 기록을 볼 수 있으며, 연결이 복구된 뒤 상태를 확인해 주세요.', code: 'service' };
   return { message: navigator.onLine === false ? '연결이 끊겼어요. 같은 기기·계정으로 다시 연결한 뒤 상태를 확인해 주세요.' : '요청의 완료 여부를 확인하지 못했어요. 상태를 확인한 뒤 다시 선택해 주세요.', code: 'unconfirmed' };
 }
 
@@ -239,7 +239,7 @@ export function createPostCallFlow(deps) {
         else if (['input_too_large', 'quota'].includes(job.blocked_reason)) {
           const blocked = recovery({ code: job.blocked_reason === 'quota' ? 'BUDGET_EXCEEDED' : 'ANALYSIS_TOO_LARGE' });
           blocked.sourceVersion = job.source_version || null;
-          if (job.blocked_until) { blocked.until = Date.parse(job.blocked_until); blocked.message = `오늘 피드백 생성 한도를 사용했어요. ${date(job.blocked_until)}부터 다시 만들 수 있어요. 기존 기록과 복습은 계속 볼 수 있어요.`; }
+          if (job.blocked_until) { blocked.until = Date.parse(job.blocked_until); blocked.message = `오늘 학습 노트 생성 한도를 사용했어요. ${date(job.blocked_until)}부터 다시 만들 수 있어요. 기존 기록과 복습은 계속 볼 수 있어요.`; }
           errors.set(job.session_id, blocked);
         }
       }
@@ -349,7 +349,7 @@ export function createPostCallFlow(deps) {
     const t = token(), current = itemOf(item.id);
     if (!current) return false;
     if (current.status === 'excluded' && !['restore', 'exclude', 'known', 'hold_wrong_transcript', 'hold_intent'].includes(action)) { notify('최신 상태는 추천 제외예요. 제외 상태를 유지하거나 이전 선택을 취소한 뒤 먼저 제외를 해제해 주세요.'); return false; }
-    if (action === 'prepare_next' && current.has_valid_source === false) { notify('유효한 출처를 확인하지 못해 다음 통화 목표를 준비할 수 없어요. 이전 선택을 취소하거나 새 피드백을 확인해 주세요.'); return false; }
+    if (action === 'prepare_next' && current.has_valid_source === false) { notify('유효한 출처를 확인하지 못해 다음 통화 목표를 준비할 수 없어요. 이전 선택을 취소하거나 새 학습 노트를 확인해 주세요.'); return false; }
     if (!oldRecord && itemPending(item.id).length) { notify('이 표현의 이전 선택을 먼저 서버에서 확인해 주세요.'); return false; }
     const id = uuid();
     const record = { id, kind: 'action', created_at: now(), body: {
@@ -532,7 +532,7 @@ export function createPostCallFlow(deps) {
       }
     } else if (item.status === 'excluded' && !itemPending(item.id).length) {
       actions.append(actionButton('추천 제외 되돌리기', item, 'restore'));
-      if (item.has_valid_source === false) article.append(text('p', '유효한 새 피드백이 확인되기 전에는 자동 추천하지 않아요.', 'help'));
+      if (item.has_valid_source === false) article.append(text('p', '유효한 새 학습 노트가 확인되기 전에는 자동 추천하지 않아요.', 'help'));
     } else article.append(text('p', '품질 보류 또는 제외 반영 대기 중이에요. 현재 기기의 추천과 다음 통화 목표에서 제외됩니다.', 'help'));
     const records = itemPending(item.id);
     if (records.length) article.append(status(records.some(record => record.state === 'conflict') ? '최신 상태가 달라 선택을 보류했어요. 위의 동기화 안내에서 다시 선택해 주세요.' : records.some(record => volatile.has(record.id)) ? '기기 저장을 확인하지 못했어요 · 서버에 반영되지 않았어요' : '기기 보관 확인 · 서버 반영 대기'));
@@ -558,7 +558,7 @@ export function createPostCallFlow(deps) {
     }
     const actions = text('div', '', 'learning-actions takeaway-actions');
     const sourceSession = attribution?.sessionId || item.source_session_id;
-    const start = button(delayed ? '가리고 회상하기' : '대화와 피드백 보기', () => delayed ? startRecall(item.id, start) : sourceSession ? openSession(sourceSession) : undefined, true);
+    const start = button(delayed ? '가리고 회상하기' : '대화와 학습 노트 보기', () => delayed ? startRecall(item.id, start) : sourceSession ? openSession(sourceSession) : undefined, true);
     start.className = 'primary-button'; start.dataset.action = delayed ? 'start-delayed-recall' : 'open-source-feedback';
     start.disabled = itemPending(item.id).length > 0 || snapshotError || !queueReady;
     if (delayed || sourceSession) actions.append(start);
@@ -633,27 +633,27 @@ export function createPostCallFlow(deps) {
     target.replaceChildren(); renderQueue(target);
     if (reviewMode() !== 'hub') return;
     if (snapshotError) {
-      target.append(status('학습 상태를 서버에서 확인하지 못했어요. 저장된 피드백 원문은 볼 수 있으나 최신 추천·저장 상태는 확인이 필요해요.'));
+      target.append(status('학습 상태를 서버에서 확인하지 못했어요. 저장된 학습 노트는 볼 수 있으나 최신 추천·저장 상태는 확인이 필요해요.'));
       target.append(button('학습 상태 다시 확인', () => refreshSnapshot()));
     }
     const unseen = snapshot?.feedback?.filter(job => job.current && !job.exposed_at && sessionFor(job.session_id)) || [];
     const unseenList = document.createElement('details'); unseenList.className='feedback-context'; unseenList.dataset.practiceSurrounding='';
     if (unseen.length) {
-      unseenList.append(text('summary', `아직 안 본 피드백 · ${unseen.length}회`));
+      unseenList.append(text('summary', `아직 안 본 학습 노트 · ${unseen.length}회`));
       for (const job of unseen.slice(0, 3)) {
-        const open = button(`${date(sessionFor(job.session_id)?.ended_at)} 피드백 보기`, () => openSession(job.session_id));
+        const open = button(`${date(sessionFor(job.session_id)?.ended_at)} 학습 노트 보기`, () => openSession(job.session_id));
         open.dataset.sessionId = job.session_id; unseenList.append(open);
       }
     }
     if (!snapshot) return;
     const recommended = enhancements.recommendedIds(snapshot.recommended_item_ids || []).slice(0, (snapshot.recommended_item_ids || []).length).map(itemOf).filter(canRecommend);
     if (recommended[0]) { const next = takeawayCard(recommended[0]); next.dataset.practiceSurrounding = ''; target.append(next); }
-    else if (!unseen.length) { const empty = text('p', sessions.length ? '남겨둔 표현이 없어요. 다음 통화에서 이어가요.' : '통화를 마치면 대화 기록과 피드백을 볼 수 있어요.', 'empty-state'); empty.dataset.practiceSurrounding = ''; target.append(empty); }
+    else if (!unseen.length) { const empty = text('p', sessions.length ? '남겨둔 표현이 없어요. 다음 통화에서 이어가요.' : '통화를 마치면 대화 기록과 학습 노트를 볼 수 있어요.', 'empty-state'); empty.dataset.practiceSurrounding = ''; target.append(empty); }
     if (unseen.length) { if (!recommended.length) unseenList.open=true; target.append(unseenList); }
     const collection=document.createElement('details');collection.className='feedback-context';collection.dataset.practiceSurrounding='';collection.append(text('summary','복습 보관함'));target.append(collection);
     const content=document.createElement('div');collection.append(content);
     const heading = text('h4', '오늘 추천 표현'); content.append(heading);
-    if (!recommended.length) content.append(text('p', '지금 권할 표현이 없어요. 보관함에서 지난 피드백을 볼 수 있어요.', 'help'));
+    if (!recommended.length) content.append(text('p', '지금 권할 표현이 없어요. 보관함에서 지난 학습 노트를 볼 수 있어요.', 'help'));
     for (const item of recommended.slice(1, 3)) {
       const reason = enhancements.reason(item);
       if (reason) content.append(text('p', `추천 이유: ${reason}`, 'help'));
@@ -665,13 +665,13 @@ export function createPostCallFlow(deps) {
       if (same(t)) await refreshSnapshot(t);
     }); more.dataset.action = 'recommend-more'; more.disabled = snapshotError || !queueReady;
     content.append(more);
-    const library = document.createElement('details'); library.append(text('summary', '지난 피드백·표현 보관함'));
+    const library = document.createElement('details'); library.append(text('summary', '지난 학습 노트·표현 보관함'));
     let built = false;
     library.addEventListener('toggle', () => {
       if (!library.open || built) return; built = true;
       for (const session of sessions) {
         if (!analysisFor(session.id)) continue;
-        library.append(button(`${date(session.ended_at)} 피드백`, () => openSession(session.id)));
+        library.append(button(`${date(session.ended_at)} 학습 노트`, () => openSession(session.id)));
       }
       for (const item of snapshot.items) library.append(itemCard(item));
       if (!snapshot.items.length) library.append(text('p', '보관된 표현이 아직 없어요.', 'help'));
@@ -702,7 +702,7 @@ export function createPostCallFlow(deps) {
     }); target.append(details);
   }
   function renderFullFeedback(target, analysis) {
-    const details = document.createElement('details'); details.append(text('summary', '전체 피드백 보기'));
+    const details = document.createElement('details'); details.append(text('summary', '학습 노트 전체 보기'));
     let built = false;
     details.addEventListener('toggle', () => {
       if (!details.open || built) return; built = true;
@@ -751,8 +751,8 @@ export function createPostCallFlow(deps) {
     };
     if(snapshotError) {
       const retry=()=>refreshSnapshot();
-      const detail='피드백의 최신 상태를 확인하지 못했어요. 대화 원문은 계속 볼 수 있어요.';
-      const box=showState(detail,'unavailable'); box.append(button('피드백 상태 다시 확인',retry));
+      const detail='학습 노트의 최신 상태를 확인하지 못했어요. 대화 원문은 계속 볼 수 있어요.';
+      const box=showState(detail,'unavailable'); box.append(button('학습 노트 상태 다시 확인',retry));
       emit({status:'failed',message:detail,retry,retryLabel:'상태 다시 확인'});return;
     }
     if(session && session.status!=='ended') {
@@ -777,28 +777,28 @@ export function createPostCallFlow(deps) {
       // Historical corrections retain source-specific exclusion, enrollment and
       // quality controls. Reading feedback itself never records practice/defer.
       if(sourceItems.length) {
-        const management=document.createElement('details');management.className='feedback-context feedback-management';management.append(text('summary','피드백 관리'));
+        const management=document.createElement('details');management.className='feedback-context feedback-management';management.append(text('summary','학습 노트 관리'));
         for(const item of sourceItems) management.append(itemCard(item,{sessionId:id,analysisId:analysis.id},item.status==='candidate'||!item.enrolled));
         target.append(management);
       }
       if(session?.record_incomplete||job?.record_incomplete) target.append(status('수신된 기록으로 마무리한 통화예요. 누락된 음성은 포함되지 않아요.'));
-      emit({status:'ready',message:'피드백이 준비됐어요.',analysis:displayAnalysis,excludedExpressions});
+      emit({status:'ready',message:'학습 노트가 준비됐어요.',analysis:displayAnalysis,excludedExpressions});
       return;
     }
     if(job?.has_user_speech===false || error?.code==='no_speech') {
-      const message='확인된 내 발화가 없어 피드백을 만들지 않았어요.';
+      const message='확인된 내 발화가 없어 학습 노트를 만들지 않았어요.';
       emit({status:'empty',message});return;
     }
     if(running(job)||requests.has(id)||startingReviews.has(id)) {
-      emit({status:'pending',message:'피드백 준비 중',retry:async()=>{const t=token();await refreshSnapshot(t);if(same(t))await deps.refresh();},retryLabel:'상태 확인'});return;
+      emit({status:'pending',message:'학습 노트 준비 중',retry:async()=>{const t=token();await refreshSnapshot(t);if(same(t))await deps.refresh();},retryLabel:'상태 확인'});return;
     }
-    if(!snapshot||!session) {emit({status:'loading',message:'피드백 상태를 확인하고 있어요.'});return;}
+    if(!snapshot||!session) {emit({status:'loading',message:'학습 노트 상태를 확인하고 있어요.'});return;}
     const blocked=Boolean(error?.blocked&&(!error.until||Date.now()<error.until));
-    const message=error?.message || (analysis?'대화 기록이 바뀌었어요. 최신 피드백을 다시 준비해 주세요.':'대화는 저장됐어요. 피드백을 준비할 수 있어요.');
+    const message=error?.message || (analysis?'대화 기록이 바뀌었어요. 최신 학습 노트를 다시 준비해 주세요.':'대화는 저장됐어요. 학습 노트를 준비할 수 있어요.');
     const retry=()=>requestReview(id);
     const box=showState(message,error?'failed':analysis?'stale':'pending');
-    const request=button(error||analysis?'피드백 다시 준비':'피드백 준비하기',retry,true);request.dataset.action='request-feedback';request.disabled=blocked;box.append(request);
-    emit({status:error||analysis?'failed':'loading',message,retry:blocked?undefined:retry,retryLabel:error||analysis?'피드백 다시 준비':'피드백 준비하기',blocked});
+    const request=button(error||analysis?'학습 노트 다시 준비':'학습 노트 준비하기',retry,true);request.dataset.action='request-feedback';request.disabled=blocked;box.append(request);
+    emit({status:error||analysis?'failed':'loading',message,retry:blocked?undefined:retry,retryLabel:error||analysis?'학습 노트 다시 준비':'학습 노트 준비하기',blocked});
   }
 
   function feedbackViewed(node) {
@@ -819,7 +819,7 @@ export function createPostCallFlow(deps) {
     const unseen=snapshot?.feedback?.find(job=>job.current&&!job.exposed_at&&sessionFor(job.session_id));
     const recommended=enhancements.recommendedIds(snapshot?.recommended_item_ids||[]).slice(0,(snapshot?.recommended_item_ids||[]).length).map(itemOf).find(canRecommend);
     home.hidden=!unseen&&!recommended;home.disabled=snapshotError;
-    home.textContent=unseen?ctx().name+'의 새 피드백 · 지난 통화 피드백이 준비됐어요':recommended?'남겨둔 복습 · '+(enhancements.isDue(recommended.id)?'예약한 표현 가리고 회상':recommended.expression):'';
+    home.textContent=unseen?ctx().name+'와의 통화 · 새 학습 노트':recommended?'남겨둔 복습 · '+(enhancements.isDue(recommended.id)?'예약한 표현 가리고 회상':recommended.expression):'';
     home.onclick=openPreview;
   }
   function render() {
@@ -879,7 +879,7 @@ export function createPostCallFlow(deps) {
   }
   async function openSession(id) {
     if (!ensureIdentity() || !sessionFor(id)) return;
-    if (busy()) { notify('현재 통화를 마친 뒤 피드백을 확인해 주세요.'); return; }
+    if (busy()) { notify('현재 통화를 마친 뒤 학습 노트를 확인해 주세요.'); return; }
     if (activePractice) closePractice();
     deps.setReviewMode?.('session'); selected=id;panelOpen=true;await deps.openSession(id,analysisFor(id));render();
   }
@@ -903,22 +903,22 @@ export function createPostCallFlow(deps) {
     const job = feedback(id);
     if (job?.current) { errors.delete(id); persistBlockers(); if (!analysisFor(id)) await deps.refresh(); return; }
     if (job?.has_user_speech === false || running(job)) return;
-    requests.add(id); errors.delete(id); render(); callStatus('통화는 서버에 저장됐어요 · 피드백 준비 중');
+    requests.add(id); errors.delete(id); render(); callStatus('통화는 서버에 저장됐어요 · 학습 노트 준비 중');
     try {
       const result=await deps.edge('review', { sessionId: id });
       if (!same(t)) return;
       const analysis=result?.analysis;
-      if(!analysis?.id||analysis.session_id!==id||!analysis.content||analysis.content.scope?.companionId&&analysis.content.scope.companionId!==t.companion)throw Error('이번 통화의 피드백 저장 결과를 확인하지 못했어요.');
+      if(!analysis?.id||analysis.session_id!==id||!analysis.content||analysis.content.scope?.companionId&&analysis.content.scope.companionId!==t.companion)throw Error('이번 통화의 학습 노트 저장 결과를 확인하지 못했어요.');
       // The committed review response is independent of a later history fetch.
       // Keep it available even when the history endpoint is temporarily down.
       const accepted={...analysis,companion_id:t.companion};
       analyses=[accepted,...analyses.filter(row=>row.id!==accepted.id)];errors.delete(id);persistBlockers();
-      try{deps.onAnalysis?.(accepted);}catch{notify('피드백은 서버에 저장됐어요. 화면을 새로고침해 주세요.');}
+      try{deps.onAnalysis?.(accepted);}catch{notify('학습 노트는 서버에 저장됐어요. 화면을 새로고침해 주세요.');}
       await refreshSnapshot(t);
       if (!same(t)) return;
-      callStatus('통화와 피드백 서버 저장 확인');
-      try{await deps.refresh();}catch{if(same(t))notify('통화와 피드백은 서버에 저장됐어요. 최근 통화 목록을 새로고침해 주세요.');}
-      if(same(t))callStatus('통화와 피드백 서버 저장 확인');
+      callStatus('통화와 학습 노트 서버 저장 확인');
+      try{await deps.refresh();}catch{if(same(t))notify('통화와 학습 노트는 서버에 저장됐어요. 최근 통화 목록을 새로고침해 주세요.');}
+      if(same(t))callStatus('통화와 학습 노트 서버 저장 확인');
     } catch (error) {
       if (!same(t)) return;
       const state = recovery(error); state.sourceVersion = feedback(id)?.source_version || null; errors.set(id, state); persistBlockers();
@@ -926,7 +926,7 @@ export function createPostCallFlow(deps) {
       await event('flow_failure', { sessionId: id }, { stage: 'analysis', reason: ({ quota: 'quota', input_too_large: 'input_too_large', auth: 'auth', no_speech: 'unknown', processing: 'unknown', service: 'network', unconfirmed: 'network' })[state.code] || 'unknown', status: 'failure' }, t);
       if (!same(t)) return;
       await refreshSnapshot(t);
-      if (same(t)) { if (selected !== id || !panelOpen || reviewMode() !== 'session') notify(state.message); callStatus('통화 저장 확인 · 피드백 완료 여부 확인 필요'); }
+      if (same(t)) { if (selected !== id || !panelOpen || reviewMode() !== 'session') notify(state.message); callStatus('통화 저장 확인 · 학습 노트 완료 여부 확인 필요'); }
     } finally {
       if (same(t)) { requests.delete(id); render(); schedulePoll(); }
     }
@@ -995,7 +995,7 @@ export function createPostCallFlow(deps) {
     const analysis=attribution?.sessionId?analyses.find(row=>row.id===attribution.analysisId):null;
     const item=canonical&&analysis?sourceProjection(canonical,analysis):canonical;
     if (!item || suppressed(item) || itemPending(id).length || !item.enrolled || item.status==='candidate') return;
-    if (attribution?.analysisId && item.sources && !item.sources.some(source => source.analysis_id === attribution.analysisId && source.session_id === attribution.sessionId && source.valid)) { notify('이 출처는 현재 연습 추천에서 보류됐어요. 유효한 새 피드백을 확인해 주세요.'); return; }
+    if (attribution?.analysisId && item.sources && !item.sources.some(source => source.analysis_id === attribution.analysisId && source.session_id === attribution.sessionId && source.valid)) { notify('이 출처는 현재 연습 추천에서 보류됐어요. 유효한 새 학습 노트를 확인해 주세요.'); return; }
     pendingFocusRestore=null;
     const t = token(), attemptId = uuid();
     // Attribution is fixed at the explicit click. A merged item is never counted

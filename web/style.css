@@ -490,3 +490,4 @@ body[data-session-review=transcript] .glass-dock,body[data-session-review=feedba
 .session-feedback{overflow-anchor:none}
 .feedback-source-excerpt{display:block;margin:0 0 5px;font-size:.75rem;color:var(--secondary)}
 .session-review-header h1,#session-feedback-title,.session-feedback-card h2{word-break:keep-all;overflow-wrap:anywhere}
+#session-feedback-open{word-break:keep-all;overflow-wrap:anywhere}

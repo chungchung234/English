@@ -298,7 +298,7 @@ try {
   await transcript.getByText(turns[1][1], { exact: true }).waitFor({ state: 'visible' });
   assert.equal((await query('select status from public.sessions where id=$1', [first])).rows[0].status, 'active', 'received transcript opens before the server finish response');
   assert.equal(transport.calls.filter(row => row.path.endsWith('/coach/review') && row.body.sessionId === first).length, 0, 'unfinished storage never starts feedback');
-  assert.doesNotMatch(await page.locator('#session-review-footer').innerText(), /피드백 준비 중/, 'final ASR/save verification is not mislabeled as generation');
+  assert.doesNotMatch(await page.locator('#session-review-footer').innerText(), /학습 노트 준비 중/, 'final ASR/save verification is not mislabeled as generation');
   assert.equal(await page.locator('#learning-queue [data-session-id]:visible').count(), 0, 'older reports do not compete with this call');
   await assertLayout(page); await capture(page, '01-received-before-save-390');
   await page.evaluate(() => scrollTo({ top: 420, behavior: 'instant' }));
@@ -397,8 +397,8 @@ try {
 
   const empty = await start(); await page.locator('#end-call').click();
   await page.locator('#review-panel').waitFor({ state: 'visible' });
-  await page.locator('#session-review-footer').getByText(/발화.*없|말.*없|피드백.*내용.*없/).first().waitFor();
-  assert.doesNotMatch(await page.locator('#session-review-footer').innerText(), /피드백.*준비 중/);
+  await page.locator('#session-review-footer').getByText(/발화.*없|말.*없|학습 노트.*내용.*없/).first().waitFor();
+  assert.doesNotMatch(await page.locator('#session-review-footer').innerText(), /학습 노트.*준비 중/);
   assert.equal(transport.calls.filter(row => row.path.endsWith('/coach/review') && row.body.sessionId === empty).length, 0);
   await capture(page, '10-no-user-speech-390');
 
@@ -408,7 +408,7 @@ try {
   await page.locator('#session-feedback-retry').waitFor({ state: 'visible' });
   assert.equal((await query('select status from public.sessions where id=$1', [failed])).rows[0].status, 'ended', 'feedback outage cannot undo saved call');
   assert(await transcript.isVisible(), 'feedback failure leaves original conversation readable');
-  assert.doesNotMatch(await page.locator('#session-review-footer').innerText(), /피드백.*준비 중/);
+  assert.doesNotMatch(await page.locator('#session-review-footer').innerText(), /학습 노트.*준비 중/);
   await capture(page, '11-feedback-recovery-390');
   failAnalysis = false; await page.locator('#session-feedback-retry').click(); await page.locator('#session-feedback-open').waitFor({ state: 'visible' });
   assert.equal((await query('select count(*)::int as n from public.analyses where session_id=$1', [failed])).rows[0].n, 1, 'retry yields one stored feedback');

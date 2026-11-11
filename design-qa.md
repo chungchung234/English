@@ -147,3 +147,10 @@ P3: 플랫폼에 따른 글자 두께와 웹 글래스의 광학적 차이는 �
 실제 승인 계정 음성 연결과 iOS Safari 실기기,실사용자 관찰은 이번 검증 범위 밖이다. 사람의 학습 효과나 교정 품질을 통과했다고 주장하지 않는다. 별도의 잔여 디자인 수정은 없다.
 
 final result: passed
+
+
+## 학습 노트 명칭 적용 · 2026-11-11
+
+사용자가 선택한 `학습 노트`를 제목/진입/준비/오류/복귀/보관함에 적용했다. 기존 레이아웃과 정보 구조를 유지하며 제목은 더 짧게 정리했다. [실제 390px 화면](docs/design/learning-note-copy-20261111/note-390.png), [320px·200% 큰 글자](docs/design/learning-note-copy-20261111/note-320-large.png), [긴 복귀 버튼](docs/design/learning-note-copy-20261111/source-return-320-large.png)을 열어 확인했다. 큰 글자에서 복귀 버튼의 ‘돌아가기’가 중간에서 나뉘는 문제를 단어 줄바꿈으로 수정하고 같은 조건으로 재캡처했다. [측정값](docs/design/learning-note-copy-20261111/long-copy-check.json): 276px 버튼 폭, 320×568 CSS px, 200% 글자, deviceScaleFactor1, 잘림/넘침/페이지 오류 없음. 기존 상태·통화 후 수용 검증 통과. 남은 P0/P1/P2 없음.
+
+final result: passed

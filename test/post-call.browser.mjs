@@ -377,7 +377,7 @@ try {
   };
   await refresh(page); await openFeedback(page, quota.session.scenario);
   await page.locator('#session-feedback-retry').click();
-  await page.locator('#session-feedback-status-note').filter({hasText:/오늘 피드백 생성 한도를/}).waitFor();
+  await page.locator('#session-feedback-status-note').filter({hasText:/오늘 학습 노트 생성 한도를/}).waitFor();
   assert.match(await page.locator('#review-panel').innerText(), /09:00|오전 9:00/);
   assert(await page.locator('#session-feedback-retry').isHidden());
   assert(!await page.locator('body').innerText().then(text => text.includes('RAW_UPSTREAM_DEBUG_SECRET')));

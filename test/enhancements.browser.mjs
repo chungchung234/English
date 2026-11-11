@@ -97,7 +97,7 @@ async function fixture(label, expression, { companion = 'alex', user = uid, orig
   await query("insert into public.sessions(id,user_id,scenario,companion_id,status,created_at,ended_at) values($1,$2,$3,$4,'ended',$5,$5)", [sessionId, user, label, companion, endedAt]);
   await query("insert into public.transcript_events(id,user_id,session_id,event_key,speaker,text) values($1,$2,$3,$4,'user',$5)", [eventId, user, sessionId, eventId, original]);
   let analysisId;
-  const content = { summary: '확인된 녹취에 연결된 로컬 검증 피드백입니다.', strengths: [], corrections: [{ original, improved: expression, reason: '과거 경험을 설명하는 표현입니다.', category: 'error', evidence_ids: [eventId] }], next_scenario: 'Discuss yesterday with a friend' };
+  const content = { summary: '확인된 녹취에 연결된 로컬 검증 학습 노트입니다.', strengths: [], corrections: [{ original, improved: expression, reason: '과거 경험을 설명하는 표현입니다.', category: 'error', evidence_ids: [eventId] }], next_scenario: 'Discuss yesterday with a friend' };
   if (analysis) {
     analysisId = randomUUID();
     await query("insert into public.analyses(id,user_id,session_id,kind,content,model,source_event_ids) values($1,$2,$3,'session',$4::jsonb,'explicit-local-fixture',$5::uuid[])", [analysisId, user, sessionId, JSON.stringify(content), [eventId]]);

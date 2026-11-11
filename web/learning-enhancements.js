@@ -49,7 +49,7 @@ export function createLearningEnhancements(host) {
     if (review) {
       section.dataset.reviewId = review.id;
       section.append(text('small', '내가 추가한 의도 설명'), text('p', review.explanation));
-      if (review.source_current === false) section.append(status('원래 발화나 피드백이 바뀌어 지금은 재검토를 계속할 수 없어요. 최신 피드백을 확인해 주세요. 보충 설명은 보관돼요.'));
+      if (review.source_current === false) section.append(status('원래 발화나 학습 노트가 바뀌어 지금은 재검토를 계속할 수 없어요. 최신 학습 노트를 확인해 주세요. 보충 설명은 보관돼요.'));
       else if (review.status === 'pending') {
         section.append(status('의도 설명 서버 저장 확인 · 재검토 제안은 아직 확인되지 않았어요.'));
         const reconsider = button(requests.has(review.id) ? '재검토 준비 중…' : '이 설명으로 재검토', async () => {
@@ -75,7 +75,7 @@ export function createLearningEnhancements(host) {
         if (!value) { host.notify('말하려던 뜻을 짧게 적어 주세요.'); explanation.control.focus(); return; }
         await act('learning_review_submit', item, { p_item_id: item.id, p_expected_revision: item.revision, p_source_analysis_id: source, p_explanation: value });
       }); save.dataset.action = 'submit-intent'; save.disabled = pending(item) || !source;
-      if (!source) section.append(text('p', '현재 유효한 원본 피드백을 확인한 뒤 의도 설명을 보낼 수 있어요.', 'help'));
+      if (!source) section.append(text('p', '현재 유효한 원본 학습 노트를 확인한 뒤 의도 설명을 보낼 수 있어요.', 'help'));
       section.append(explanation.field, save);
     }
     article.append(section);

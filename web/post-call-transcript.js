@@ -81,13 +81,13 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
       : state.loading ? '서버 대화문과 이 기기의 전송 대기 기록을 확인하고 있어요.'
       : state.error ? '대화문 전체의 저장 상태를 확인하지 못했어요. 확인된 발화만 표시하며, 기기·서버 기록은 다시 확인해 주세요.'
       : pending ? `${pending}개 발화의 서버 반영 대기 · 기기 보관 여부는 아래 기록에 표시돼요.`
-      : rows.length ? '대화문 서버 저장 확인 · 피드백은 별도로 준비돼요.'
+      : rows.length ? '대화문 서버 저장 확인 · 학습 노트는 별도로 준비돼요.'
       : '서버에서 확인된 발화가 없어요. 수신되지 않은 음성은 기록에 포함되지 않아요.';
     if (phase === 'saved' && incomplete) message = '수신된 기록으로 마무리한 통화예요. 누락된 음성은 포함되지 않아요.';
     updateText(host.querySelector('[data-transcript-storage-detail]'), message);
     const measurement = host.querySelector('[data-call-save-duration]');
     measurement.hidden = !(phase === 'saved' && Number.isFinite(current?.saveDurationMs) && current.saveDurationMs >= 0);
-    if (!measurement.hidden) updateText(measurement, `통화 종료부터 저장 확인까지 ${(current.saveDurationMs / 1000).toFixed(1)}초 · 피드백 준비 시간은 별도예요.`);
+    if (!measurement.hidden) updateText(measurement, `통화 종료부터 저장 확인까지 ${(current.saveDurationMs / 1000).toFixed(1)}초 · 학습 노트 준비 시간은 별도예요.`);
     host.querySelector('.transcript-recovery').hidden = !(state.error || phase === 'partial');
     const events = host.querySelector('[data-transcript-events]'), stamps = host.querySelector('[data-transcript-record-times]');
     const blocks = new Map([...events.querySelectorAll('[data-transcript-key]')].map(node => [node.dataset.transcriptKey, node]));

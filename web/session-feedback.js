@@ -103,7 +103,7 @@ export function renderSessionFeedback(target, analysis, { getRows = () => [], on
     }
     root.append(details);
   }
-  if (!root.childElementCount) root.append(text('p', '이번 기록에서 구체적으로 안내할 피드백은 없어요. 대화 원문은 그대로 볼 수 있어요.', 'help'));
+  if (!root.childElementCount) root.append(text('p', '이번 기록에서 학습 노트로 정리할 내용은 없어요. 대화 원문은 그대로 볼 수 있어요.', 'help'));
   // Exposure observes a real, visible first card, not an off-screen whole page.
   if (!root.querySelector('[data-feedback-core]')) root.firstElementChild.dataset.feedbackCore = '';
   target.replaceChildren(root); return root;

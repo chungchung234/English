@@ -205,7 +205,8 @@ async function main() {
       pass(`${profile.name}: actual WebRTC connected, provider confirmed ${profile.voice}, and both speech transcripts reached the app.`);
       stage = `${profile.name}: automatic transcript and feedback save`;
       await page.locator('#end-call').click();
-      await page.waitForFunction(() => document.querySelector('#call-status')?.textContent === '통화와 피드백 서버 저장 확인', {}, { timeout: 120_000 });
+      await page.waitForFunction(() => document.querySelector('#call-status')?.textContent === '통화와 학습 노트 서버 저장 확인', {}, { timeout: 120_000 });
+      await page.locator('#session-feedback-open').click();
       await page.locator('#review-panel[data-mode="session"] [data-feedback-core]').first().waitFor({ state: 'visible' });
       await page.screenshot({ path: `test-results/live-${profile.id}-review.png`, fullPage: true });
       pass(`${profile.name}: call ended and automatic cloud transcript plus feedback save completed.`);

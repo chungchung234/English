@@ -294,6 +294,10 @@ try {
     ['user', 'It opens early so we could eat breakfast before the park gets crowded.']
   ];
   for (let i = 0; i < turns.length; i++) await emit(...turns[i], `first-${i}`);
+  // The provider has committed final audio but has not delivered its text yet.
+  // Keep that receipt pending instead of relying on screenshots finishing inside
+  // the uncommitted-audio grace period before injecting the delayed ASR result.
+  await page.evaluate(() => window.testPeer.channel.onmessage({ data: JSON.stringify({ type: 'input_audio_buffer.committed', item_id: 'first-final' }) }));
   await page.locator('#end-call').click();
   await page.locator('#review-panel[data-session-view="transcript"]').waitFor({ state: 'visible' });
   await transcript.getByText(turns[1][1], { exact: true }).waitFor({ state: 'visible' });
@@ -306,6 +310,7 @@ try {
   const beforeSave = await stableScroll(page);
   // A late final utterance updates the received source without moving earlier turns.
   await emit('user', 'I will invite Mina next Saturday.', 'first-final');
+  await waitUntil(async () => (await query('select count(*)::integer count from public.transcript_events where session_id=$1 and text=$2', [first, 'I will invite Mina next Saturday.'])).rows[0].count === 1, 'committed final speech is durably stored before the finish acknowledgement');
   assert(Math.abs(await stableScroll(page) - beforeSave) <= 2, 'late final transcript preserves the reading position');
   finishGate.resolve(); transport.finishGate = null;
   await waitUntil(() => transport.calls.some(row => row.path.endsWith('/coach/review') && row.body.sessionId === first), 'analysis starts after confirmed call save');
@@ -369,6 +374,7 @@ try {
   await page.locator('[data-view="review"]').click();
   assert.equal(await page.locator('#review-panel').getAttribute('data-mode'), 'hub', 'generic revisit opens the review hub');
   await openCallFeedback(page, first); await page.locator('#session-feedback-open').waitFor({ state: 'visible' });
+  await transcript.getByText('I will invite Mina next Saturday.', { exact: true }).waitFor({ state: 'visible' });
   assert.match(await transcript.innerText(), /I will invite Mina next Saturday/);
   // Excluded expressions remain in the historical transcript, but disappear from
   // current feedback suggestions after a fresh owned snapshot.

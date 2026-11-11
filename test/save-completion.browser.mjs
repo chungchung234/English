@@ -52,6 +52,7 @@ async function harness() {
       else if (url.pathname.endsWith('/rpc/learning_snapshot')) data = { items: [], recommended_item_ids: [], next_plan: null, feedback: state.sessions.map(s => { const analysis = state.analyses.find(row => row.session_id === s.id); return { session_id: s.id, current: Boolean(analysis), analysis_id: analysis?.id, job_state: analysis ? 'completed' : 'not_requested', has_user_speech: [...state.events.values()].some(e => e.session_id === s.id && e.speaker === 'user') }; }) };
       else if (url.pathname.endsWith('/rpc/learning_enhancement_snapshot')) data = { reviews: [], schedules: [], recalls: [], usage: [], weekly_goals: [], imports: [], personalized_item_ids: [], recommendation_reasons: {} };
       else if (url.pathname.endsWith('/rpc/learning_record_event')) data = { saved: true };
+      else if (url.pathname.endsWith('/rpc/record_call_diagnostics')) data = { event_ids: body.p_events.map(event => event.event_id), dropped_event_ids: [] };
       else if (url.pathname.endsWith('/rpc/append_events')) { const held = state.appendGate; if (held) { held.started.resolve(); await held.release.promise; } for (const event of body.p_events) state.events.set(event.id, { ...event, session_id: body.p_session_id, timestamp: event.occurred_at }); data = { inserted: body.p_events.length, event_ids: body.p_events.map(e => e.id) }; }
       else if (url.pathname.endsWith('/rpc/finish_session')) {
         state.finishCalls++; const held = state.finishGate; if (held) { held.started.resolve(); await held.release.promise; }

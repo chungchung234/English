@@ -82,6 +82,7 @@ try {
           feedback: sessions.filter(session => session.companion_id === body.p_companion_id).map(session => ({ session_id: session.id, current: false, job_state: 'not_requested', has_user_speech: [...saved.values()].some(row => row.sessionId === session.id && row.event.speaker === 'user') })) };
       } else if (url.pathname.endsWith('/rpc/learning_enhancement_snapshot')) data = emptyEnhancements;
       else if (url.pathname.endsWith('/rpc/learning_record_event')) data = { saved: true };
+      else if (url.pathname.endsWith('/rpc/record_call_diagnostics')) data = { event_ids: body.p_events.map(event => event.event_id), dropped_event_ids: [] };
       else if (url.pathname.endsWith('/rpc/learning_plan')) data = { scenario: null };
       else if (url.pathname === '/rest/v1/sessions') {
         if (request.method() === 'POST') { const session = { ...body, status: 'active', created_at: new Date().toISOString() }; sessions.unshift(session); data = [session]; }

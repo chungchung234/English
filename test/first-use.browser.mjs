@@ -89,6 +89,7 @@ try {
       else if (url.pathname.endsWith('/rpc/learning_snapshot')) data = { items: [], recommended_item_ids: [], next_plan: null, feedback: sessions.map(s => ({ session_id: s.id, current: Boolean(auditAnalysis), job_state: auditAnalysis?'succeeded':'not_requested', has_user_speech: [...saved.values()].some(e => e.session_id === s.id && e.speaker === 'user') })) };
       else if (url.pathname.endsWith('/rpc/learning_enhancement_snapshot')) data = { reviews: [], schedules: [], recalls: [], usage: [], weekly_goals: [], imports: [], personalized_item_ids: [], recommendation_reasons: {} };
       else if (url.pathname.endsWith('/rpc/learning_record_event')) data = { saved: true };
+      else if (url.pathname.endsWith('/rpc/record_call_diagnostics')) data = { event_ids: body.p_events.map(event => event.event_id), dropped_event_ids: [] };
       else if (url.pathname.endsWith('/rpc/append_events')) {
         const gate = appendGate; if (gate) { gate.started.resolve(); await gate.release.promise; }
         for (const event of body.p_events) saved.set(event.id, { ...event, session_id: body.p_session_id, timestamp: event.occurred_at });

@@ -21,7 +21,7 @@ try{
  await testEmailLogin(browser,base);
  await testTabUI(browser,base);
  const context=await browser.newContext({permissions:['microphone']});
- const page=await context.newPage();let offline=true;const saved=new Map();const savedSession=new Map();let holdReview=false,releaseReview;let reviews=0,checkpoints=0,checkpointFail=false,historyFailure=false,voiceFailure=false;const finishes=new Map();
+ const page=await context.newPage();let offline=true;const saved=new Map();const savedSession=new Map();const diagnostics=new Map();let holdReview=false,releaseReview;let reviews=0,checkpoints=0,checkpointFail=false,historyFailure=false,voiceFailure=false;const finishes=new Map();
  const openContact=async id=>{if(await page.locator('#session-review-exit').isVisible())await page.locator('#session-review-exit').click();await page.locator('[data-view="contacts"]').click();await page.locator(`[data-companion="${id}"]`).click();await page.locator(`[data-companion="${id}"][aria-pressed="true"]`).waitFor({state:'visible'});await page.waitForFunction(id=>document.querySelector('#orb').dataset.profile===id&&document.querySelector('#orb').dataset.ready==='true',id);await page.locator('#companion-selector').evaluate(node=>Promise.all(node.getAnimations({subtree:true}).map(animation=>animation.finished)));};
  const memoryAction=action=>page.waitForResponse(response=>response.url().endsWith('/coach/memory-manage')&&response.request().postDataJSON()?.action===action);
  const artRequests=[];page.on('request',request=>{if(/assets\/ai-.*\.webp/.test(request.url()))artRequests.push(request.url());});
@@ -39,7 +39,8 @@ try{
   else if(url.pathname.endsWith('/rpc/append_events')){
    if(offline)return route.fulfill({status:503,json:{message:'temporary offline'}});
    for(const e of body.p_events){const old=saved.get(e.id);if(old)assert.deepEqual(old,e);saved.set(e.id,e);savedSession.set(e.id,body.p_session_id);}data={inserted:body.p_events.length,event_ids:body.p_events.map(e=>e.id)};
-  }else if(url.pathname.endsWith('/rpc/finish_session')){finishes.set(body.p_session_id,(finishes.get(body.p_session_id)||0)+1);data=sessions.find(x=>x.id===body.p_session_id);data.status='ended';data.ended_at=new Date().toISOString();}
+  }else if(url.pathname.endsWith('/rpc/record_call_diagnostics')){for(const event of body.p_events)diagnostics.set(event.event_id,event);data={event_ids:body.p_events.map(event=>event.event_id)};}
+  else if(url.pathname.endsWith('/rpc/finish_session')){finishes.set(body.p_session_id,(finishes.get(body.p_session_id)||0)+1);data=sessions.find(x=>x.id===body.p_session_id);data.status='ended';data.ended_at=new Date().toISOString();}
   else if(url.pathname==='/rest/v1/sessions'){
    if(route.request().method()==='POST'){data=[{...body,status:'active',created_at:new Date().toISOString()}];sessions.unshift(data[0]);}else {if(historyFailure&&url.searchParams.get('select')==='*'){historyFailure=false;return route.fulfill({status:503,json:{message:'History fixture unavailable'}});}const companion=url.searchParams.get('companion_id')?.replace('eq.','');data=companion?sessions.filter(s=>s.companion_id===companion):sessions;}
   }else if(url.pathname==='/rest/v1/analyses')data=analyses;
@@ -189,7 +190,13 @@ try{
   window.RTCPeerConnection=class{
    constructor(){window.testPeer=this;window.testPeers.push(this);this.connectionState='new';}
    addTrack(track){this.track=track;}
-   createDataChannel(){return this.dc={readyState:'open',send:raw=>{const message=JSON.parse(raw);(window.testMessages ||= []).push(message);if(message.session?.audio?.output?.speed!==undefined){const failed=window.failNextSpeed;window.failNextSpeed=false;setTimeout(()=>this.dc.onmessage({data:JSON.stringify(failed?{type:'error',error:{event_id:message.event_id,code:'speed_update_failed',message:'fixture'}}:{type:'session.updated',session:{audio:{output:{speed:message.session.audio.output.speed}}}})}),10);}if(message.type==='session.update'&&message.session.instructions)setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'session.updated',session:{instructions:message.session.instructions}})}),10);if(message.type==='input_audio_buffer.commit'){this.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.committed',item_id:'last-item'})});setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'last-item',transcript:'One last thing before we end.'})}),30);}}};}
+   createDataChannel(){return this.dc={readyState:'open',send:raw=>{
+    const message=JSON.parse(raw);(window.testMessages ||= []).push(message);
+    if(message.session?.audio?.output?.speed!==undefined){const failed=window.failNextSpeed;window.failNextSpeed=false;setTimeout(()=>this.dc.onmessage({data:JSON.stringify(failed?{type:'error',error:{event_id:message.event_id,code:'speed_update_failed',message:'fixture'}}:{type:'session.updated',session:{audio:{output:{speed:message.session.audio.output.speed}}}})}),10);}
+    if(message.type==='session.update'&&message.session.instructions)setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'session.updated',session:{instructions:message.session.instructions}})}),10);
+    if(message.type==='conversation.item.delete')setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'conversation.item.deleted',item_id:message.item_id})}),10);
+    if(message.type==='input_audio_buffer.commit'){this.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.committed',item_id:'last-item'})});setTimeout(()=>this.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'last-item',transcript:'One last thing before we end.'})}),30);}
+   }};}
    async createOffer(){return{type:'offer',sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'};}
    async setLocalDescription(){}
    async setRemoteDescription(){this.audio=new NativeAudio();this.osc=this.audio.createOscillator();this.gain=this.audio.createGain();this.gain.gain.value=.1;this.destination=this.audio.createMediaStreamDestination();this.osc.connect(this.gain).connect(this.destination);this.osc.start();this.ontrack?.({streams:[this.destination.stream],track:this.destination.stream.getAudioTracks()[0]});this.connectionState='connected';this.onconnectionstatechange?.();this.dc.onopen?.();}
@@ -198,7 +205,9 @@ try{
  });
  await page.locator('[data-view="history"]').click();await page.locator('#memory-manage-open').click();await page.locator('[data-close="memory-dialog"]').click();await openContact('mia');await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});await page.evaluate(()=>document.getElementById('memory-dialog').showModal());assert.equal(await page.locator('#memory-index').isDisabled(),true);assert.equal(await page.locator('#memory-facts input').first().isDisabled(),true);await page.evaluate(()=>document.getElementById('memory-dialog').close());
  assert.equal(sessions[0].companion_id,'mia','new sessions must be assigned to the selected companion');
- assert.deepEqual(await page.evaluate(()=>window.testMessages.find(message=>message.type==='response.create')),{type:'response.create'},'initial greeting must retain the server persona and English-only short-turn instructions');
+ const {event_id:greetingRequestId,...greetingRequest}=await page.evaluate(()=>window.testMessages.find(message=>message.type==='response.create'));
+ assert.deepEqual(greetingRequest,{type:'response.create'},'initial greeting must retain the server persona and English-only short-turn instructions');
+ assert.match(greetingRequestId,/^rtc-[0-9a-f-]{36}$/,'the greeting request must be traceable without overriding provider instructions');
  assert.equal(sessions[0].scenario,'Natural English conversation about everyday life');
  assert.match(await page.locator('#call-timer').textContent(),/^\d{2}:\d{2}$/);assert.equal(await page.locator('#call-remaining').isVisible(),false);
  await page.waitForFunction(()=>window.audioProbe.length>=2&&window.presenceContexts.some(context=>context.state==='running'));
@@ -246,11 +255,17 @@ try{
  assert(compactMessages.findIndex(message=>message.session?.instructions)>-1);
  assert(compactMessages.findIndex(message=>message.session?.instructions)<compactMessages.findIndex(message=>message.type==='conversation.item.delete'));
  assert.deepEqual(compactMessages.filter(message=>message.type==='conversation.item.delete').map(message=>message.item_id),['context-0','context-1','context-2','context-3']);
- checkpointFail=true;
- await page.evaluate(()=>{const now=Date.now;Date.now=()=>now()+61000;window.testPeer.dc.onmessage({data:JSON.stringify({type:'response.done',response:{usage:{input_tokens:19000}}})});Date.now=now;});
- await page.waitForFunction(()=>document.querySelector('#notice').textContent.includes('대화 기억을 정리하지 못했어요'));
- assert.doesNotMatch(await page.locator('#notice').textContent(),/Checkpoint fixture unavailable/);
  await page.waitForFunction(()=>window.testPeer.track.enabled===true);
+ checkpointFail=true;
+ const noticeBeforeCheckpointFailure=await page.locator('#notice').textContent();
+ const failureRecorded=page.waitForResponse(response=>response.url().endsWith('/rpc/record_call_diagnostics')&&response.request().postDataJSON()?.p_events?.some(event=>event.kind==='context_error'&&event.code==='UPSTREAM_UNAVAILABLE'&&event.request_type==='checkpoint'));
+ await page.evaluate(()=>{const now=Date.now;Date.now=()=>now()+61000;window.testPeer.dc.onmessage({data:JSON.stringify({type:'response.done',response:{usage:{input_tokens:19000}}})});Date.now=now;});
+ await failureRecorded;
+ await page.waitForFunction(()=>window.testPeer.track.enabled===true);
+ assert.equal(await page.locator('#notice').textContent(),noticeBeforeCheckpointFailure,'failed maintenance must not interrupt normal calls with a redial warning');
+ assert([...diagnostics.values()].some(event=>event.kind==='context_error'&&event.code==='UPSTREAM_UNAVAILABLE'&&event.request_type==='checkpoint'&&event.connection_state==='connected'),'maintenance failure must retain a server-acknowledged diagnostic');
+ assert.equal(await page.evaluate(()=>window.testPeer.connectionState),'connected');
+ assert.equal(await page.evaluate(()=>window.testPeer.track.readyState),'live');
  assert.equal(checkpoints,2);assert.equal((await page.evaluate(()=>window.testMessages.filter(message=>message.type==='conversation.item.delete'))).length,4,'failed checkpoint must preserve every remaining live item');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'input_audio_buffer.speech_started',item_id:'last-item'})}));
  holdReview=true;await page.locator('#end-call').click();await page.locator('#review-panel').waitFor({state:'visible'});await page.locator('#session-review-exit').click();await page.waitForFunction(()=>!document.querySelector('[data-view="history"]').disabled);await page.locator('[data-view="history"]').click();releaseReview();await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='대화와 학습 노트를 저장했어요');assert.equal(await page.locator('#history-panel').isVisible(),true,'late feedback cannot pull the user back into review');await page.locator('[data-view="review"]').click();assert.equal(reviews,1);assert.equal(sessions[0].status,'ended');assert.equal(saved.size,3);
@@ -274,6 +289,11 @@ try{
  await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});
  const timedSession=sessions[0],sessionCount=sessions.length;
  await page.clock.fastForward(10*60*1000);
+ const checkpointsBeforeTenMinuteTurn=checkpoints;
+ await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'response.done',response:{status:'completed',usage:{input_tokens:1200}}})}));
+ await page.clock.fastForward(1000);
+ assert.equal(checkpoints,checkpointsBeforeTenMinuteTurn,'ten elapsed minutes alone must not trigger maintenance');
+ assert.equal(await page.evaluate(()=>window.testPeer.track.enabled),true,'low-context conversation keeps its microphone active after ten minutes');
  await page.evaluate(()=>{const old=window.testPeers[0];old.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'stale',transcript:'Must not enter the new call.'})});window.testPeer.connectionState='disconnected';window.testPeer.onconnectionstatechange();});
  await page.clock.fastForward(2*60*1000);await page.evaluate(()=>{window.testPeer.connectionState='connected';window.testPeer.onconnectionstatechange();});
  await page.clock.fastForward(7*60*1000);
@@ -308,7 +328,9 @@ try{
  // A failed start returns to the selected contact and can retry. Its incomplete
  // attempt stays in history instead of being falsely represented as a call.
  await openContact('alex');voiceFailure=true;await page.locator('#start-call').click();await page.locator('#contacts-panel').waitFor({state:'visible'});assert.equal(await page.locator('#start-call').isEnabled(),true);
+ assert.equal(await page.evaluate(()=>localStorage.getItem('loop.last-call-companion:https://test-project.supabase.co|aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')),'juno','failed calls must preserve the last connected companion');
  await page.locator('#call-help-retry').click();await page.locator('#end-call').waitFor({state:'visible'});assert.equal(sessions[0].companion_id,'alex');
+ assert.equal(await page.evaluate(()=>localStorage.getItem('loop.last-call-companion:https://test-project.supabase.co|aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')),'alex','a newly connected call replaces the previous companion');
  assert.equal(voiceSpeeds.at(-1),.7,'the next call starts at the acknowledged saved speed');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'alex-turn',transcript:'I am ready to speak again.'})}));await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.locator('#end-call').click();await page.clock.fastForward(2000);await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='대화와 학습 노트를 저장했어요');
  // Redial a Mia row while Alex was selected. The new session and final review
@@ -318,6 +340,13 @@ try{
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'redial-turn',transcript:'It is nice to talk again.'})}));await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.evaluate(()=>{document.getElementById('end-call').onclick();document.getElementById('end-call').onclick();});await page.clock.fastForward(2000);await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='대화와 학습 노트를 저장했어요');assert.equal(finishes.get(redialSession.id),1);assert.equal(await page.locator('#post-call-transcript').getAttribute('data-session-id'),redialSession.id);assert.match(await page.locator('.session-feedback-context').textContent(),/Mia/);
  await page.locator('#review-panel').waitFor({state:'visible'});
  console.log('PASS: direct contact calls, failed starts/retry, terminal failures, refresh failures, row-bound redial and idempotent end preserve saved state and companion identity.');
+ await openContact('juno');
+ await page.reload();await page.locator('#workspace').waitFor({state:'visible'});
+ await page.waitForFunction(()=>document.querySelector('#orb').dataset.profile==='mia'&&document.querySelector('#orb').dataset.ready==='true');
+ assert.equal(await page.locator('#companion-selector').getAttribute('data-selected'),'mia');
+ assert.equal(await page.locator('[data-companion="mia"]').getAttribute('aria-pressed'),'true');
+ assert.equal(await page.locator('#start-call').getAttribute('aria-label'),'Mia와 통화');
+ console.log('PASS: returning shows the last connected companion in front, even after browsing another companion.');
  assert.deepEqual(errors,[]);
  console.log('PASS: browser reload retains offline records; retry syncs exact IDs; voice-event wiring saves and reviews; mobile layout fits. Full export handles a lower DB page cap. Voice upstream is simulated, not validated.');
  await page.route('**/functions/v1/coach/config', route=>route.fulfill({status:403,json:{error:{code:'ACCOUNT_NOT_ALLOWED',message:'승인된 이메일 계정만 이용할 수 있습니다.'}}}));

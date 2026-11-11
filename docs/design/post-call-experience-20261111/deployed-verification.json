@@ -1,5 +1,5 @@
 {
-  "status": "local_validation_passed_deployment_pending",
+  "status": "deployed_and_verified",
   "local_validation": {
     "unit_tests": 222,
     "type_check": "passed",
@@ -20,5 +20,28 @@
   "limitations": [
     "Browser transport fixtures and local SQL are used for private flows.",
     "Physical iPhone and human learning outcomes were not measured."
-  ]
+  ],
+  "verified_at": "2026-11-11T01:12:00.984667+00:00",
+  "public_release": {
+    "site": "https://chungchung234.github.io/English/",
+    "status": 200,
+    "release_commit": "360998ced533d4459d8d9a3b97085dfd98257a99",
+    "module": "assets/app.8d29a6503f83.js",
+    "html_sha256": "ed8c0f6921360683461c9e9f5ae078ab8f12f0e9f05e916196b773c1c0ae56b6",
+    "module_sha256": "8d29a6503f83d2a9accf2d1c71891233e4cbd6dffbf3af8102ae623e56080c93",
+    "sri_verified": true,
+    "release_provenance_verified": true,
+    "local_release_html_equal": false,
+    "local_release_module_equal": false,
+    "bundled_application_code_equal": true,
+    "inline_styles_equal": true,
+    "public_connection_config_different": true
+  },
+  "workflow": {
+    "id": 42936340002,
+    "url": "https://github.com/chungchung234/English/actions/runs/42936340002",
+    "build": "success",
+    "deploy": "success",
+    "post_deployment_smoke": "success"
+  }
 }

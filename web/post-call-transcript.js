@@ -40,8 +40,8 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     const timing = text('p', '', 'help'); timing.dataset.sessionTime = '';
     const measurement = text('p', '', 'help'); measurement.dataset.callSaveDuration = ''; measurement.hidden = true;
     const detailStatus = text('p', '', 'help'); detailStatus.dataset.transcriptStorageDetail = '';
-    const note = text('p', '자동 전사된 기록이에요. 중간에 멈춘 답변은 실제로 들은 내용과 다를 수 있어요.', 'help');
-    const timeNote = text('p', '기록 시각은 발화를 수신한 때이며 실제 말하기 시작 시각과 다를 수 있어요.', 'help');
+    const note = text('p', '음성을 글로 옮긴 기록이에요. 중간에 멈춘 답변은 들은 내용과 다를 수 있어요.', 'help');
+    const timeNote = text('p', '시간은 대화가 기록된 때를 기준으로 표시해요.', 'help');
     const stamps = text('div', '', 'transcript-record-times'); stamps.dataset.transcriptRecordTimes = '';
     info.append(summary, timing, measurement, detailStatus, note, timeNote, stamps);
     host.append(meta, recovery, events, info);
@@ -71,23 +71,23 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     const compactStatus = phase === 'finalizing' ? '마지막 대화 확인 중'
       : phase === 'partial' || state.error ? '저장 확인 필요'
       : state.loading && !rows.length ? '기록 확인 중'
-      : pending ? '서버 저장 대기'
-      : incomplete ? '수신된 대화 저장됨'
+      : pending ? '저장 대기 중'
+      : incomplete ? '확인된 대화 저장됨'
       : rows.length ? '대화 저장됨' : '저장된 발화 없음';
     updateText(host.querySelector('[data-transcript-status]'), compactStatus);
     host.dataset.transcriptPhase = phase;
-    let message = phase === 'finalizing' ? '마지막 발화의 전사와 서버 저장을 확인하고 있어요. 지금까지 수신한 대화는 먼저 읽을 수 있어요.'
-      : phase === 'partial' ? '전사 또는 통화 저장이 미완료예요. 지금까지 수신한 발화만 표시하며, 누락된 음성은 복구를 보장할 수 없어요.'
-      : state.loading ? '서버 대화문과 이 기기의 전송 대기 기록을 확인하고 있어요.'
-      : state.error ? '대화문 전체의 저장 상태를 확인하지 못했어요. 확인된 발화만 표시하며, 기기·서버 기록은 다시 확인해 주세요.'
-      : pending ? `${pending}개 발화의 서버 반영 대기 · 기기 보관 여부는 아래 기록에 표시돼요.`
-      : rows.length ? '대화문 서버 저장 확인 · 학습 노트는 별도로 준비돼요.'
-      : '서버에서 확인된 발화가 없어요. 수신되지 않은 음성은 기록에 포함되지 않아요.';
-    if (phase === 'saved' && incomplete) message = '수신된 기록으로 마무리한 통화예요. 누락된 음성은 포함되지 않아요.';
+    let message = phase === 'finalizing' ? '마지막 대화를 정리하고 있어요. 먼저 기록된 내용을 읽을 수 있어요.'
+      : phase === 'partial' ? '일부 대화의 저장을 확인하지 못했어요. 아래 기록을 다시 확인해 주세요. 기록되지 않은 음성은 복구할 수 없어요.'
+      : state.loading ? '대화 기록을 불러오고 있어요.'
+      : state.error ? '대화가 모두 저장됐는지 확인하지 못했어요. 아래 버튼으로 다시 확인해 주세요.'
+      : pending ? `${pending}개 대화가 아직 저장 대기 중이에요.`
+      : rows.length ? '대화를 저장했어요. 학습 노트는 준비되는 대로 확인할 수 있어요.'
+      : '저장된 대화가 없어요. 기록되지 않은 음성은 다시 들을 수 없어요.';
+    if (phase === 'saved' && incomplete) message = '확인된 대화만 남긴 기록이에요. 빠진 내용이 있을 수 있어요.';
     updateText(host.querySelector('[data-transcript-storage-detail]'), message);
     const measurement = host.querySelector('[data-call-save-duration]');
     measurement.hidden = !(phase === 'saved' && Number.isFinite(current?.saveDurationMs) && current.saveDurationMs >= 0);
-    if (!measurement.hidden) updateText(measurement, `통화 종료부터 저장 확인까지 ${(current.saveDurationMs / 1000).toFixed(1)}초 · 학습 노트 준비 시간은 별도예요.`);
+    if (!measurement.hidden) updateText(measurement, `저장까지 ${(current.saveDurationMs / 1000).toFixed(1)}초`);
     host.querySelector('.transcript-recovery').hidden = !(state.error || phase === 'partial');
     const events = host.querySelector('[data-transcript-events]'), stamps = host.querySelector('[data-transcript-record-times]');
     const blocks = new Map([...events.querySelectorAll('[data-transcript-key]')].map(node => [node.dataset.transcriptKey, node]));
@@ -109,7 +109,7 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
       if (next !== block) events.insertBefore(block, next);
       previous = block;
       if (!stamp) { stamp = text('p', '', 'transcript-record-time'); stamp.dataset.transcriptKey = key; }
-      const storage = row.storage === 'server' ? '서버 저장 확인' : row.storage === 'device' ? '이 기기 보관 확인 · 서버 전송 대기' : row.storage === 'failed' ? '기기 보관과 서버 저장을 확인하지 못했어요.' : '수신한 발화 · 기기 보관 확인 중';
+      const storage = row.storage === 'server' ? '저장 완료' : row.storage === 'device' ? '임시 보관 · 저장 대기' : row.storage === 'failed' ? '저장을 확인하지 못했어요.' : '저장 확인 중';
       updateText(stamp, `${row.speaker === 'user' ? '나' : state.name} · ${recordTimeLabel(row.occurred_at || row.timestamp, zone)} · ${storage}`);
       const nextStamp = previousStamp ? previousStamp.nextElementSibling : stamps.firstElementChild;
       if (nextStamp !== stamp) stamps.insertBefore(stamp, nextStamp);
@@ -118,7 +118,7 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     for (const [key, block] of blocks) if (!keys.has(key)) block.remove();
     for (const [key, stamp] of stampNodes) if (!keys.has(key)) stamp.remove();
     const empty = events.querySelector('[data-transcript-empty]'); empty.hidden = rows.length > 0;
-    updateText(empty, phase === 'finalizing' ? '아직 수신된 대화문이 없어요. 마지막 발화를 확인하고 있어요.' : state.loading || state.error ? '기록을 확인하고 있어요.' : '저장된 발화가 없어요.');
+    updateText(empty, phase === 'finalizing' ? '마지막 대화를 확인하고 있어요. 잠시만 기다려 주세요.' : state.loading || state.error ? '기록을 확인하고 있어요.' : '저장된 발화가 없어요.');
     if (anchor?.isConnected && host.getClientRects().length) {
       const delta = anchor.getBoundingClientRect().top - anchorTop;
       if (Math.abs(delta) > .5) window.scrollBy({ top: delta, behavior: 'instant' });

@@ -57,7 +57,7 @@ export function createVoiceTurnControls({ send, changed = () => {}, blockOutput 
     output(true);
     const target = { ...clone(policy), create_response: !hold, interrupt_response: hold ? false : policy.interrupt_response !== false };
     flight = { target, hold, eventId: null, timer: null };
-    flight.timer = setTimeout(() => reject('응답 제어를 확인하지 못했어요. 다시 확인하거나 통화를 마쳐 주세요.'), timeoutMs);
+    flight.timer = setTimeout(() => reject('답변 상태를 확인하지 못했어요. 다시 시도하거나 통화를 마쳐 주세요.'), timeoutMs);
     publish();
     try {
       // On resume the settings acknowledgement is also an ordering barrier:
@@ -66,7 +66,7 @@ export function createVoiceTurnControls({ send, changed = () => {}, blockOutput 
       if (!hold) silence();
       flight.eventId = transmit({ type: 'session.update', session: { type: 'realtime', audio: { input: { turn_detection: target } } } });
       if (hold) silence();
-    } catch { reject('응답 제어를 보내지 못했어요. 연결을 확인하고 다시 시도해 주세요.'); }
+    } catch { reject('답변을 잠시 멈추지 못했어요. 연결을 확인하고 다시 시도해 주세요.'); }
     return true;
   }
   return {
@@ -82,7 +82,7 @@ export function createVoiceTurnControls({ send, changed = () => {}, blockOutput 
     },
     event(event) {
       if (event.type === 'error' && sent.has(event.error?.event_id)) {
-        if (!disposed && event.error.event_id === flight?.eventId) reject('응답 제어를 적용하지 못했어요. 다시 확인해 주세요.');
+        if (!disposed && event.error.event_id === flight?.eventId) reject('답변 상태를 바꾸지 못했어요. 다시 확인해 주세요.');
         if (clearRequests.delete(event.error?.event_id) && !disposed) reject('답변 중지를 확인하지 못했어요. 다시 확인해 주세요.');
         return true;
       }

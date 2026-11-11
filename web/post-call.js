@@ -23,10 +23,10 @@ function quotaReset() {
 function recovery(error) {
   const code = String(error?.code || '');
   if (code === 'BUDGET_EXCEEDED' || error?.status === 429) return { message: `오늘 학습 노트 생성 한도를 사용했어요. ${quotaReset()}부터 다시 만들 수 있어요. 기존 기록과 복습은 계속 볼 수 있어요.`, blocked: true, until: new Date().setUTCHours(24, 0, 0, 0), code: 'quota' };
-  if (['ANALYSIS_TOO_LARGE', 'BODY_TOO_LARGE'].includes(code)) return { message: '이번 기록은 자동 분석 크기 한도를 넘었어요. 원문은 유지됩니다. 다음에는 통화를 짧게 나누어 주세요.', blocked: true, code: 'input_too_large' };
+  if (['ANALYSIS_TOO_LARGE', 'BODY_TOO_LARGE'].includes(code)) return { message: '대화가 길어 학습 노트를 만들지 못했어요. 대화문은 그대로 볼 수 있어요. 다음에는 통화를 짧게 나누어 주세요.', blocked: true, code: 'input_too_large' };
   if (['UNAUTHENTICATED', 'ACCOUNT_NOT_ALLOWED'].includes(code) || [401, 403].includes(error?.status)) return { message: '같은 계정으로 다시 로그인한 뒤 저장과 학습 노트 상태를 확인해 주세요.', blocked: true, code: 'auth' };
-  if (code === 'NO_TRANSCRIPT') return { message: '확인된 사용자 발화가 없어 학습 노트를 만들 수 없어요. 저장된 기록을 확인하거나 다음 대화를 시작해 주세요.', blocked: true, code: 'no_speech' };
-  if (code === 'JOB_IN_PROGRESS') return { message: '서버에서 학습 노트를 준비하고 있어요. 상태를 확인하거나 홈으로 이동할 수 있어요.', code: 'processing' };
+  if (code === 'NO_TRANSCRIPT') return { message: '말한 내용을 확인하지 못해 학습 노트를 만들지 못했어요. 대화 기록을 확인해 주세요.', blocked: true, code: 'no_speech' };
+  if (code === 'JOB_IN_PROGRESS') return { message: '학습 노트를 준비하고 있어요. 기다리는 동안 대화문을 읽거나 홈으로 이동할 수 있어요.', code: 'processing' };
   if (['CONFIGURATION_REQUIRED', 'UPSTREAM_UNAVAILABLE', 'DATABASE_UNAVAILABLE'].includes(code)) return { message: '현재 학습 노트 서비스를 확인할 수 없어요. 기존 기록을 볼 수 있으며, 연결이 복구된 뒤 상태를 확인해 주세요.', code: 'service' };
   return { message: navigator.onLine === false ? '연결이 끊겼어요. 같은 기기·계정으로 다시 연결한 뒤 상태를 확인해 주세요.' : '요청의 완료 여부를 확인하지 못했어요. 상태를 확인한 뒤 다시 선택해 주세요.', code: 'unconfirmed' };
 }
@@ -35,7 +35,7 @@ function recovery(error) {
 // unacknowledged user intent; an optimistic label must never imply server success.
 export function createPostCallFlow(deps) {
   let outbox;
-  try{outbox=createLearningOutbox();}catch{const unavailable=async()=>{throw Error('기기 저장을 사용할 수 없어요.');};outbox={put:unavailable,list:unavailable,remove:unavailable};}
+  try{outbox=createLearningOutbox();}catch{const unavailable=async()=>{throw Error('이 브라우저에서 연습 기록을 저장하지 못했어요.');};outbox={put:unavailable,list:unavailable,remove:unavailable};}
   let generation = 0, loadVersion = 0, snapshotVersion = 0;
   let identity = '', accountScope = '', companion = '', selected = null;
   let sessions = [], analyses = [], weekly = null, snapshot = null;
@@ -99,7 +99,7 @@ export function createPostCallFlow(deps) {
         if (activePractice !== attempt || attempt.saved || !same(attempt.t)) return;
         const current = itemPending(attempt.itemId).filter(record => record.body?.p_payload?.attempt_id === attempt.id || record.body?._enhancement?.attemptId === attempt.id);
         if (!current.length || current.some(record => record.state === 'conflict')) return;
-        attempt.state.textContent = '같은 연습 기록의 서버 저장을 다시 확인하고 있어요.';
+        attempt.state.textContent = '연습 기록을 다시 저장하고 있어요.';
         await flush();
         if (activePractice === attempt && same(attempt.t)) render();
       });
@@ -311,14 +311,14 @@ export function createPostCallFlow(deps) {
       if (!same(t)) return false;
       volatile.delete(record.id);
       pending = [...pending.filter(item => item.id !== record.id), record];
-      actionStates.set(record.id, '기기 보관 확인 · 서버 반영 대기');
+      actionStates.set(record.id, '저장 대기 중이에요.');
       render();
       return true;
     } catch {
       if (same(t)) {
-        actionStates.set(record.id, '저장하지 못했어요 · 기기 보관도 확인되지 않았어요');
+        actionStates.set(record.id, '선택을 저장하지 못했어요. 다시 선택해 주세요.');
         localQueueError = true;
-        if (!quiet) reportQueueFailure(record, '저장하지 못했어요. 기기 보관도 확인되지 않았으므로 이 화면에서 다시 선택해 주세요.');
+        if (!quiet) reportQueueFailure(record, '선택을 저장하지 못했어요. 이 화면에서 다시 시도해 주세요.');
         render();
       }
       return false;
@@ -349,8 +349,8 @@ export function createPostCallFlow(deps) {
     const t = token(), current = itemOf(item.id);
     if (!current) return false;
     if (current.status === 'excluded' && !['restore', 'exclude', 'known', 'hold_wrong_transcript', 'hold_intent'].includes(action)) { notify('최신 상태는 추천 제외예요. 제외 상태를 유지하거나 이전 선택을 취소한 뒤 먼저 제외를 해제해 주세요.'); return false; }
-    if (action === 'prepare_next' && current.has_valid_source === false) { notify('유효한 출처를 확인하지 못해 다음 통화 목표를 준비할 수 없어요. 이전 선택을 취소하거나 새 학습 노트를 확인해 주세요.'); return false; }
-    if (!oldRecord && itemPending(item.id).length) { notify('이 표현의 이전 선택을 먼저 서버에서 확인해 주세요.'); return false; }
+    if (action === 'prepare_next' && current.has_valid_source === false) { notify('대화 내용을 확인하지 못했어요. 새 학습 노트를 확인한 뒤 목표를 선택해 주세요.'); return false; }
+    if (!oldRecord && itemPending(item.id).length) { notify('이전 선택을 저장하고 있어요. 잠시 뒤 다시 선택해 주세요.'); return false; }
     const id = uuid();
     const record = { id, kind: 'action', created_at: now(), body: {
       p_item_id: current.id, p_expected_revision: current.revision, p_action_id: id,
@@ -358,16 +358,16 @@ export function createPostCallFlow(deps) {
     } };
     if (!await queue(record, t)) return false;
     if (oldRecord) {
-      try { await outbox.remove(t.scope, oldRecord.id); } catch { notify('이전 선택 정리를 확인하지 못했어요. 새 선택은 서버 확인 대기 중이에요.'); }
+      try { await outbox.remove(t.scope, oldRecord.id); } catch { notify('이전 선택을 정리하지 못했어요. 새 선택은 저장 대기 중이에요.'); }
       if (!same(t)) return false;
       pending = pending.filter(item => item.id !== oldRecord.id);
     }
     await flush();
-    return same(t) && actionStates.get(id) === '서버 저장 확인';
+    return same(t) && actionStates.get(id) === '저장 완료';
   }
   async function submitEnhancement(rpc, item, args, metadata = {}, oldRecord = null) {
     if (!ensureIdentity() || !item || item.companion_id !== companion) return null;
-    if (!oldRecord && itemPending(item.id).length) { notify('이 표현의 이전 선택을 먼저 서버에서 확인해 주세요.'); return null; }
+    if (!oldRecord && itemPending(item.id).length) { notify('이전 선택을 저장하고 있어요. 잠시 뒤 다시 선택해 주세요.'); return null; }
     const t = token(), id = uuid();
     const record = { id, kind: 'action', created_at: now(), body: {
       companion_id: t.companion, p_item_id: item.id, p_action: 'enhancement', p_payload: {},
@@ -382,7 +382,7 @@ export function createPostCallFlow(deps) {
     await flush();
     if (!same(t)) return null;
     const result = actionResults.get(id) || null;
-    if (result?.outcome === 'applied' && !practiceOwnsRecord(record)) notify('선택을 서버에 저장했어요.');
+    if (result?.outcome === 'applied' && !practiceOwnsRecord(record)) notify('선택을 저장했어요.');
     return result;
   }
   async function flush() {
@@ -426,7 +426,7 @@ export function createPostCallFlow(deps) {
             if (snapshot && result.next_plan !== undefined) snapshot.next_plan = result.next_plan;
             if (record.body.p_action === 'practice') confirmPractice(record);
             if (extension?.rpc === 'learning_recall') confirmRecall(record);
-            actionStates.set(record.id, '서버 저장 확인');
+            actionStates.set(record.id, '저장 완료');
           } else if (record.kind === 'event') {
             const acknowledgement = unwrap(await deps.rpc('learning_record_event', record.body));
             if (!same(t)) return;
@@ -448,10 +448,10 @@ export function createPostCallFlow(deps) {
             actionStates.set(record.id, '현재 조건에서는 저장할 수 없어요 · 다시 선택하거나 이전 선택을 취소해 주세요');
             await refreshSnapshot(t);
             if (!same(t)) return;
-            reportQueueFailure(record, '현재 상태에서 이 선택을 저장할 수 없어요. 연습을 닫고 동기화 안내에서 다시 선택해 주세요.');
+            reportQueueFailure(record, '선택이 바뀌어 저장하지 못했어요. 연습을 닫고 저장 대기 항목에서 다시 선택해 주세요.');
             render(); continue;
           }
-          actionStates.set(record.id, '기기 보관 확인 · 서버 반영을 확인하지 못했어요');
+          actionStates.set(record.id, '저장을 확인하지 못했어요. 다시 시도해 주세요.');
           reportQueueFailure(record, recovery(error).message);
           render(); break;
         }
@@ -476,7 +476,7 @@ export function createPostCallFlow(deps) {
   function actionButton(label, item, action, payload = {}, primary = false) {
     const node = button(label, async () => {
       const confirmed = await act(item, action, payload);
-      if (confirmed) notify(action === 'defer' ? '나중에 하기로 서버에 저장했어요.' : action === 'prepare_next' ? '다음 통화 준비를 서버에 저장했어요. 통화 시작은 직접 선택해 주세요.' : '선택을 서버에 저장했어요.');
+      if (confirmed) notify(action === 'defer' ? '나중에 하기로 저장했어요.' : action === 'prepare_next' ? '다음 통화를 준비했어요. 준비되면 통화를 눌러 주세요.' : '선택을 저장했어요.');
       render();
     }, primary);
     node.dataset.action = action;
@@ -506,7 +506,7 @@ export function createPostCallFlow(deps) {
   function itemCard(item, attribution = null, candidate = false, controlsOnly = false) {
     const article = document.createElement('article'); article.className = 'feedback-item'; article.dataset.itemId = item.id;
     const delayed = ((!attribution && !candidate) || activePractice?.mode === 'delayed' && activePractice.itemId === item.id) && enhancements.isDue(item.id) && !suppressed(item);
-    if (delayed) article.append(text('h4', '예약한 표현 · 가리고 회상'));
+    if (delayed) article.append(text('h4', '예약한 표현 · 가리고 말하기'));
     else if (!controlsOnly) {
     article.append(text('small', item.category === 'error' ? '의미·문법 오류' : '선택 가능한 대안'));
     if (item.original) article.append(text('p', item.original, 'original'));
@@ -514,13 +514,13 @@ export function createPostCallFlow(deps) {
     if (item.reason) article.append(text('p', item.reason));
     appendEvidence(article, item.evidence_ids, attribution?.sessionId);
     } else article.append(text('h4', '이 표현 연습'));
-    if (item.practice_count) article.append(text('small', `직접 연습한 날 ${item.practice_count}일 · 자동 숙달 평가가 아니에요`));
+    if (item.practice_count) article.append(text('small', `${item.practice_count}일 연습했어요`));
     const actions = document.createElement('div'); actions.className = 'learning-actions';
     const advanced=document.createElement('details');advanced.className='feedback-context';advanced.append(text('summary','표현 관리'));const management=document.createElement('div');management.className='learning-actions';advanced.append(management);
     if (!suppressed(item)) {
       if (candidate || item.status === 'candidate' || !item.enrolled) actions.append(actionButton('이 표현도 등록', item, 'enroll'));
       if (delayed) {
-        const start = button('가리고 회상하기', () => startRecall(item.id, start)); start.dataset.action = 'start-delayed-recall';
+        const start = button('가리고 말해보기', () => startRecall(item.id, start)); start.dataset.action = 'start-delayed-recall';
         start.disabled = itemPending(item.id).length > 0 || snapshotError || candidate || item.status === 'candidate' || !item.enrolled;
         actions.append(start, actionButton('나중에 하기', item, 'defer'));
       }
@@ -532,10 +532,10 @@ export function createPostCallFlow(deps) {
       }
     } else if (item.status === 'excluded' && !itemPending(item.id).length) {
       actions.append(actionButton('추천 제외 되돌리기', item, 'restore'));
-      if (item.has_valid_source === false) article.append(text('p', '유효한 새 학습 노트가 확인되기 전에는 자동 추천하지 않아요.', 'help'));
-    } else article.append(text('p', '품질 보류 또는 제외 반영 대기 중이에요. 현재 기기의 추천과 다음 통화 목표에서 제외됩니다.', 'help'));
+      if (item.has_valid_source === false) article.append(text('p', '새 학습 노트에서 다시 확인할 때까지 추천하지 않아요.', 'help'));
+    } else article.append(text('p', '이 표현은 추천에서 뺐어요.', 'help'));
     const records = itemPending(item.id);
-    if (records.length) article.append(status(records.some(record => record.state === 'conflict') ? '최신 상태가 달라 선택을 보류했어요. 위의 동기화 안내에서 다시 선택해 주세요.' : records.some(record => volatile.has(record.id)) ? '기기 저장을 확인하지 못했어요 · 서버에 반영되지 않았어요' : '기기 보관 확인 · 서버 반영 대기'));
+    if (records.length) article.append(status(records.some(record => record.state === 'conflict') ? '선택이 바뀌었어요. 저장 대기 항목에서 다시 선택해 주세요.' : records.some(record => volatile.has(record.id)) ? '선택을 저장하지 못했어요. 다시 선택해 주세요.' : '저장 대기 중이에요.'));
     if (item.defer_count >= 2) article.append(text('p', '계속 미루고 싶다면 그만 보기를 선택해도 괜찮아요. 연습 이력은 남습니다.', 'help'));
     article.append(actions);if(management.childElementCount)article.append(advanced);
     enhancements.renderItem(article, item, attribution);
@@ -558,7 +558,7 @@ export function createPostCallFlow(deps) {
     }
     const actions = text('div', '', 'learning-actions takeaway-actions');
     const sourceSession = attribution?.sessionId || item.source_session_id;
-    const start = button(delayed ? '가리고 회상하기' : '대화와 학습 노트 보기', () => delayed ? startRecall(item.id, start) : sourceSession ? openSession(sourceSession) : undefined, true);
+    const start = button(delayed ? '가리고 말해보기' : '대화와 학습 노트 보기', () => delayed ? startRecall(item.id, start) : sourceSession ? openSession(sourceSession) : undefined, true);
     start.className = 'primary-button'; start.dataset.action = delayed ? 'start-delayed-recall' : 'open-source-feedback';
     start.disabled = itemPending(item.id).length > 0 || snapshotError || !queueReady;
     if (delayed || sourceSession) actions.append(start);
@@ -573,7 +573,7 @@ export function createPostCallFlow(deps) {
     article.append(actions);
     if (item.practice_count) article.append(text('small', '직접 연습한 기록이 있는 표현이에요.', 'help'));
     const pendingItems = itemPending(item.id);
-    if (pendingItems.length) article.append(status(pendingItems.some(row => row.state === 'conflict') ? '최신 상태가 달라 저장을 보류했어요. 동기화 안내를 확인해 주세요.' : '선택한 내용을 서버에 저장하는 중이에요.'));
+    if (pendingItems.length) article.append(status(pendingItems.some(row => row.state === 'conflict') ? '선택이 바뀌었어요. 저장 대기 항목을 확인해 주세요.' : '선택을 저장하고 있어요.'));
     const more = document.createElement('details'); more.className = 'feedback-context takeaway-details'; more.append(text('summary', '근거·표현 관리'));
     appendEvidence(more, item.evidence_ids, attribution?.sessionId);
     const management = text('div', '', 'learning-actions');
@@ -590,16 +590,16 @@ export function createPostCallFlow(deps) {
     const actions = pending.filter(record => record.kind === 'action');
     if (!actions.length && !volatile.size && !localQueueError) return;
     const area = document.createElement('section'); area.className = 'analysis';
-    area.append(text('h3', '저장과 동기화'));
-    if (localQueueError) area.append(status('기기 저장 상태를 확인하지 못했어요. 복원과 서버 반영을 약속할 수 없어요.'));
+    area.append(text('h3', '저장 대기 항목'));
+    if (localQueueError) area.append(status('연습 기록을 저장하지 못했어요. 이 화면에서 다시 시도해 주세요.'));
     for (const record of actions) {
       const row = document.createElement('div'); row.className = 'feedback-item';
       if (record.state === 'conflict') {
         row.dataset.conflictId = record.id;
-        row.append(status('최신 상태나 저장 조건이 달라 이전 선택을 보류했어요. 서버 상태를 자동으로 덮어쓰지 않았어요.'));
+        row.append(status('최신 상태나 저장 조건이 달라 이전 선택을 보류했어요. 최신 내용을 확인한 뒤 다시 선택해 주세요.'));
         const item = itemOf(recordItem(record));
-        row.append(text('p', `최신 상태: ${stateLabel(item)}. ${exclusion(record.body.p_action) ? '현재 기기에서는 계속 추천을 막고 있어요.' : '원하는 행동을 다시 선택할 수 있어요.'}`));
-        const retry = button('최신 상태에 다시 적용', async () => {
+        row.append(text('p', `최신 상태: ${stateLabel(item)}. ${exclusion(record.body.p_action) ? '이 화면에서는 추천하지 않아요.' : '원하는 행동을 다시 선택할 수 있어요.'}`));
+        const retry = button('이 선택으로 저장', async () => {
           const t = token();
           if (!await refreshSnapshot(t) || !same(t)) return;
           const current = itemOf(recordItem(record));
@@ -614,32 +614,32 @@ export function createPostCallFlow(deps) {
           if (!same(t)) return; pending = pending.filter(item => item.id !== record.id); render();
         }); discard.dataset.action = 'discard-conflict';
         row.append(retry, discard);
-      } else row.append(status(`${exclusion(record.body.p_action) ? '제외 반영 대기 · ' : ''}${actionStates.get(record.id) || '기기 보관 확인 · 서버 반영 대기'}`));
+      } else row.append(status(`${exclusion(record.body.p_action) ? '제외 반영 대기 · ' : ''}${actionStates.get(record.id) || '저장 대기 중이에요.'}`));
       area.append(row);
     }
     for (const record of volatile.values()) {
       const row = document.createElement('div'); row.className = 'feedback-item';
-      row.append(status('저장하지 못했어요. 현재 화면에서만 추천을 막고 있으며 재접속 후 복원은 보장되지 않아요.'));
+      row.append(status('저장하지 못했어요. 이 화면을 닫으면 선택한 내용이 사라질 수 있어요.'));
       row.append(button('같은 선택 다시 저장', async () => { if (await queue(record, token())) await flush(); })); area.append(row);
     }
-    area.append(button('같은 요청 다시 전송', flush)); target.append(area);
+    area.append(button('저장 다시 시도', flush)); target.append(area);
   }
   function stateLabel(item) {
     if (!item) return '항목을 확인할 수 없음';
-    return ({ candidate: '선택 등록 전', active: '미연습', deferred: '나중에 하기', practiced: '직접 연습함', excluded: '추천 제외', held: '품질 보류' })[item.status] || '확인 필요';
+    return ({ candidate: '선택 등록 전', active: '미연습', deferred: '나중에 하기', practiced: '직접 연습함', excluded: '추천 제외', held: '확인 보류' })[item.status] || '확인 필요';
   }
   function renderBacklog() {
     const target = $('learning-queue'); if (!target) return;
     target.replaceChildren(); renderQueue(target);
     if (reviewMode() !== 'hub') return;
     if (snapshotError) {
-      target.append(status('학습 상태를 서버에서 확인하지 못했어요. 저장된 학습 노트는 볼 수 있으나 최신 추천·저장 상태는 확인이 필요해요.'));
+      target.append(status('추천 표현을 불러오지 못했어요. 저장된 학습 노트는 계속 볼 수 있어요.'));
       target.append(button('학습 상태 다시 확인', () => refreshSnapshot()));
     }
     const unseen = snapshot?.feedback?.filter(job => job.current && !job.exposed_at && sessionFor(job.session_id)) || [];
     const unseenList = document.createElement('details'); unseenList.className='feedback-context'; unseenList.dataset.practiceSurrounding='';
     if (unseen.length) {
-      unseenList.append(text('summary', `아직 안 본 학습 노트 · ${unseen.length}회`));
+      unseenList.append(text('summary', `아직 안 본 학습 노트 · ${unseen.length}개`));
       for (const job of unseen.slice(0, 3)) {
         const open = button(`${date(sessionFor(job.session_id)?.ended_at)} 학습 노트 보기`, () => openSession(job.session_id));
         open.dataset.sessionId = job.session_id; unseenList.append(open);
@@ -681,7 +681,7 @@ export function createPostCallFlow(deps) {
       target.append(activePractice.box);
       if (!activePractice.saved && activePractice.mode === 'delayed' && suppressed(itemOf(activePractice.itemId))) {
         for (const node of activePractice.gradeButtons) node.disabled = true;
-        activePractice.state.textContent = '이 표현은 현재 추천 제외 또는 품질 보류 상태예요. 회상 기록을 새로 저장하지 않았어요.';
+        activePractice.state.textContent = '이 표현은 현재 추천 제외 또는 확인 보류 상태예요. 다시 말하기 기록을 새로 저장하지 않았어요.';
       }
     }
   }
@@ -697,7 +697,7 @@ export function createPostCallFlow(deps) {
         if (!same(t) || !node.isConnected) return;
         node.replaceChildren();
         for (const row of rows) node.append(text('p', `${row.speaker === 'user' ? '나' : ctx().name}: ${row.text}`));
-        if (!rows.length) node.append(text('p', '서버에서 확인된 발화가 없어요. 수신되지 않은 음성은 원본 녹음으로 복구할 수 없어요.'));
+        if (!rows.length) node.append(text('p', '저장된 대화가 없어요. 기록되지 않은 음성은 다시 들을 수 없어요.'));
       } catch { if (same(t) && node.isConnected) { node.textContent = '저장된 기록을 확인하지 못했어요. 다시 열어 주세요.'; loaded = false; } }
     }); target.append(details);
   }
@@ -819,7 +819,7 @@ export function createPostCallFlow(deps) {
     const unseen=snapshot?.feedback?.find(job=>job.current&&!job.exposed_at&&sessionFor(job.session_id));
     const recommended=enhancements.recommendedIds(snapshot?.recommended_item_ids||[]).slice(0,(snapshot?.recommended_item_ids||[]).length).map(itemOf).find(canRecommend);
     home.hidden=!unseen&&!recommended;home.disabled=snapshotError;
-    home.textContent=unseen?ctx().name+'와의 통화 · 새 학습 노트':recommended?'남겨둔 복습 · '+(enhancements.isDue(recommended.id)?'예약한 표현 가리고 회상':recommended.expression):'';
+    home.textContent=unseen?ctx().name+'와의 통화 · 새 학습 노트':recommended?'남겨둔 복습 · '+(enhancements.isDue(recommended.id)?'예약한 표현 가리고 말하기':recommended.expression):'';
     home.onclick=openPreview;
   }
   function render() {
@@ -903,7 +903,7 @@ export function createPostCallFlow(deps) {
     const job = feedback(id);
     if (job?.current) { errors.delete(id); persistBlockers(); if (!analysisFor(id)) await deps.refresh(); return; }
     if (job?.has_user_speech === false || running(job)) return;
-    requests.add(id); errors.delete(id); render(); callStatus('통화는 서버에 저장됐어요 · 학습 노트 준비 중');
+    requests.add(id); errors.delete(id); render(); callStatus('대화를 저장했어요 · 학습 노트 준비 중');
     try {
       const result=await deps.edge('review', { sessionId: id });
       if (!same(t)) return;
@@ -913,12 +913,12 @@ export function createPostCallFlow(deps) {
       // Keep it available even when the history endpoint is temporarily down.
       const accepted={...analysis,companion_id:t.companion};
       analyses=[accepted,...analyses.filter(row=>row.id!==accepted.id)];errors.delete(id);persistBlockers();
-      try{deps.onAnalysis?.(accepted);}catch{notify('학습 노트는 서버에 저장됐어요. 화면을 새로고침해 주세요.');}
+      try{deps.onAnalysis?.(accepted);}catch{notify('학습 노트를 저장했어요. 화면을 새로고침해 주세요.');}
       await refreshSnapshot(t);
       if (!same(t)) return;
-      callStatus('통화와 학습 노트 서버 저장 확인');
-      try{await deps.refresh();}catch{if(same(t))notify('통화와 학습 노트는 서버에 저장됐어요. 최근 통화 목록을 새로고침해 주세요.');}
-      if(same(t))callStatus('통화와 학습 노트 서버 저장 확인');
+      callStatus('대화와 학습 노트를 저장했어요');
+      try{await deps.refresh();}catch{if(same(t))notify('대화와 학습 노트를 저장했어요. 최근 통화를 새로고침해 주세요.');}
+      if(same(t))callStatus('대화와 학습 노트를 저장했어요');
     } catch (error) {
       if (!same(t)) return;
       const state = recovery(error); state.sourceVersion = feedback(id)?.source_version || null; errors.set(id, state); persistBlockers();
@@ -944,7 +944,7 @@ export function createPostCallFlow(deps) {
     if (!ensureIdentity() || session?.companion_id !== companion) return;
     if (!sessionFor(session.id)) sessions.unshift(session);
     else sessions = sessions.map(row => row.id === session.id ? { ...row, ...session } : row);
-    errors.set(session.id, { message: warning || '서버 저장이 끝나지 않았어요. 수신된 발화만 기기 대기열에 있을 수 있으며, 수신되지 않은 음성은 복구를 보장할 수 없어요.', code: 'record_unconfirmed' });
+    errors.set(session.id, { message: warning || '아직 저장을 확인하지 못했어요. 대화 기록에서 다시 확인해 주세요. 기록되지 않은 음성은 복구할 수 없어요.', code: 'record_unconfirmed' });
     render();
   }
 
@@ -971,9 +971,9 @@ export function createPostCallFlow(deps) {
     const shouldFocus = panelOpen && !$('review-panel')?.hidden && (!focused || focused === document.body || attempt.box.contains(focused));
     attempt.saved = true;
     attempt.box.classList.add('practice-complete');
-    const heading = text('h3', kind === 'delayed' ? '회상 기록을 남겼어요' : kind === 'deferred' ? '다음에 이어갈 수 있어요' : '연습을 기록했어요');
+    const heading = text('h3', kind === 'delayed' ? '다시 말하기 기록을 남겼어요' : kind === 'deferred' ? '다음에 이어갈 수 있어요' : '연습을 기록했어요');
     heading.tabIndex = -1; heading.dataset.action = 'practice-complete';
-    attempt.state.textContent = kind === 'delayed' ? '시간을 둔 회상 자기보고를 서버에 저장했어요.' : kind === 'deferred' ? '나중에 하기로 저장했어요. 연습한 것으로 기록하지 않았어요.' : '직접 말해봤다는 표시를 서버에 저장했어요.';
+    attempt.state.textContent = kind === 'delayed' ? '다시 말하기 기록을 저장했어요.' : kind === 'deferred' ? '다음에 이어서 연습할 수 있어요.' : '연습한 내용을 저장했어요.';
     attempt.state.dataset.practiceStatus = '';
     const expression = text('p', attempt.expression || itemOf(attempt.itemId)?.expression, 'improved'); expression.dataset.practiceExpression = '';
     const finish = text('div', '', 'learning-actions');
@@ -995,7 +995,7 @@ export function createPostCallFlow(deps) {
     const analysis=attribution?.sessionId?analyses.find(row=>row.id===attribution.analysisId):null;
     const item=canonical&&analysis?sourceProjection(canonical,analysis):canonical;
     if (!item || suppressed(item) || itemPending(id).length || !item.enrolled || item.status==='candidate') return;
-    if (attribution?.analysisId && item.sources && !item.sources.some(source => source.analysis_id === attribution.analysisId && source.session_id === attribution.sessionId && source.valid)) { notify('이 출처는 현재 연습 추천에서 보류됐어요. 유효한 새 학습 노트를 확인해 주세요.'); return; }
+    if (attribution?.analysisId && item.sources && !item.sources.some(source => source.analysis_id === attribution.analysisId && source.session_id === attribution.sessionId && source.valid)) { notify('이 표현은 확인이 필요해 추천하지 않아요. 최신 학습 노트를 확인해 주세요.'); return; }
     pendingFocusRestore=null;
     const t = token(), attemptId = uuid();
     // Attribution is fixed at the explicit click. A merged item is never counted
@@ -1013,13 +1013,13 @@ export function createPostCallFlow(deps) {
     const original = text('p', cue.value, cue.kind === 'source' ? 'original' : 'help'); original.dataset.practiceCue = cue.kind;
     const expression = text('p', item.expression, 'improved'); expression.dataset.practiceExpression = ''; expression.hidden = true;
     const reason = text('p', item.reason); reason.hidden = true;
-    const assistance = text('p', '혼자 소리 내어 연습해요 · 녹음·자동 채점 없음', 'help');
+    const assistance = text('p', '소리 내어 말한 뒤 ‘직접 연습했어요’를 눌러 주세요.', 'help');
     const toggle = button('표현 다시 보기 · 도움 받기', () => {
       if (!same(t) || activePractice !== attempt || attempt.saved) return;
       expression.hidden = !expression.hidden;
       reason.hidden = expression.hidden;
       toggle.textContent = expression.hidden ? '표현 다시 보기 · 도움 받기' : '표현 가리고 내 말로';
-      assistance.textContent = '표현을 참고했어요. 가리고 다시 말해봐도 좋아요. 녹음·자동 채점은 하지 않아요.';
+      assistance.textContent = '표현을 가리고 다시 말해봐도 좋아요.';
       toggle.setAttribute('aria-expanded', String(!expression.hidden));
     }); toggle.dataset.action = 'toggle-expression'; toggle.setAttribute('aria-expanded', 'false');
     const state = status(''); state.dataset.practiceStatus = '';
@@ -1029,7 +1029,7 @@ export function createPostCallFlow(deps) {
       save.disabled = true;
       const payload = { attempt_id: attemptId, attribution: source ? 'session' : 'library', source_session_id: source?.sessionId || null, source_analysis_id: source?.analysisId || null };
       const operation = act(itemOf(id), 'practice', payload);
-      state.textContent = '기기 보관과 서버 저장을 확인하고 있어요.';
+      state.textContent = '저장하고 있어요.';
       const confirmed = await operation;
       if (!same(t) || activePractice !== attempt || !state.isConnected) return;
       attempt.saveId = [...pending].find(record => record.body?.p_action === 'practice' && record.body?.p_payload?.attempt_id === attemptId)?.id || null;
@@ -1037,7 +1037,7 @@ export function createPostCallFlow(deps) {
         finishPractice(attempt);
       } else {
         const records = itemPending(id);
-        state.textContent = records.some(record => record.state === 'conflict') ? '최신 상태가 달라 저장하지 않았어요. 연습 창을 닫고 동기화 안내에서 다시 선택해 주세요.' : records.length ? '기기 보관 확인 · 서버 반영 대기. 서버 확인 전에는 연습 완료로 표시하지 않아요.' : '저장하지 못했어요. 다시 선택해 주세요.';
+        state.textContent = records.some(record => record.state === 'conflict') ? '선택이 바뀌었어요. 연습을 닫고 저장 대기 항목에서 다시 선택해 주세요.' : records.length ? '저장 대기 중이에요. 연결을 확인한 뒤 다시 시도해 주세요.' : '저장하지 못했어요. 다시 선택해 주세요.';
         save.disabled = records.length > 0; save.dataset.keepDisabled = String(records.length > 0);
       }
     }, true); save.dataset.action = 'save-practice'; save.disabled = true;
@@ -1045,7 +1045,7 @@ export function createPostCallFlow(deps) {
       if (!same(t)) return;
       const confirmed = await act(itemOf(id), 'defer');
       if (!same(t) || !state.isConnected) return;
-      state.textContent = confirmed ? '나중에 하기를 서버에 저장했어요. 연습 수행으로 기록하지 않았어요.' : itemPending(id).length ? '기기 보관 확인 · 나중에 하기 서버 반영 대기' : '저장하지 못했어요. 다시 선택해 주세요.';
+      state.textContent = confirmed ? '나중에 하기로 저장했어요.' : itemPending(id).length ? '저장 대기 중이에요.' : '저장하지 못했어요. 다시 선택해 주세요.';
       if (confirmed) finishPractice(attempt, 'deferred');
     }); later.dataset.action = 'defer';
     Object.assign(attempt, { state, save, toggle, finish });
@@ -1059,7 +1059,7 @@ export function createPostCallFlow(deps) {
     const started = await event('practice_started', { sessionId: source?.sessionId, analysisId: source?.analysisId, itemId: id, attemptId }, { attribution: source ? 'session' : 'library', status: 'success' }, t);
     if (same(t) && activePractice === attempt) {
       save.disabled = !started;
-      if (!started) state.textContent = '연습 시작을 기기에 보관하지 못했어요. 닫은 뒤 다시 선택해 주세요. 완료로 기록하지 않았어요.';
+      if (!started) state.textContent = '연습을 시작하지 못했어요. 닫은 뒤 다시 선택해 주세요.';
     }
   }
   function confirmPractice(record) {
@@ -1088,7 +1088,7 @@ export function createPostCallFlow(deps) {
     const t = token();
     const rows = await outbox.list(t.scope);
     if (!same(t)) throw Error('백업 중 계정이나 상대가 바뀌었어요. 다시 선택해 주세요.');
-    if (rows.some(record => record.kind === 'action') || volatile.size) throw Error('서버 확인 전인 복습 선택이 있어요. 저장·충돌 상태를 먼저 확인한 뒤 백업해 주세요.');
+    if (rows.some(record => record.kind === 'action') || volatile.size) throw Error('아직 저장하지 못한 선택이 있어요. 저장 대기 항목을 확인한 뒤 내보내 주세요.');
     const items = await deps.allRows('learning_state_items', 'order=created_at.asc,id.asc');
     if (!same(t)) throw Error('백업 중 계정이나 상대가 바뀌었어요. 다시 선택해 주세요.');
     const sources = await deps.allRows('learning_sources', 'order=item_id.asc,analysis_id.asc');
@@ -1097,7 +1097,7 @@ export function createPostCallFlow(deps) {
     if (!same(t)) throw Error('백업 중 계정이나 상대가 바뀌었어요. 다시 선택해 주세요.');
     const extended = await Promise.all([...new Set(items.map(item => item.companion_id))].map(async companionId => {
       const value = unwrap(await deps.rpc('learning_enhancement_snapshot', { p_companion_id: companionId }));
-      if (!value || !['reviews', 'schedules', 'recalls', 'usage', 'weekly_goals'].every(key => Array.isArray(value[key]))) throw Error('회상·재검토 이력을 확인하지 못해 불완전한 백업을 만들지 않았어요.');
+      if (!value || !['reviews', 'schedules', 'recalls', 'usage', 'weekly_goals'].every(key => Array.isArray(value[key]))) throw Error('연습 기록을 확인하지 못했어요. 잠시 뒤 다시 내보내 주세요.');
       return value;
     }));
     if (!same(t)) throw Error('백업 중 계정이나 상대가 바뀌었어요. 다시 선택해 주세요.');
@@ -1105,7 +1105,7 @@ export function createPostCallFlow(deps) {
       const { user_id: ignored, ...safe } = item;
       const ownedSources = sources.filter(source => source.item_id === item.id);
       const sessionId = ownedSources[0]?.session_id || item.restored_session_id;
-      if (!sessionId) throw Error('표현과 원본 회차의 연결을 확인하지 못했어요. 불완전한 복습 백업은 만들지 않았어요.');
+      if (!sessionId) throw Error('일부 표현의 대화 기록을 확인하지 못했어요. 잠시 뒤 다시 내보내 주세요.');
       const held = holds.filter(hold => ownedSources.some(source => source.session_id === hold.session_id && (hold.reason === 'intent' ? hold.item_id === item.id : !hold.evidence_ids?.length || hold.evidence_ids.some(id => source.evidence_ids?.includes(id)))) || hold.session_id === item.restored_session_id && (hold.reason === 'wrong_transcript' || hold.item_id === item.id));
       const held_sources = [...new Map(held.map(hold => [`${hold.session_id}|${hold.reason}`, { session_id: hold.session_id, reason: hold.reason }])).values()];
       const enhancements = Object.fromEntries(['reviews', 'schedules', 'recalls', 'usage', 'weekly_goals', 'imports'].map(key => [key, extended.flatMap(value => value[key] || []).filter(row => row.item_id === item.id).map(row => {
@@ -1120,12 +1120,12 @@ export function createPostCallFlow(deps) {
     if (!Array.isArray(items)) throw Error('복습 백업 형식을 확인해 주세요.');
     const t = token(); let restored = 0;
     for (let offset = 0; offset < items.length; offset += 50) {
-      if (!same(t)) throw Error(`계정이나 상대가 바뀌었어요. 앞선 ${restored}개 요청만 전송했어요.`);
+      if (!same(t)) throw Error(`계정이나 상대가 바뀌어 가져오기를 중단했어요. 같은 계정과 상대를 선택한 뒤 다시 시도해 주세요.`);
       try { await deps.rpc('learning_restore', { p_items: items.slice(offset, offset + 50) }); restored += Math.min(50, items.length - offset); }
-      catch { throw Error(`복습 이력 ${restored}개 항목의 복원 요청을 전송했어요. ${offset + 1}번째 이후 배치를 확인하지 못했어요. 같은 백업으로 다시 시도할 수 있어요.`); }
+      catch { throw Error(`복습 기록 가져오기를 끝내지 못했어요. 같은 백업 파일로 다시 시도해 주세요.`); }
     }
     for (let offset = 0; offset < items.length; offset += 50) {
-      if (!same(t)) throw Error('복습 이력 요청은 전송했어요. 회상·재검토 이력 복원 중 계정이나 상대가 바뀌어 중단했어요. 같은 백업으로 다시 시도할 수 있어요.');
+      if (!same(t)) throw Error('계정이나 상대가 바뀌어 가져오기를 중단했어요. 같은 계정과 상대를 선택한 뒤 다시 시도해 주세요.');
       const batch = items.slice(offset, offset + 50);
       const p_data = Object.fromEntries(['reviews', 'schedules', 'recalls', 'usage', 'weekly_goals', 'imports'].map(key => [key, batch.flatMap(item => {
         const values = item.enhancements?.[key] || [];
@@ -1134,7 +1134,7 @@ export function createPostCallFlow(deps) {
       })]));
       if (!Object.values(p_data).some(rows => rows.length)) continue;
       try { await deps.rpc('learning_enhancement_restore', { p_data }); }
-      catch { throw Error('기본 복습 이력 요청은 전송했어요. 회상·재검토·활용 이력의 일부 복원은 확인하지 못했어요. 기존 서버 기록은 유지되며 같은 백업으로 다시 시도할 수 있어요.'); }
+      catch { throw Error('일부 연습 기록을 가져오지 못했어요. 기존 기록은 유지돼요. 같은 백업 파일로 다시 시도해 주세요.'); }
     }
     if (same(t)) await refreshSnapshot(t);
     return { restored };

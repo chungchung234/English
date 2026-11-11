@@ -1,4 +1,5 @@
 import { createSessionReview } from './session-review.js';
+import { createConversationMemoryDelivery } from '../src/conversation-memory.js';
 import { createLearningReview } from '../src/learning-review.mjs';
 import { createCallCompletion } from './call-completion.js';
 import { createCallCues } from './call-cues.js';
@@ -396,6 +397,7 @@ async function edge(name, body) {
   for(let attempt=0;;attempt++)try{return await api('/functions/v1/coach/'+name,{method:body===undefined?'GET':'POST',body});}
   catch(error){if(error.code!=='ANALYSIS_CONTINUE'||attempt>=3)throw error;}
 }
+const conversationMemory=createConversationMemoryDelivery({identity:()=>auth&&scope?scope:null,busy:()=>Boolean(call||callStarting||callEnding),prepare:body=>edge('memory-prepare',body)});
 async function allRows(table, query='') {
   const result=[];let expectedTotal;
   for(let offset=0;;){
@@ -707,6 +709,7 @@ function endCall() {
       current.transcriptPhase='saved';current.completion.settle('saved');transcriptReview.changed(current);
       if(document.body.dataset.callPhase!=='ending')$('call-status').textContent='통화 저장 완료 · 학습 노트를 만들고 있습니다';
       mountLearningSession(current.id);
+      conversationMemory.wake([current.companionId],{force:true});
       learning.saved({id:current.id,companion_id:current.companionId,status:'ended',created_at:current.created_at,time_zone:current.time_zone,ended_at:current.ended_at??null}).catch(error=>notice(error.message));
       if(!current.wrapupHome)current.nextView='review';
     } catch(e) {
@@ -842,6 +845,7 @@ async function loadHistory(){
   const analyses=await api('/rest/v1/analyses?select=*&user_id=eq.'+auth.user.id+'&order=created_at.desc&limit=100');
   const weeklySessions=await api('/rest/v1/sessions?select=companion_id,status,ended_at&user_id=eq.'+auth.user.id+'&status=eq.ended&ended_at=gte.'+new Date(since).toISOString()+'&and=(ended_at.lte.'+new Date(through).toISOString()+')&order=ended_at.desc&limit=1000').catch(()=>[]);
   const sessionCompanions=[...new Set(sessions.map(session=>session.companion_id).filter(id=>Object.hasOwn(companions,id)))];
+  if(epoch===historyEpoch&&requestScope===scope)conversationMemory.wake(Object.keys(companions));
   const exclusions=new Set();
   await Promise.all(sessionCompanions.map(async id=>{try{const controls=await edge('memory-manage',{companionId:id,action:'list'});for(const row of controls.excluded_sessions||[])exclusions.add(row.session_id);}catch(error){if(scope===requestScope&&epoch===historyEpoch)notice(error.message);}}));
   if(epoch!==historyEpoch||requestScope!==scope||filter!==historyFilter)return;
@@ -964,6 +968,7 @@ function revealWorkspace(){
 }
 companionMotion.addEventListener('change',()=>{if(companionMotion.matches){if(authTransitionLeaving)hideAuthTransition();else clearAuthAnimations();}});
 function resetSignedOutUI(){
+  conversationMemory.clear();
   stopCompanionSlide();
   readyEpoch++;hideAuthTransition();
   learning.reset();auth=null;scope=null;historyEpoch++;memoryEpoch++;selectedReviewSessionId=null;

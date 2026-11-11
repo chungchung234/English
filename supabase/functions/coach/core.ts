@@ -1,6 +1,6 @@
 // Pure validation and evidence handling; also tested with Node's TypeScript support.
 export class AppError extends Error {
-  constructor(public status: number, public code: string, message: string, public metadata: { retry_at?: string } = {}) { super(message); }
+  constructor(public status: number, public code: string, message: string, public metadata: { retry_at?: string; retry_seconds?: number } = {}) { super(message); }
 }
 // Behavioral criteria and source limitations: docs/persona-research.md and
 // docs/research/english-learning-conclusions.md. These are product policies,

@@ -37,6 +37,7 @@ try {
     else if (url.pathname.endsWith('/coach/config')) data = { models: { voice: 'fixture' } };
     else if (url.pathname.endsWith('/coach/memory-manage')) data = { revision: 0, facts: [], excluded_sessions: [], history_suppressed: false };
     else if (url.pathname.endsWith('/coach/memory')) data = { memories: [] };
+    else if (url.pathname.endsWith('/coach/memory-prepare')) data = {status:'ready'};
     else if (url.pathname.endsWith('/coach/voice')) {
       const session = sessions.find(row => row.id === body.sessionId);
       data = { sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n', ...(reply === 'legacy' ? {} : { clock: { server_now_utc: '2026-11-10T14:59:58Z', time_zone: session.time_zone, session_created_at: session.created_at }, memory_context: { status: reply, memory_count: reply === 'ready' ? 1 : 0, fact_count: reply === 'ready' ? 1 : 0, last_session_created_at: sessions[0].created_at } }) };
@@ -77,6 +78,7 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   assert(await page.locator('#live-call').evaluate(e => e.getBoundingClientRect().bottom <= document.querySelector('#end-call').getBoundingClientRect().top));
   await page.screenshot({ path: 'test-results/temporal-call-320-large-text.png', fullPage: true });
+  const preparationsBeforeEnd=requests.filter(r=>r.path.endsWith('/coach/memory-prepare')&&r.body.companionId==='alex').length;
   await end();
   assert(await page.locator('[data-post-call-transcript] [data-transcript-events]').isVisible(), 'received transcript is readable without opening a disclosure');
   await page.locator('.transcript-record-info > summary').click();
@@ -84,6 +86,9 @@ try {
   assert.match(await page.locator('[data-session-time]').textContent(), /Asia\/Seoul/);
   assert.match(await page.locator('[data-post-call-transcript] .transcript-record-time').first().textContent(), /2026\. 11\. 11\. 00:00/);
   assert(saved.some(e => e.session_id === first && e.timestamp.startsWith('2026-11-10T15:00:')));
+  await page.clock.fastForward(6000);
+  for(let n=0;n<30&&requests.filter(r=>r.path.endsWith('/coach/memory-prepare')&&r.body.companionId==='alex').length<=preparationsBeforeEnd;n++)await page.waitForTimeout(50);
+  assert(requests.filter(r=>r.path.endsWith('/coach/memory-prepare')&&r.body.companionId==='alex').length>preparationsBeforeEnd,'independent memory delivery runs after call completion even when learning-note generation fails');
   assert(requests.some(r => r.body?.p_name === 'call_connected' && r.body?.p_session_id === first && r.body.p_payload?.occurred_at?.startsWith('2026-11-10T14:59:')), 'connection receipt uses the same server-anchored clock despite device skew');
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' });
   await page.locator('[data-view="history"]').click();

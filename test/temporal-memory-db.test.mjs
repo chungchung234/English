@@ -134,7 +134,7 @@ test('last conversation survives failed analysis, skips empty calls, and cannot 
     const foreign=await session(db,{user:B,companion,created:'2026-11-10T00:00:00Z'});await speech(db,foreign,'Another account secret.');
     const result=await context(db,A,companion);
     assert.equal(result.recent_conversation.session_id,previous.id);assert.equal(result.recent_conversation.analysis_status,'failed');
-    assert.equal(result.recent_conversation.turns.length,2);assert(!JSON.stringify(result).includes('Another account secret'));
+    assert.equal(result.recent_conversation.turns.length,1);assert.equal(result.recent_conversation.mode,'excerpt_fallback');assert(!JSON.stringify(result).includes('Another account secret'));
     assert.deepEqual(result.memories,[],'recent original speech does not require an analysis');
     await asService(db,()=>db.query("select public.memory_manage($1,$2,'excludeSession',null,null,$3)",[A,companion,previous.id]));
     assert.equal((await context(db,A,companion)).recent_conversation,null,'excluded dialogue never returns through raw fallback');

@@ -241,9 +241,9 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.equal(data.clock.time_zone, null); assert.equal(data.clock.session_created_at, null); assert(Number.isFinite(Date.parse(data.clock.server_now_utc)));
       assert.deepEqual(data.memory_context, { status: 'empty', memory_count: 0, fact_count: 0, last_session_created_at: null, has_undated_memory: false });
     }
-    const {memory_context,context_sources,context_fingerprint,...metadata}=completed.p_result;
-    assert.deepEqual(metadata, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',policy_version:'2026-11-10-v2',voice_policy_version:'2026-11-11-recent-call-v2' });
-    assert.equal(memory_context.status,'empty');assert.deepEqual(context_sources,{memory_session_ids:[],recent_session_id:null});assert.match(context_fingerprint,/^[a-f0-9]{64}$/);
+    const {memory_context,context_sources,context_fingerprint,context_bytes,...metadata}=completed.p_result;
+    assert.deepEqual(metadata, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',policy_version:'2026-11-10-v2',voice_policy_version:'2026-11-11-conversation-handoff-v3' });
+    assert(context_bytes>0);assert.equal(memory_context.status,'empty');assert.deepEqual(context_sources,{memory_session_ids:[],recent_session_id:null,conversation_session_ids:[]});assert.match(context_fingerprint,/^[a-f0-9]{64}$/);
   } finally { globalThis.fetch = original; }
 });
 

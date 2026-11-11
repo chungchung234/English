@@ -15,7 +15,7 @@ const recentCall = () => ({session_id:oldSid,session_created_at:'2026-11-10T14:0
 test('a failed analysis still supplies the last original exchange, while suppression and bounded provenance remain authoritative',()=>{
   const clock=callClock(current,new Date('2026-11-11T00:00:00Z'));
   const result=boundVoiceContext({memory:{facts:[],memories:[],recent_conversation:recentCall(),suppress_memory:false}},clock);
-  assert.equal(result.context.continuity.session_id,oldSid);assert.equal(result.receipt.status,'ready');assert.equal(result.receipt.memory_count,0);assert.equal(result.receipt.recent_turn_count,2);assert.equal(result.receipt.recent_analysis_status,'failed');
+  assert.equal(result.context.continuity.session_id,oldSid);assert.equal(result.receipt.status,'ready');assert.equal(result.receipt.memory_count,0);assert.equal(result.receipt.recent_turn_count,1);assert.equal(result.receipt.recent_analysis_status,'failed');
   assert.equal(result.context.memory.recent_conversation.turns[0].text,recentCall().turns[0].text);
   assert(!JSON.stringify(result.receipt).includes('sister'));
   const suppressed=boundVoiceContext({memory:{facts:[],memories:[],recent_conversation:recentCall(),suppress_memory:true}},clock);
@@ -115,6 +115,6 @@ test('voice sends dated grounding and isolated clock then returns only a context
     const second=await handler(req('voice',{sessionId:sid,sdp}));assert.equal(second.status,200);
     const receipt=(await second.json()).memory_context;
     assert.equal(receipt.recent_session_id,oldSid);assert.equal(receipt.recent_analysis_status,'failed');assert.equal(sent.memory.recent_conversation.turns[0].text,recentCall().turns[0].text);
-    assert.equal(persisted.memory_context.recent_turn_count,2);assert.equal(persisted.context_sources.recent_session_id,oldSid);assert.match(persisted.context_fingerprint,/^[a-f0-9]{64}$/);assert(!JSON.stringify(persisted).includes('sister'));
+    assert.equal(persisted.memory_context.recent_turn_count,1);assert.equal(persisted.memory_context.recent_mode,'excerpt_fallback');assert.equal(persisted.context_sources.recent_session_id,oldSid);assert.match(persisted.context_fingerprint,/^[a-f0-9]{64}$/);assert(!JSON.stringify(persisted).includes('sister'));
   } finally { globalThis.fetch = original; globalThis.Deno = previousDeno; }
 });

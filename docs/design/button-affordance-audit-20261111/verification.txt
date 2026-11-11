@@ -1,0 +1,15 @@
+Fresh execution, 2026-11-11 UTC
+
+node test/first-use.browser.mjs
+PASS: delayed loading/empty/retry states; optional guide has no mic side effects, ESC/focus, compact layout and account-scoped persistence; permission recovery; late microphone and voice responses after cancel cannot revive a call; immediate retry remains isolated.
+
+Temporary instrumentation copy of test/enhancements.browser.mjs (screenshots only; app source unchanged)
+PASS E01: real RTC boundary, one failed IndexedDB write, autonomous retry, offline reload and exact server acknowledgement preserve one connection receipt.
+PASS E02: held intent → separate explanation → proposal → explicit acceptance/dismissal survives reload, preserves originals and never reuses held content automatically.
+PASS E03: optional 1/3/7-day KST schedules, concealed delayed recall and three self-report choices remain separate from immediate practice and preserve the default cap.
+PASS E04: a service-prepared actual connection binds original user evidence; observation requires explicit self-review, leaves context/opportunity unknown and never labels success/mastery.
+PASS E05: exact saved 168-hour period and generation disclosure remain fixed through goal selection → preparation → actual connection → delayed recall.
+PASS Privacy: authenticated roles isolate accounts/companions, excluded sources revoke derivative evidence/plans, and approval guards both client and service RPCs.
+PASS: 6 enhancement acceptance scenarios; live voice and human quality gates remain external.
+
+Authenticated screenshots use explicit local synthetic fixtures. These checks are not live voice, real learner quality, user research, or accessibility certification.

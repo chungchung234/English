@@ -67,7 +67,7 @@ export function renderSessionFeedback(target, analysis, { getRows = () => [], on
         });
       }).catch(() => { /* The source link remains usable if quotes are unavailable. */ });
     }
-    const source = text('button', '원문에서 보기', 'text-button feedback-source-link'); source.type = 'button';
+    const source = text('button', '원문에서 보기', 'text-button link-button feedback-source-link'); source.type = 'button';
     source.dataset.feedbackSource = ''; source.dataset.evidenceIds = allowed.join(' ');
     source.onclick = () => onSource(allowed, source); card.append(source);
   };

@@ -1,0 +1,500 @@
+[
+  {
+    "file": "screens/01-public-login.png",
+    "description": "공개 로그인",
+    "source": "public live URL",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BODY",
+    "dom_record": "screens/01-public-login.json"
+  },
+  {
+    "file": "screens/02-public-email.png",
+    "description": "공개 이메일 로그인",
+    "source": "public live URL",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "SUMMARY",
+    "dom_record": "screens/02-public-email.json"
+  },
+  {
+    "file": "screens/03-home.png",
+    "description": "중복된 통화 실패 캡처 · 미사용",
+    "source": "local current-source / synthetic data",
+    "accepted": false,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BUTTON",
+    "dom_record": "screens/03-home.json"
+  },
+  {
+    "file": "screens/04-account.png",
+    "description": "내 계정",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BUTTON",
+    "dom_record": "screens/04-account.json"
+  },
+  {
+    "file": "screens/05-account-keyboard-button.png",
+    "description": "내보내기 Tab 포커스",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "export",
+    "dom_record": "screens/05-account-keyboard-button.json"
+  },
+  {
+    "file": "screens/06-account-keyboard-file.png",
+    "description": "가져오기 Tab 포커스 누락",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "restore",
+    "dom_record": "screens/06-account-keyboard-file.json"
+  },
+  {
+    "file": "screens/07-memory.png",
+    "description": "기억 관리 빈 상태",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BUTTON",
+    "dom_record": "screens/07-memory.json"
+  },
+  {
+    "file": "screens/08-memory-bottom.png",
+    "description": "기억 관리 하단",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BUTTON",
+    "dom_record": "screens/08-memory-bottom.json"
+  },
+  {
+    "file": "screens/09-memory-search-expanded.png",
+    "description": "기억 검색 펼침",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "SUMMARY",
+    "dom_record": "screens/09-memory-search-expanded.json"
+  },
+  {
+    "file": "screens/10-privacy.png",
+    "description": "개인정보 안내",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BUTTON",
+    "dom_record": "screens/10-privacy.json"
+  },
+  {
+    "file": "screens/11-guide.png",
+    "description": "안내 첫 단계",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "guide-title",
+    "dom_record": "screens/11-guide.json"
+  },
+  {
+    "file": "screens/12-guide-call.png",
+    "description": "안내 통화 단계",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "guide-title",
+    "dom_record": "screens/12-guide-call.json"
+  },
+  {
+    "file": "screens/13-live-call.png",
+    "description": "통화 중",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BODY",
+    "dom_record": "screens/13-live-call.json"
+  },
+  {
+    "file": "screens/14-speed.png",
+    "description": "속도 선택",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BUTTON",
+    "dom_record": "screens/14-speed.json"
+  },
+  {
+    "file": "screens/15-speed-keyboard.png",
+    "description": "속도 선택 키보드 포커스",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "INPUT",
+    "dom_record": "screens/15-speed-keyboard.json"
+  },
+  {
+    "file": "screens/16-live-transcript.png",
+    "description": "통화 중 대화문",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "SUMMARY",
+    "dom_record": "screens/16-live-transcript.json"
+  },
+  {
+    "file": "screens/17-post-call.png",
+    "description": "통화 종료 후 마지막 발화 저장 대기",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "session-record-title",
+    "dom_record": "screens/17-post-call.json"
+  },
+  {
+    "file": "screens/18-post-call-ready.png",
+    "description": "통화 종료 후 기록 준비 완료",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "session-record-title",
+    "dom_record": "screens/18-post-call-ready.json"
+  },
+  {
+    "file": "screens/19-call-note-empty.png",
+    "description": "빈 학습 노트",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "session-feedback-title",
+    "dom_record": "screens/19-call-note-empty.json"
+  },
+  {
+    "file": "screens/20-history.png",
+    "description": "최근 통화",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "refresh-history",
+    "dom_record": "screens/20-history.json"
+  },
+  {
+    "file": "screens/21-call-detail.png",
+    "description": "통화 상세",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BUTTON",
+    "dom_record": "screens/21-call-detail.json"
+  },
+  {
+    "file": "screens/22-call-management.png",
+    "description": "통화 관리 펼침",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "SUMMARY",
+    "dom_record": "screens/22-call-management.json"
+  },
+  {
+    "file": "screens/23-call-note.png",
+    "description": "통화 학습 노트",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "session-feedback-title",
+    "dom_record": "screens/23-call-note.json"
+  },
+  {
+    "file": "screens/24-call-note-actions.png",
+    "description": "기존 노트 동작",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BODY",
+    "dom_record": "screens/24-call-note-actions.json"
+  },
+  {
+    "file": "screens/25-call-note-expanded.png",
+    "description": "기존 노트 펼침",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "SUMMARY",
+    "dom_record": "screens/25-call-note-expanded.json"
+  },
+  {
+    "file": "screens/26-review-list.png",
+    "description": "표현 목록",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "review-title",
+    "dom_record": "screens/26-review-list.json"
+  },
+  {
+    "file": "screens/27-expression-detail.png",
+    "description": "표현 상세 중간 렌더링 · 미사용",
+    "source": "local current-source / synthetic data",
+    "accepted": false,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "SECTION",
+    "dom_record": "screens/27-expression-detail.json"
+  },
+  {
+    "file": "screens/28-expression-actions.png",
+    "description": "표현 상세 동작",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "SECTION",
+    "dom_record": "screens/28-expression-actions.json"
+  },
+  {
+    "file": "screens/29-expression-source.png",
+    "description": "대화 원문 뒤로 동작",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "SECTION",
+    "dom_record": "screens/29-expression-source.json"
+  },
+  {
+    "file": "screens/30-source-back-result.png",
+    "description": "복습 목록 클릭 후 실제 도착한 표현 상세",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "SECTION",
+    "dom_record": "screens/30-source-back-result.json"
+  },
+  {
+    "file": "screens/31-history-retry.png",
+    "description": "최근 통화 실패 후 재시도",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "refresh-history",
+    "dom_record": "screens/31-history-retry.json"
+  },
+  {
+    "file": "screens/32-call-failure.png",
+    "description": "통화 연결 실패 복구",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "call-help-title",
+    "dom_record": "screens/32-call-failure.json"
+  },
+  {
+    "file": "screens/33-microphone-denied.png",
+    "description": "마이크 권한 거부 복구",
+    "source": "local current-source / synthetic data / fresh first-use.browser.mjs",
+    "accepted": true
+  },
+  {
+    "file": "screens/34-connecting-cancel.png",
+    "description": "연결 중 취소",
+    "source": "local current-source / synthetic data / fresh first-use.browser.mjs",
+    "accepted": true
+  },
+  {
+    "file": "screens/35-guide-compact.png",
+    "description": "320×568 안내",
+    "source": "local current-source / synthetic data / fresh first-use.browser.mjs",
+    "accepted": true
+  },
+  {
+    "file": "screens/36-first-home.png",
+    "description": "첫 사용 홈",
+    "source": "local current-source / synthetic data / fresh first-use.browser.mjs",
+    "accepted": true
+  },
+  {
+    "file": "screens/37-source-keyboard.png",
+    "description": "원문 보기 키보드 포커스",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BUTTON",
+    "dom_record": "screens/37-source-keyboard.json"
+  },
+  {
+    "file": "screens/38-detail-compact.png",
+    "description": "320px 표현 상세",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 320,
+      "height": 740
+    },
+    "active": "SECTION",
+    "dom_record": "screens/38-detail-compact.json"
+  },
+  {
+    "file": "screens/39-detail-large-text.png",
+    "description": "320px·루트 글자 32px 시뮬레이션",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 320,
+      "height": 740
+    },
+    "active": "SECTION",
+    "dom_record": "screens/39-detail-large-text.json"
+  },
+  {
+    "file": "screens/40-account-desktop.png",
+    "description": "1024px 계정",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 1024,
+      "height": 900
+    },
+    "active": "BUTTON",
+    "dom_record": "screens/40-account-desktop.json"
+  },
+  {
+    "file": "screens/41-intent-decision.png",
+    "description": "조건부 의도 보충 제안 결정",
+    "source": "local current-source / synthetic data / fresh instrumented enhancements.browser.mjs",
+    "accepted": true
+  },
+  {
+    "file": "screens/42-recall-schedule.png",
+    "description": "선택형 재연습 예약",
+    "source": "local current-source / synthetic data / fresh instrumented enhancements.browser.mjs",
+    "accepted": true
+  },
+  {
+    "file": "screens/43-delayed-recall.png",
+    "description": "다시 말하기 도움·자기평가",
+    "source": "local current-source / synthetic data / fresh instrumented enhancements.browser.mjs",
+    "accepted": true
+  },
+  {
+    "file": "screens/44-weekly-goals.png",
+    "description": "주간 목표와 잔류 알림",
+    "source": "local current-source / synthetic data / fresh instrumented enhancements.browser.mjs",
+    "accepted": true
+  },
+  {
+    "file": "screens/45-weekly-persistent-notice.png",
+    "description": "주간 화면 추가 10초 대기 후 잔류 알림",
+    "source": "local current-source / synthetic data / fresh instrumented enhancements.browser.mjs",
+    "accepted": true
+  },
+  {
+    "file": "screens/46-memory-saved.png",
+    "description": "합성 기억 저장 후 활성 잊기",
+    "source": "local current-source / synthetic data",
+    "accepted": true,
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "active": "BODY",
+    "dom_record": "screens/46-memory-saved.json"
+  }
+]

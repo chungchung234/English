@@ -1,0 +1,13 @@
+{
+  "checked_at_utc": "2026-11-11T13:54:38.206130+00:00",
+  "public_url": "https://chungchung234.github.io/English/",
+  "pre_release_asset": "assets/app.af850d82cbd4.js",
+  "pre_release_sha256": "af850d82cbd4a2416be2fbf88937c36f049122c4a63bf5eb110accc930a9435f",
+  "pre_release_build": [
+    "git:d998452baac429fbff5f4fdd7eac03a046402a96"
+  ],
+  "initial_source_base": "d41b871e2811fc6196ba60b06cb5175eb1469e74",
+  "integrated_latest_base": "1eb405d4c10a003d6f725a76b027519bd3e0d6c5",
+  "source_unchanged_since_final_checks": false,
+  "authenticated_capture": "Actual local app source, synthetic auth/transcript/backend/microphone/WebRTC. Not a real learner account."
+}

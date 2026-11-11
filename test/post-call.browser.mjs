@@ -458,7 +458,7 @@ try {
   await query(`insert into public.analyses(user_id,kind,content,model) values($1,'weekly',$2::jsonb,'local-weekly-fixture')`, [uid, JSON.stringify({ summary: '저장된 168시간 분석입니다.', scope: { companionId: 'alex', period_start: periodStart, period_end: periodEnd } })]);
   await refresh(page); await page.locator('[data-view="history"]').click();
   await page.locator('#weekly').click();
-  await page.waitForFunction(()=>document.querySelector('#review-content h3')?.textContent==='Alex · 최근 7일 분석');
+  await page.waitForFunction(()=>document.querySelector('#review-content [data-analysis-kind=weekly]')&&document.querySelector('#review-context').textContent==='Alex와의 대화');
   const weekly = page.locator('#review-content');
   assert.match(await weekly.innerText(), /최근 7일/);
   assert.match(await weekly.innerText(), /생성:/);

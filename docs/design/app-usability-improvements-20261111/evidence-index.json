@@ -1,0 +1,380 @@
+[
+  {
+    "phase": "before",
+    "file": "before/01-account.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "BUTTON",
+    "dom": "before/01-account.json"
+  },
+  {
+    "phase": "before",
+    "file": "before/02-export-focus.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "export",
+    "dom": "before/02-export-focus.json"
+  },
+  {
+    "phase": "before",
+    "file": "before/03-import-focus.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "restore",
+    "dom": "before/03-import-focus.json"
+  },
+  {
+    "phase": "before",
+    "file": "before/04-memory-draft-lost.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "BODY",
+    "dom": "before/04-memory-draft-lost.json"
+  },
+  {
+    "phase": "before",
+    "file": "before/05-memory-bottom.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "BODY",
+    "dom": "before/05-memory-bottom.json"
+  },
+  {
+    "phase": "before",
+    "file": "before/06-history.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "BUTTON",
+    "dom": "before/06-history.json"
+  },
+  {
+    "phase": "before",
+    "file": "before/07-review-list.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "review-title",
+    "dom": "before/07-review-list.json"
+  },
+  {
+    "phase": "before",
+    "file": "before/08-detail.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "SECTION",
+    "dom": "before/08-detail.json"
+  },
+  {
+    "phase": "before",
+    "file": "before/09-source.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "SECTION",
+    "dom": "before/09-source.json"
+  },
+  {
+    "phase": "before",
+    "file": "before/11-memory-error.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "BODY",
+    "dom": "before/11-memory-error.json"
+  },
+  {
+    "phase": "before",
+    "file": "before/41-intent-decision.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "before",
+    "file": "before/42-recall-schedule.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "before",
+    "file": "before/43-delayed-recall.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "before",
+    "file": "before/44-weekly-goals.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "before",
+    "file": "before/45-weekly-persistent-notice.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "after",
+    "file": "after/01-account.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "BUTTON",
+    "dom": "after/01-account.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/02-export-focus.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "export",
+    "dom": "after/02-export-focus.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/03-import-focus.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "restore",
+    "dom": "after/03-import-focus.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/04-memory-draft-kept.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "INPUT",
+    "dom": "after/04-memory-draft-kept.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/05-memory-bottom.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "INPUT",
+    "dom": "after/05-memory-bottom.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/06-history.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "BUTTON",
+    "dom": "after/06-history.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/07-review-list.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "review-title",
+    "dom": "after/07-review-list.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/08-detail.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "SECTION",
+    "dom": "after/08-detail.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/09-source.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "SECTION",
+    "dom": "after/09-source.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/10-source-return.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "SECTION",
+    "dom": "after/10-source-return.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/11-memory-error.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "BODY",
+    "dom": "after/11-memory-error.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/12-memory-recovered.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "focused": "BODY",
+    "dom": "after/12-memory-recovered.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/13-review-compact.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 320,
+      "height": 740
+    },
+    "focused": "review-title",
+    "dom": "after/13-review-compact.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/14-detail-compact.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 320,
+      "height": 740
+    },
+    "focused": "SECTION",
+    "dom": "after/14-detail-compact.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/15-detail-large-text.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 320,
+      "height": 740
+    },
+    "focused": "SECTION",
+    "dom": "after/15-detail-large-text.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/16-account-compact.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "focused": "BUTTON",
+    "dom": "after/16-account-compact.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/17-memory-error-compact.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 320,
+      "height": 568
+    },
+    "focused": "BODY",
+    "dom": "after/17-memory-error-compact.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/18-account-desktop.png",
+    "source": "local actual source / synthetic fixture",
+    "viewport": {
+      "width": 1024,
+      "height": 900
+    },
+    "focused": "BUTTON",
+    "dom": "after/18-account-desktop.json"
+  },
+  {
+    "phase": "after",
+    "file": "after/19-live-call.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "after",
+    "file": "after/20-call-limit-warning.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "after",
+    "file": "after/21-call-limit-saved.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "after",
+    "file": "after/41-intent-decision.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "after",
+    "file": "after/42-recall-schedule.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "after",
+    "file": "after/43-delayed-recall.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "after",
+    "file": "after/44-weekly-goals.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "after",
+    "file": "after/45-weekly-persistent-notice.png",
+    "source": "local actual source / synthetic fixture"
+  },
+  {
+    "phase": "after",
+    "file": "after/46-weekly-summary.png",
+    "source": "local actual source / synthetic fixture"
+  }
+]

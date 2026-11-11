@@ -36,6 +36,9 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     const hasSessionTime = session.created_at && Object.hasOwn(session, 'time_zone');
     const timing = text('p', hasSessionTime ? sessionTimeLabel(session) : state.metadataFailed ? '통화 시각과 시간대를 확인하지 못했어요.' : '통화 시각과 시간대를 확인하고 있어요.', 'help'); timing.dataset.sessionTime = ''; details.append(timing);
     const phase = current?.transcriptPhase || state.phase;
+    if (phase === 'saved' && Number.isFinite(current?.saveDurationMs) && current.saveDurationMs >= 0) {
+      const duration = text('p', `통화 종료부터 저장 확인까지 ${(current.saveDurationMs / 1000).toFixed(1)}초 · 피드백 준비 시간은 별도예요.`, 'help'); duration.dataset.callSaveDuration = ''; details.append(duration);
+    }
     const rows = ordered((current?.transcript || state.rows).values());
     const pending = rows.filter(row => row.storage !== 'server').length;
     let message = phase === 'finalizing' ? '통화 음성을 종료했어요. 마지막 발화의 전사와 서버 저장을 확인하고 있어요.'

@@ -36,7 +36,8 @@ async function rpc(name, body, user = uid) {
   });
   return asUser(async () => {
     const invocation = `public.${quote(name)}(${args.map(arg => arg.sql).join(',')})`;
-    const result = await db.query(signature.set ? `select * from ${invocation}` : `select ${invocation} as result`, args.map(arg => arg.value));
+    // JSON serialization matches the RPC transport, including composite rows.
+    const result = await db.query(signature.set ? `select * from ${invocation}` : `select to_jsonb(${invocation}) as result`, args.map(arg => arg.value));
     return signature.set ? result.rows : result.rows[0]?.result;
   }, user);
 }
@@ -600,6 +601,8 @@ try {
     await delayed.locator('#start-call').click(); await delayed.locator('#end-call').waitFor({ state: 'visible' });
     const delayedSessionId = transport.voice.at(-1).sessionId;
     await delayed.locator('#end-call').click();
+    await delayed.locator('#view-ending-transcript').waitFor({ state: 'visible' });
+    await delayed.locator('#view-ending-transcript').click();
     await delayed.locator('#wrapup-home').waitFor({ state: 'visible', timeout: 15000 });
     const finalizing = delayed.locator('[data-review-state="finalizing"]');
     assert(await finalizing.isVisible(), 'the post-call save state is visible without opening the transcript');
@@ -614,6 +617,8 @@ try {
     assert.equal((await query('select status from public.sessions where id=$1', [delayedSessionId])).rows[0].status, 'ended');
     assert(await delayed.locator('[data-panel="contacts"]').isVisible(), 'background finish respects the user home exit');
     assert.equal(transport.calls.filter(call => call.path.endsWith('/coach/review')).length, reviewCount, 'no-speech delayed finish never generates feedback');
+    await delayed.locator('[data-call-save-duration]').waitFor({ state: 'attached' });
+    assert.doesNotMatch(await delayed.locator('[data-transcript-status]').textContent(), /미완료|확인하지 못/, 'the client accepts the real completed session row, not only the database side effect');
     console.log('PASS T14: real ten-second finish delay offers home, keeps save state honest, blocks overlap, releases start and avoids forced navigation.');
   } finally { releaseFinish?.(); transport.finishGate = null; await delayContext.close(); }
 

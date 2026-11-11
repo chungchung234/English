@@ -419,3 +419,6 @@ body[data-call-phase=ending] #call-status{color:#fff}
 body[data-call-phase=ending] #end-call{opacity:.5;box-shadow:none}
 @keyframes call-connecting-pulse{0%,100%{opacity:.25}50%{opacity:1}}
 @media(prefers-reduced-motion:reduce){body[data-call-phase=connecting] #call-status::after{animation:none}}
+
+.call-completion-status{margin:6px 0 0;font-size:12px;line-height:1.5;color:#c4d1e5;font-variant-numeric:tabular-nums}
+#view-ending-transcript{min-height:44px;margin:4px 0;padding:8px 12px;font-size:13px;color:#fff;text-decoration:underline;text-underline-offset:4px}

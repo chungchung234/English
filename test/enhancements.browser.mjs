@@ -43,7 +43,8 @@ async function invokeRpc(name, body, work, user) {
   });
   return work(async () => {
     const invocation = `public.${quote(name)}(${args.map(arg => arg.sql).join(',')})`;
-    const result = await db.query(signature.set ? `select * from ${invocation}` : `select ${invocation} as result`, args.map(arg => arg.value));
+    // JSON serialization matches the RPC transport, including composite rows.
+    const result = await db.query(signature.set ? `select * from ${invocation}` : `select to_jsonb(${invocation}) as result`, args.map(arg => arg.value));
     return signature.set ? result.rows : result.rows[0]?.result;
   }, user);
 }

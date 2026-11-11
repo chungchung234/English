@@ -295,7 +295,7 @@ try{
  // attempt stays in history instead of being falsely represented as a call.
  await openContact('alex');voiceFailure=true;await page.locator('#start-call').click();await page.locator('#contacts-panel').waitFor({state:'visible'});assert.equal(await page.locator('#start-call').isEnabled(),true);
  await page.locator('#start-call').click();await page.locator('#end-call').waitFor({state:'visible'});assert.equal(sessions[0].companion_id,'alex');
- assert.equal(voiceSpeeds.at(-1),1.15,'the next call starts at the acknowledged saved speed');
+ assert.equal(voiceSpeeds.at(-1),.7,'the next call starts at the acknowledged saved speed');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'conversation.item.input_audio_transcription.completed',item_id:'alex-turn',transcript:'I am ready to speak again.'})}));await page.waitForFunction(()=>document.querySelector('#turn-count').textContent==='1개 발화');await page.locator('#end-call').click();await page.clock.fastForward(2000);await page.waitForFunction(()=>document.querySelector('#call-status').textContent==='통화와 피드백 서버 저장 확인');
  // Redial a Mia row while Alex was selected. The new session and final review
  // must follow the row, and duplicate end requests must create one finish only.

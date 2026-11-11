@@ -244,7 +244,7 @@ function updateCallControls() {
   if($('mute-call')){$('mute-call').disabled=locked||Boolean(current?.inputBlocked);$('mute-call').setAttribute('aria-pressed',String(Boolean(current?.muted)));$('mute-call').setAttribute('aria-label','음소거');}
   document.querySelectorAll('[data-cue]').forEach(button=>button.disabled=locked||!connected||!current.voiceInstructions||current.responding||current.speaking||current.aiSpeaking||current.floor?.blocksResponse);
   $('speed-call').disabled=locked||!connected;
-  $('speed-apply').disabled=!current||current.ending||callStarting||!connected;
+  $('speed-apply').disabled=!current||current.ending||callStarting||!connected||!validSpeed(selectedSpeechSpeed());
   current?.speed?.availability(Boolean(connected&&current.dc?.readyState==='open'&&!current.ending), Boolean(current.responding||current.aiSpeaking||current.speaking||current.compacting||callStarting));
   current?.floor?.availability(Boolean(connected&&current.dc?.readyState==='open'&&!current.ending));
   renderFloor(current);
@@ -268,11 +268,16 @@ function renderSpeechSpeed(state) {
   $('speed-pending').hidden=!state.pending;
   $('speed-pending').textContent=state.pending?formatSpeed(state.desired)+' · 다음 답변에 적용 대기 중':'';
 }
-function renderSpeedDraft() {
-  const value=Number($('speed-range').value);
-  $('speed-value').value=formatSpeed(value);
-  $('speed-progress').value=value-.5;
-  $('speed-range').setAttribute('aria-valuetext',formatSpeed(value).replace('×','배'));
+function selectedSpeechSpeed() {
+  return Number($('speed-form').elements['speech-speed'].value);
+}
+function renderSpeedDraft(value) {
+  const options=[...document.querySelectorAll('[name="speech-speed"]')];
+  options.forEach(option=>{option.checked=Number(option.value)===value;});
+  const custom=!options.some(option=>option.checked);
+  $('speed-custom-current').hidden=!custom;
+  $('speed-custom-current').textContent=custom?'현재 '+formatSpeed(value)+' · 변경할 속도를 선택하세요':'';
+  updateCallControls();
 }
 function setCallPhase(phase) {
   document.body.dataset.callPhase=phase;presence.setPaused(phase==='ending');
@@ -1013,11 +1018,9 @@ document.querySelectorAll('[data-oauth]').forEach(button=>button.onclick=protect
 document.querySelectorAll('[data-link-provider]').forEach(button=>button.onclick=protect(()=>startSocialLogin(button.dataset.linkProvider,true)));
 $('view-ending-transcript').onclick=()=>{if(call?.ending)call.completion?.openReview();};
 $('start-call').onclick=protect(startCall);$('end-call').onclick=protect(endCall);
-$('speed-call').onclick=()=>{if(!call||call.ending)return;$('speed-range').value=String(call.speed.state.desired);renderSpeedDraft();openDialog('speed-dialog');};
-$('speed-range').oninput=renderSpeedDraft;
-document.querySelectorAll('[data-speed-preset]').forEach(button=>{button.onclick=()=>{$('speed-range').value=button.dataset.speedPreset;renderSpeedDraft();};});
-$('speed-reset').onclick=()=>{$('speed-range').value=String(SPEED.default);renderSpeedDraft();};
-$('speed-form').onsubmit=event=>{event.preventDefault();if(!call||call.ending||$('speed-apply').disabled)return;call.speed.request(Number($('speed-range').value));closeDialog('speed-dialog');};
+$('speed-call').onclick=()=>{if(!call||call.ending)return;renderSpeedDraft(call.speed.state.desired);openDialog('speed-dialog');};
+$('speed-form').onchange=()=>renderSpeedDraft(selectedSpeechSpeed());
+$('speed-form').onsubmit=event=>{event.preventDefault();if(!call||call.ending||$('speed-apply').disabled)return;const value=selectedSpeechSpeed();if(!validSpeed(value))return;call.speed.request(value);closeDialog('speed-dialog');};
 $('refresh-history').onclick=protect(async()=>{if(memoryBusy())return;await sync();await loadHistory();await loadMemory();});
 $('weekly').onclick=protect(async()=>{
   if(memoryBusy())throw Error('통화를 마친 뒤 분석하세요.');

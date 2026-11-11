@@ -97,13 +97,13 @@
 <div class="dialog-heading"><h2 id="speed-title">말하기 속도</h2><button data-close="speed-dialog" class="icon-button" aria-label="닫기"><img src="assets/close.svg" alt=""></button></div>
 <p id="speed-note" class="dialog-note">AI 음성에만 적용돼요</p>
 <form id="speed-form">
-<output id="speed-value" for="speed-range" class="speed-value">0.85×</output>
-<label class="sr-only" for="speed-range">말하기 속도</label>
-<div class="speed-slider"><progress id="speed-progress" max="1" value="0.35" aria-hidden="true"></progress><input id="speed-range" type="range" min="0.5" max="1.5" step="0.05" value="0.85" aria-valuetext="0.85배" aria-describedby="speed-help"></div>
-<div class="speed-scale" aria-hidden="true"><span>0.5×</span><span>1.0×</span><span>1.5×</span></div>
-<div class="speed-presets" role="group" aria-label="속도 빠른 선택"><button type="button" class="glass-button" data-speed-preset="0.7">느리게 · 0.7×</button><button type="button" class="glass-button" data-speed-preset="1">빠르게 · 1.0×</button></div>
-<button id="speed-reset" type="button" class="text-button">기본 · 0.85×</button>
-<p id="speed-help">다음 답변부터 적용</p>
+<fieldset class="speed-options" aria-describedby="speed-help"><legend class="sr-only">말하기 속도 선택</legend>
+<label class="speed-option"><input type="radio" name="speech-speed" value="0.7"><span class="speed-option-face"><span class="speed-option-check" aria-hidden="true">✓</span><strong>느리게</strong><small>0.7×</small></span></label>
+<label class="speed-option"><input type="radio" name="speech-speed" value="0.85" checked><span class="speed-option-face"><span class="speed-option-check" aria-hidden="true">✓</span><strong>기본</strong><small>0.85×</small></span></label>
+<label class="speed-option"><input type="radio" name="speech-speed" value="1"><span class="speed-option-face"><span class="speed-option-check" aria-hidden="true">✓</span><strong>빠르게</strong><small>1.0×</small></span></label>
+</fieldset>
+<p id="speed-custom-current" class="dialog-note" hidden></p>
+<p id="speed-help">다음 답변부터 적용돼요</p>
 <button id="speed-apply" type="submit" class="primary-button">적용</button>
 </form></dialog>
 <audio id="remote-audio" autoplay></audio><script src="public-config.js"></script><script type="module" src="app.js"></script>

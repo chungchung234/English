@@ -42,6 +42,7 @@
     "url": "https://github.com/chungchung234/English/actions/runs/42936340002",
     "build": "success",
     "deploy": "success",
-    "post_deployment_smoke": "success"
+    "post_deployment_smoke": "success",
+    "live_smoke_scope": "Unapproved-account access policy verified. Actual approved-account voice calls were not run by the release smoke check."
   }
 }

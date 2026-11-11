@@ -46,6 +46,7 @@ try {
  await root.locator('[data-expression-key]').nth(1).click();
  await root.locator('[data-note-expression="b"]').waitFor();
  assert.equal(await root.locator('[data-note-expression]').count(),1,'opening B shows only the selected expression');
+ await page.waitForFunction(()=>document.activeElement.dataset.noteExpression==='b');
  assert.equal(await page.evaluate(()=>document.activeElement.dataset.noteExpression),'b');
  assert.equal(await root.locator('[data-note-expression="c"]').count(),0,'other calls are not merged into the note');
  await page.screenshot({path:'test-results/review-journal/02-call-note.png',fullPage:true});

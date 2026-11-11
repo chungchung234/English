@@ -122,3 +122,41 @@ test('recent and fallback retrieval use conversation dates even when an old call
   assert.deepEqual(both.map(row => row.id), [recentAnalysis.id, oldAnalysis.id]);
   assert.equal(both[1].session_time_zone, null, 'old call time zone is not inferred');
 });
+
+test('last conversation survives failed analysis, skips empty calls, and cannot cross account, companion, exclusion or approval boundaries',async t=>{
+  const {db}=await database(t);
+  for(const companion of ['alex','mia','juno']){
+    const previous=await session(db,{companion,created:'2026-11-09T00:00:00Z'});
+    await speech(db,previous,'Yesterday I planned a train trip.',{timestamp:'2026-11-09T00:01:00Z'});
+    await speech(db,previous,'Where would you like to go?',{speaker:'assistant',timestamp:'2026-11-09T00:02:00Z'});
+    await db.query("insert into public.analysis_jobs(user_id,session_id,kind,request_key,state,error) values($1,$2,'session',$3,'failed','INVALID_MODEL_OUTPUT')",[A,previous.id,'failed-review-'+previous.id]);
+    await session(db,{companion,created:'2026-11-10T00:00:00Z'}); // no user speech
+    const foreign=await session(db,{user:B,companion,created:'2026-11-10T00:00:00Z'});await speech(db,foreign,'Another account secret.');
+    const result=await context(db,A,companion);
+    assert.equal(result.recent_conversation.session_id,previous.id);assert.equal(result.recent_conversation.analysis_status,'failed');
+    assert.equal(result.recent_conversation.turns.length,2);assert(!JSON.stringify(result).includes('Another account secret'));
+    assert.deepEqual(result.memories,[],'recent original speech does not require an analysis');
+    await asService(db,()=>db.query("select public.memory_manage($1,$2,'excludeSession',null,null,$3)",[A,companion,previous.id]));
+    assert.equal((await context(db,A,companion)).recent_conversation,null,'excluded dialogue never returns through raw fallback');
+  }
+  await assert.rejects(asUser(db,A,()=>db.query("select loop_private.recent_conversation($1,'alex')",[B])),/permission denied/);
+  await db.exec("delete from loop_private.approved_emails where email='owner@example.com'");
+  await assert.rejects(context(db,A,'alex'),/Account not approved/);
+});
+
+test('partial call and wrong-transcript hold never become a raw-memory bypass',async t=>{
+ const {db}=await database(t);const prior=await session(db);
+ await speech(db,prior,'This source needs correction.');
+ await db.query("insert into public.learning_source_holds(user_id,session_id,reason) values($1,$2,'wrong_transcript')",[A,prior.id]);
+ assert.equal((await context(db)).recent_conversation,null);
+ await db.query('delete from public.learning_source_holds where session_id=$1',[prior.id]);
+ await db.query('update public.sessions set record_incomplete=true where id=$1',[prior.id]);
+ assert.equal((await context(db)).recent_conversation,null,'explicit incomplete-record finalization is not normal remembered history');
+ await db.query('update public.sessions set record_incomplete=false where id=$1',[prior.id]);
+ await db.query("update public.sessions set status='active',ended_at=null where id=$1",[prior.id]);
+ assert.equal((await context(db)).recent_conversation,null);
+ await db.query("update public.sessions set status='ended',ended_at=created_at+interval '20 minutes' where id=$1",[prior.id]);
+ assert((await context(db)).recent_conversation);
+ await asService(db,()=>db.query("select public.memory_manage($1,'alex','forgetFact','goal')",[A]));
+ const forgotten=await context(db);assert.equal(forgotten.recent_conversation,null);assert(forgotten.facts.some(f=>f.key==='goal'&&f.forgotten));
+});

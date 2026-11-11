@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { callClock, trustedTimeContext, memoryFact, memoryEvidence, boundVoiceContext, conversationQuery } from './temporal-context.ts';
+import { callClock, trustedTimeContext, memoryFact, memoryEvidence, boundVoiceContext, conversationQuery, recentConversation } from './temporal-context.ts';
 import { handler } from './index.ts';
 
 const uid = '11111111-1111-4111-8111-111111111111', sid = '22222222-2222-4222-8222-222222222222';
@@ -10,6 +10,19 @@ const sdp = 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n';
 const current = { id: sid, user_id: uid, companion_id: 'alex', scenario: 'Natural English conversation about everyday life', status: 'active', created_at: '2026-11-11T00:00:00Z', ended_at: null, time_zone: 'Asia/Seoul' };
 const rawMemory = () => ({ id: aid, session_id: oldSid, created_at: '2026-11-11T00:00:00Z', session_created_at: '2026-11-09T14:00:00Z', session_ended_at: '2026-11-09T14:10:00Z', session_time_zone: 'Asia/Seoul', content: { summary: 'The learner discussed a planned walk.', corrections: [], practice: [] }, source_event_ids: [eid], evidence: [{ id: eid, text: 'I am planning a walk tomorrow.', timestamp: '2026-11-09T14:03:00Z' }] });
 const promptMemory = () => ({ session_id: oldSid, session_created_at: '2026-11-09T14:00:00.000Z', session_time_zone: 'Asia/Seoul', evidence: [{ id: eid, text: 'I am planning a walk tomorrow.', timestamp: '2026-11-09T14:03:00.000Z' }] });
+const recentCall = () => ({session_id:oldSid,session_created_at:'2026-11-10T14:00:00Z',session_ended_at:'2026-11-10T14:10:00Z',session_time_zone:'Asia/Seoul',analysis_status:'failed',turns:[{id:eid,speaker:'user',text:'I am visiting my sister in Busan tomorrow.',timestamp:'2026-11-10T14:01:00Z'},{id:aid,speaker:'assistant',text:'What are you planning to do together?',timestamp:'2026-11-10T14:02:00Z'}]});
+
+test('a failed analysis still supplies the last original exchange, while suppression and bounded provenance remain authoritative',()=>{
+  const clock=callClock(current,new Date('2026-11-11T00:00:00Z'));
+  const result=boundVoiceContext({memory:{facts:[],memories:[],recent_conversation:recentCall(),suppress_memory:false}},clock);
+  assert.equal(result.context.continuity.session_id,oldSid);assert.equal(result.receipt.status,'ready');assert.equal(result.receipt.memory_count,0);assert.equal(result.receipt.recent_turn_count,2);assert.equal(result.receipt.recent_analysis_status,'failed');
+  assert.equal(result.context.memory.recent_conversation.turns[0].text,recentCall().turns[0].text);
+  assert(!JSON.stringify(result.receipt).includes('sister'));
+  const suppressed=boundVoiceContext({memory:{facts:[],memories:[],recent_conversation:recentCall(),suppress_memory:true}},clock);
+  assert.equal(suppressed.context.memory.recent_conversation,null);assert.equal(suppressed.context.continuity,null);assert(!JSON.stringify(suppressed).includes('sister'));
+  assert.equal(recentConversation({...recentCall(),session_ended_at:'2030-01-01T00:00:00Z'},clock.server_now_utc),null);
+  assert.equal(recentConversation({...recentCall(),turns:[{...recentCall().turns[0],speaker:'system'}]},clock.server_now_utc),null);
+});
 
 test('server time distinguishes the user calendar date, DST and unknown legacy timezone', () => {
   const now = new Date('2026-11-10T15:03:00Z');
@@ -67,13 +80,13 @@ const req = (endpoint, body) => new Request(`https://project.supabase.co/functio
 test('voice sends dated grounding and isolated clock then returns only a context receipt, never private memory text', async () => {
   const original = globalThis.fetch, previousDeno = globalThis.Deno;
   globalThis.Deno = { env: { get: name => config[name] } };
-  const queries = []; let sent, modelSnapshot;
+  const queries = []; let sent, modelSnapshot,withRecent=false,persisted;
   globalThis.fetch = async (url, options) => {
     const path = String(url), body = options?.body && !(options.body instanceof FormData) ? JSON.parse(options.body) : null;
     if (path.includes('/auth/')) return json({ id: uid, email: 'owner@example.com', email_confirmed_at: '2026-01-01T00:00:00Z' });
     if (path.includes('/sessions?')) { assert(new URL(path).searchParams.get('select').includes('time_zone')); return json([current]); }
     if (path.includes('/learning_voice_context')) return json({ focus: [], suppress_memory: false });
-    if (path.includes('/memory_context')) { queries.push(body.p_query); return json({ revision: 0, facts: [{ key: 'interest', value: 'Walking', quote: 'I enjoy walking.', spoken_at: '2026-11-09T14:03:00Z', session_id: oldSid, evidence_ids: [eid] }], memories: [rawMemory()], limited: false, retrieval: 'keyword' }); }
+    if (path.includes('/memory_context')) { queries.push(body.p_query); return json({ revision: 0, facts: [{ key: 'interest', value: 'Walking', quote: 'I enjoy walking.', spoken_at: '2026-11-09T14:03:00Z', session_id: oldSid, evidence_ids: [eid] }], memories: [rawMemory()],recent_conversation:withRecent?recentCall():null, limited: false, retrieval: 'keyword' }); }
     if (path.includes('/learning_usage_prepare')) return json({ targets: [], source_version: 'fixture' });
     if (path.includes('/reserve_run')) { assert.equal(body.p_kind, 'voice'); return json({ reserved: true, job_id: sid, lease_token: eid }); }
     if (path.includes('/realtime/calls')) {
@@ -87,7 +100,7 @@ test('voice sends dated grounding and isolated clock then returns only a context
       assert.equal(sent.memory.memories[0].session_created_at, '2026-11-09T14:00:00.000Z'); assert.equal(sent.memory.facts[0].quote, 'I enjoy walking.');
       await new Promise(resolve => setTimeout(resolve, 4)); return new Response(sdp);
     }
-    if (path.includes('/complete_run')) return json({ saved: true });
+    if (path.includes('/complete_run')) {persisted=body.p_result;return json({ saved: true });}
     if (path.includes('/fail_run')) return json({ saved: true });
     throw Error('Unexpected request in temporal voice fixture');
   };
@@ -98,5 +111,10 @@ test('voice sends dated grounding and isolated clock then returns only a context
     assert(Date.parse(output.clock.server_now_utc) >= Date.parse(modelSnapshot.server_now_utc));
     assert.equal(output.clock.session_created_at, '2026-11-11T00:00:00.000Z'); assert.equal(output.clock.time_zone, 'Asia/Seoul');
     assert(!JSON.stringify(output).includes('planning a walk')); assert(!JSON.stringify(output).includes('I enjoy walking'));
+    withRecent=true;
+    const second=await handler(req('voice',{sessionId:sid,sdp}));assert.equal(second.status,200);
+    const receipt=(await second.json()).memory_context;
+    assert.equal(receipt.recent_session_id,oldSid);assert.equal(receipt.recent_analysis_status,'failed');assert.equal(sent.memory.recent_conversation.turns[0].text,recentCall().turns[0].text);
+    assert.equal(persisted.memory_context.recent_turn_count,2);assert.equal(persisted.context_sources.recent_session_id,oldSid);assert.match(persisted.context_fingerprint,/^[a-f0-9]{64}$/);assert(!JSON.stringify(persisted).includes('sister'));
   } finally { globalThis.fetch = original; globalThis.Deno = previousDeno; }
 });

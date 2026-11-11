@@ -1,3 +1,4 @@
+import { reviewLearningSchema, validReviewLearning } from './review-learning.ts';
 // Pure validation and evidence handling; also tested with Node's TypeScript support.
 export class AppError extends Error {
   constructor(public status: number, public code: string, message: string, public metadata: { retry_at?: string; retry_seconds?: number } = {}) { super(message); }
@@ -104,7 +105,14 @@ export function validateAnalysis(value: unknown, events: TranscriptEvent[], kind
       if (key === 'practice' && !text(item.expression)) return failEvidence();
       // Meaning and usage were added for review browsing; older stored notes
       // remain readable without fabricating translations on every page visit.
-      if (item.meaning !== undefined && !text(item.meaning, 500)) return failEvidence();
+      if (item.meaning !== undefined && !(key === 'strengths' && item.meaning === '') && !text(item.meaning, 500)) return failEvidence();
+      if (item.learning !== undefined && !validReviewLearning(item.learning, item.evidence_ids.map(id => sources.get(id)!.text))) return failEvidence();
+      if (key === 'strengths' && item.expression !== undefined && (typeof item.expression !== 'string' || item.expression.length > 500
+        || (item.expression !== '' && (!item.expression.trim() || !item.evidence_ids.some(id => sources.get(id)!.text.includes(item.expression as string)))))) return failEvidence();
+      if (key === 'strengths' && item.expression && item.learning) {
+        const learning = item.learning as Record<string, unknown>;
+        if (learning.source_is_question || (learning.source_quote && learning.source_quote !== item.expression)) return failEvidence();
+      }
       if (key === 'practice' && item.reason !== undefined && !text(item.reason, 1000)) return failEvidence();
       if (key === 'corrections') {
         if (!text(item.original) || !text(item.improved) || !text(item.reason)) return failEvidence();
@@ -148,11 +156,12 @@ const string = { type: 'string' };
 const itemSchema = (properties: Record<string, unknown>) => ({ type: 'object', properties: { ...properties, evidence_ids: evidence }, required: [...Object.keys(properties), 'evidence_ids'], additionalProperties: false });
 export function analysisSchema(kind: 'session' | 'weekly', withMeanings = true) {
   const meaning = withMeanings ? { meaning: { type: 'string', maxLength: 500 } } : {};
+  const learning = withMeanings ? { learning: reviewLearningSchema } : {};
   const properties: Record<string, unknown> = {
     summary: string,
-    strengths: { type: 'array', maxItems: 6, items: itemSchema({ text: string }) },
-    corrections: { type: 'array', maxItems: 8, items: itemSchema({ original: string, improved: string, ...meaning, reason: string, category: { type: 'string', enum: ['error', 'alternative'] } }) },
-    practice: { type: 'array', maxItems: 8, items: itemSchema({ expression: string, ...meaning, ...(withMeanings ? { reason: { type: 'string', maxLength: 1000 } } : {}) }) },
+    strengths: { type: 'array', maxItems: 6, items: itemSchema({ text: string, ...(withMeanings ? { expression: { type: 'string', maxLength: 500 }, ...meaning, ...learning } : {}) }) },
+    corrections: { type: 'array', maxItems: 8, items: itemSchema({ original: string, improved: string, ...meaning, ...learning, reason: string, category: { type: 'string', enum: ['error', 'alternative'] } }) },
+    practice: { type: 'array', maxItems: 8, items: itemSchema({ expression: string, ...meaning, ...learning, ...(withMeanings ? { reason: { type: 'string', maxLength: 1000 } } : {}) }) },
     next_scenario: string,
     memory_facts: { type: 'array', maxItems: 6, items: itemSchema({ key: { type: 'string', enum: ['name', 'occupation', 'location', 'goal', 'interest', 'preference'] }, value: { type: 'string', maxLength: 240 }, quote: { type: 'string', maxLength: 500 } }) },
   };

@@ -33,6 +33,17 @@ test('review uses every evidenced expression, with zero/many kinds and no recomm
  assert.equal(n.strengths.length,1);assert(n.expressions.every(e=>!e.saved));assert.equal((await db.query('select count(*)::int n from public.learning_state_items')).rows[0].n,3,'review is not limited by the independent recommendation ingest');
  const empty=await call(db,{companion:'mia'});await analysis(db,empty,{errors:0,reusable:0});assert.equal((await note(db,empty)).expressions.length,0);
 });
+test('new learning details and well-used quotations project safely without changing legacy notes or practice state',async t=>{
+ const db=await setup(t),s=await call(db);
+ const learning={focus:'lexical',form:'colloquial',source_quote:'I have a plan.',source_is_question:false,usage:'친구의 제안에 동의할 때 써요.',register:'informal',example:{prompt:'Want to join?',response:"I'm down."},alternative:'Sure.'};
+ const content={summary:'계획',strengths:[{text:'시간을 요청했어요.',expression:'Give me a moment.',meaning:'잠시만요.',evidence_ids:[s.e]},{text:'조작된 강점',expression:'I never said this.',evidence_ids:[s.e]}],corrections:[],practice:[{expression:"I'm down.",meaning:'나도 할래.',reason:'동의',learning,evidence_ids:[s.e]}]};
+ const id=(await db.query("insert into public.analyses(user_id,session_id,kind,content,model,source_event_ids) values($1,$2,'session',$3,'fixture',$4) returning id",[A,s.id,JSON.stringify(content),[s.e]])).rows[0].id;
+ const n=await note(db,s);assert.equal(n.expressions.length,2);assert.equal(n.expressions.find(e=>e.kind==='positive').original,'Give me a moment.');assert.equal(n.expressions.find(e=>e.kind==='reusable').learning.form,'colloquial');
+ const positive=n.expressions.find(e=>e.kind==='positive');await save(db,s,positive.key);assert.equal((await note(db,s)).expressions.find(e=>e.key===positive.key).saved,true);
+ content.practice[0].learning.source_quote='Invented question';content.practice[0].learning.source_is_question=true;
+ await db.query('update public.analyses set content=$1 where id=$2',[JSON.stringify(content),id]);assert.deepEqual((await note(db,s)).expressions.find(e=>e.kind==='reusable').learning,{},'bad imported metadata never fabricates a learner quotation');
+ await db.query("insert into public.learning_source_holds(user_id,session_id,evidence_ids,reason) values($1,$2,$3,'wrong_transcript')",[A,s.id,[s.e]]);assert.equal((await note(db,s)).expressions.length,0);await assert.rejects(save(db,s,positive.key),/no longer available/);
+});
 test('all companions and older calls paginate by stable call time, including equal timestamps and local midnight',async t=>{
  const db=await setup(t);for(let i=0;i<33;i++)await call(db,{companion:i%2?'mia':'alex',at:i<2?'2026-11-10T15:01:00Z':new Date(Date.UTC(2026,10,10-i,10)).toISOString()});
  const first=await journal(db,[null,null,null,'Asia/Seoul',false,20]);assert.equal(first.calls.length,20);assert(first.next);const second=await journal(db,[first.next.before,first.next.before_id,null,'Asia/Seoul',false,20]);assert.equal(second.calls.length,13);assert.equal(second.next,null);assert.equal(new Set([...first.calls,...second.calls].map(x=>x.session.id)).size,33);

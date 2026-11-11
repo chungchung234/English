@@ -1,7 +1,11 @@
 import { deviceTimeZone, sessionTimeZone } from './conversation-time.js';
 
 const names = { alex: 'Alex', mia: 'Mia', juno: 'Juno' };
-const kinds = { error: '교정할 표현', alternative: '다른 표현', reusable: '다시 쓸 표현' };
+const kinds = { error: '교정', alternative: '대안', reusable: '활용 제안', positive: '잘 쓴 표현' };
+const focuses = { lexical: '표현', grammar: '문법', pattern: '패턴', pragmatics: '상황 표현', interaction: '대화 표현', discourse: '말의 구성' };
+const forms = { collocation: '연어', phrasal_verb: '구동사', idiom: '관용어', colloquial: '일상 구어', slang: '속어', reduction: '축약형' };
+// One short public label; the richer learning classification stays in the data.
+export const expressionType = item => ['error', 'alternative', 'positive'].includes(item.kind) ? kinds[item.kind] : forms[item.learning?.form] || focuses[item.learning?.focus] || '표현';
 const natural = 'Natural English conversation about everyday life';
 const node = (tag, value = '', className = '') => {
   const el = document.createElement(tag); el.textContent = value; el.className = className; return el;
@@ -29,7 +33,7 @@ const meta = session => `${names[session.companion_id] || session.companion_id} 
 // enrollment, practice, mastery, conversation memory, or automatic retry policy.
 export function createReviewJournal({ root, context, rpc, edge, allRows, setMode, openView, notice }) {
   let identity = '', lifetime = 0, version = 0, navigation = 0, calls = [], next = null, loaded = false;
-  let tab = 'dates', through = '', view = 'list', current = null, sourceIds = [];
+  let tab = 'dates', through = '', view = 'list', current = null, sourceIds = [], selectedKey = '';
   let listY = 0, noteY = 0, focusKey = '', noteFocusKey = '', busy = false, error = '', poll = null;
   const writes = new Set(), uncertain = new Set();
   const ownerToken = () => ({ scope: identity, lifetime });
@@ -37,7 +41,7 @@ export function createReviewJournal({ root, context, rpc, edge, allRows, setMode
   const active = () => context()?.active === true;
   function clear() {
     identity = ''; lifetime++; version++; navigation++; calls = []; next = null; loaded = false;
-    tab = 'dates'; through = ''; view = 'list'; current = null; listY = noteY = 0; focusKey = noteFocusKey = ''; error = ''; busy = false;
+    tab = 'dates'; through = ''; view = 'list'; current = null; selectedKey = ''; listY = noteY = 0; focusKey = noteFocusKey = ''; error = ''; busy = false;
     writes.clear(); uncertain.clear(); clearTimeout(poll); root.replaceChildren();
   }
   function own() { const scope = context()?.scope || ''; if (scope !== identity) { clear(); identity = scope; } return Boolean(scope); }
@@ -149,7 +153,7 @@ export function createReviewJournal({ root, context, rpc, edge, allRows, setMode
     if (!own() || context()?.busy) return;
     if (view === 'list') { listY = window.scrollY; focusKey = `${call.session.id}|${expressionKey}`; }
     const owner = ownerToken(), nav = ++navigation;
-    view = 'note'; current = null; mode('journal-note'); render(); window.scrollTo({ top: 0, behavior: 'instant' });
+    view = 'note'; selectedKey = expressionKey; current = null; mode('journal-note'); render(); window.scrollTo({ top: 0, behavior: 'instant' });
     clearTimeout(poll);
     try {
       if (retry) await edge('review', { sessionId: call.session.id });
@@ -159,8 +163,11 @@ export function createReviewJournal({ root, context, rpc, edge, allRows, setMode
       current = result; calls = calls.map(c => c.session.id === result.session.id ? result : c); render();
       requestAnimationFrame(() => {
         if (!valid(owner) || nav !== navigation || !active()) return;
+        // Replacing a long list can trigger browser scroll anchoring after the
+        // request. Start the single-record page at its metadata and heading.
+        window.scrollTo({ top: 0, behavior: 'instant' });
         const target = [...root.querySelectorAll('[data-note-expression]')].find(el => el.dataset.noteExpression === expressionKey);
-        if (target) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: 'start', behavior: 'instant' }); }
+        if (target) { target.focus({ preventScroll: true }); }
         else root.querySelector('h2')?.focus({ preventScroll: true });
       });
     } catch (failure) {
@@ -181,7 +188,7 @@ export function createReviewJournal({ root, context, rpc, edge, allRows, setMode
       const rows = await allRows('transcript_events', `session_id=eq.${call.session.id}&order=timestamp.asc,id.asc`);
       if (!valid(owner) || nav !== navigation || !active()) return;
       root.replaceChildren();
-      root.append(button('학습 노트로 돌아가기', back), node('h2', '대화 원문'), node('p', '음성을 글로 옮긴 기록이에요.', 'help'));
+      root.append(button(selectedKey ? '표현으로 돌아가기' : '학습 노트로 돌아가기', back), node('h2', '대화 원문'), node('p', '음성을 글로 옮긴 기록이에요.', 'help'));
       let first;
       for (const row of rows.filter(row => row.session_id === call.session.id)) {
         const el = node('section', '', 'transcript-turn'); el.tabIndex = -1;
@@ -192,7 +199,7 @@ export function createReviewJournal({ root, context, rpc, edge, allRows, setMode
       if (!rows.length) root.append(node('p', '저장된 발화가 없어요.', 'help'));
       if (first) { first.focus({ preventScroll: true }); first.scrollIntoView({ block: 'center', behavior: 'instant' }); }
       else window.scrollTo({ top: 0, behavior: 'instant' });
-    } catch { if (valid(owner) && nav === navigation) { root.replaceChildren(node('p', '대화 원문을 불러오지 못했어요.', 'help'), button('다시 불러오기', () => source(ids)), button('학습 노트로 돌아가기', back)); } }
+    } catch { if (valid(owner) && nav === navigation) { root.replaceChildren(node('p', '대화 원문을 불러오지 못했어요.', 'help'), button('다시 불러오기', () => source(ids)), button(selectedKey ? '표현으로 돌아가기' : '학습 노트로 돌아가기', back)); } }
   }
   function renderList() {
     const tabs = node('div', '', 'journal-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', '복습 보기');
@@ -230,7 +237,7 @@ export function createReviewJournal({ root, context, rpc, edge, allRows, setMode
           const row = node('div', '', 'journal-expression');
           const open = button('', () => openNote(call, item.key), 'journal-expression-open');
           open.dataset.expressionKey = `${call.session.id}|${item.key}`;
-          if (item.kind !== 'reusable') open.append(node('span', item.kind === 'error' ? '교정' : '대안', 'journal-kind'));
+          open.append(node('span', expressionType(item), 'journal-kind'));
           open.append(node('strong', item.expression, 'journal-english'));
           if (item.meaning) open.append(node('span', item.meaning, 'journal-meaning'));
           row.append(open, bookmark(call, item), button('', () => openNote(call, item.key), 'journal-chevron'));
@@ -254,6 +261,7 @@ export function createReviewJournal({ root, context, rpc, edge, allRows, setMode
   function renderNote() {
     if (!current) { root.append(node('p', '학습 노트를 불러오고 있어요.', 'loading-copy')); return; }
     const call = current;
+    if (selectedKey) { renderExpression(call); return; }
     const title = node('h2', `${names[call.session.companion_id]}와의 학습 노트`, 'journal-note-title'); title.tabIndex = -1;
     root.append(title, node('p', `${reviewDayLabel(reviewDay(call.session))} · ${timeLabel(call.session)}`, 'journal-note-meta'));
     if (call.status !== 'ready') {
@@ -279,6 +287,41 @@ export function createReviewJournal({ root, context, rpc, edge, allRows, setMode
       if (!call.expressions.length) root.append(node('p', '이번 통화에서 정리할 표현은 없어요.', 'help'));
     }
     root.append(button('대화 원문 보기', () => source()));
+  }
+  function renderExpression(call) {
+    root.append(node('p', `${names[call.session.companion_id]} · ${reviewGroupLabel(reviewDay(call.session), String(new Date().getFullYear()))} · ${timeLabel(call.session)}`, 'journal-expression-meta'));
+    const item = call.status === 'ready' && call.expressions.find(entry => entry.key === selectedKey);
+    if (!item) {
+      const unavailable = call.status === 'ready';
+      const title = node('h2', call.status === 'pending' ? '표현을 준비하고 있어요.' : '표현을 확인할 수 없어요.', 'journal-note-title'); title.tabIndex = -1;
+      root.append(title, node('p', unavailable ? '원문이나 학습 노트가 바뀌었을 수 있어요. 목록에서 다시 확인해 주세요.' : call.status === 'pending' ? '학습 노트를 준비하고 있어요.' : '최신 표현을 불러오지 못했어요.', 'help'));
+      root.append(button('상태 다시 확인', () => openNote(call, selectedKey)), button('복습 목록', back));
+      return;
+    }
+    const section = node('section', '', 'journal-single-expression'); section.dataset.noteExpression = item.key; section.tabIndex = -1;
+    section.append(node('h2', item.expression, 'journal-expression-title'), node('p', expressionType(item), 'journal-expression-type'));
+    if (item.meaning) section.append(node('p', item.meaning, 'journal-expression-meaning'));
+    const learning = item.learning || {}, quotation = item.kind === 'positive' ? item.original : learning.source_quote || item.original;
+    if (quotation) {
+      const quote = node('div', '', 'journal-expression-quote');
+      quote.append(node('p', item.kind !== 'positive' && learning.source_is_question ? '내가 물어본 말' : '내가 한 말 · 자동 전사', 'journal-label'), node('p', quotation, 'journal-original'));
+      section.append(quote);
+    }
+    const usage = learning.usage || item.reason;
+    if (usage) {
+      section.append(node('h3', item.kind === 'positive' ? '잘 쓴 점' : '사용 설명', 'journal-detail-heading'), node('p', usage, 'journal-detail-copy'));
+      if (learning.usage && item.reason && item.reason.trim() !== learning.usage.trim() && ['error', 'alternative'].includes(item.kind)) section.append(node('p', item.reason, 'journal-detail-copy'));
+    }
+    const register = { informal: '편한 사이', formal: '격식을 갖춘 표현' }[learning.register];
+    if (register) section.append(node('p', register, 'journal-register'));
+    if (learning.example?.prompt && learning.example?.response) {
+      section.append(node('h3', '사용 예', 'journal-detail-heading'));
+      const example = node('div', '', 'journal-example');
+      example.append(node('p', `A: ${learning.example.prompt}`), node('p', `B: ${learning.example.response}`)); section.append(example);
+    }
+    if (learning.alternative && learning.alternative !== item.expression) section.append(node('h3', '다른 표현', 'journal-detail-heading'), node('p', learning.alternative, 'journal-detail-alternative'));
+    const actions = node('div', '', 'journal-note-actions'); actions.append(bookmark(call, item, true), button('대화에서 보기', () => source(item.evidence_ids)));
+    section.append(actions); root.append(section);
   }
   function render() {
     if (!identity || view === 'source') return;

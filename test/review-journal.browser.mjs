@@ -37,7 +37,7 @@ try {
    throw Error('Unexpected RPC '+name);
   };
   f.modeTo=value=>{f.mode=value;$('review-panel').dataset.mode=value;$('review-back').hidden=value==='hub';};
-  f.controller=createReviewJournal({root:$('review-journal'),context:()=>({scope:f.scope,active:f.active,mode:f.mode,busy:false}),rpc:f.rpc,edge:async()=>{throw Error('No generation expected');},allRows:async()=>[{id:'event-0',session_id:ids[0],speaker:'user',text:'Give me a moment.'}],setMode:f.modeTo,openView:()=>{f.active=true;},notice:text=>f.notices.push(text)});
+  f.controller=createReviewJournal({root:$('review-journal'),context:()=>({scope:f.scope,active:f.active,mode:f.mode,busy:false}),rpc:f.rpc,edge:async()=>{throw Error('No generation expected');},allRows:async()=>f.transcript||[{id:'event-0',session_id:ids[0],speaker:'user',text:'Give me a moment.'}],setMode:f.modeTo,openView:()=>{f.active=true;},notice:text=>f.notices.push(text)});
   $('review-back').onclick=()=>f.controller.back();await f.controller.show();
  });
  const root=page.locator('#review-journal');
@@ -45,7 +45,7 @@ try {
  await page.screenshot({path:'test-results/review-journal/01-date-list.png'});
  await root.locator('[data-expression-key]').nth(1).click();
  await root.locator('[data-note-expression="b"]').waitFor();
- assert.equal(await root.locator('[data-note-expression]').count(),2,'opening B retains all of that call, not one phrase per page');
+ assert.equal(await root.locator('[data-note-expression]').count(),1,'opening B shows only the selected expression');
  assert.equal(await page.evaluate(()=>document.activeElement.dataset.noteExpression),'b');
  assert.equal(await root.locator('[data-note-expression="c"]').count(),0,'other calls are not merged into the note');
  await page.screenshot({path:'test-results/review-journal/02-call-note.png',fullPage:true});
@@ -53,7 +53,7 @@ try {
  assert.equal(await root.locator('[data-note-expression="b"] .journal-save').getAttribute('aria-pressed'),'true');
  await root.locator('[data-note-expression="b"]').getByRole('button',{name:'대화에서 보기',exact:true}).click();await root.locator('[data-source-highlight]').waitFor();
  assert.equal(await root.locator('[data-source-highlight]').innerText(),'나\n\nGive me a moment.');
- await root.getByRole('button',{name:'학습 노트로 돌아가기'}).click();assert.equal(await root.locator('[data-note-expression]').count(),2);
+ await root.getByRole('button',{name:'표현으로 돌아가기'}).click();assert.equal(await root.locator('[data-note-expression]').count(),1);
  await page.waitForFunction(()=>document.activeElement.dataset.noteExpression==='b');
  await page.locator('#review-back').click();assert.equal(await root.locator('.journal-expression').count(),3);
  await page.waitForFunction(()=>document.activeElement.dataset.expressionKey==='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa|b');
@@ -79,9 +79,51 @@ try {
  await page.setViewportSize({width:320,height:740});await page.evaluate(()=>document.documentElement.style.fontSize='32px');
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await root.locator('.journal-expression').last().scrollIntoViewIfNeeded();assert(await root.locator('.journal-expression').last().evaluate(el=>el.getBoundingClientRect().bottom<document.querySelector('.glass-dock').getBoundingClientRect().top),'last expression can be fully read above the dock');await page.screenshot({path:'test-results/review-journal/04-small-large-text.png',fullPage:true});
  await page.setViewportSize({width:1024,height:900});await page.evaluate(()=>document.documentElement.style.fontSize='16px');assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:'test-results/review-journal/05-desktop.png'});
+ // The selected design: every row has one short type; detail is exactly one record.
+ await page.setViewportSize({width:390,height:844});
+ await page.evaluate(async()=>{
+  const f=window.journalFixture;f.rows=f.rows.slice(0,1);f.rows[0].session.scenario='주말 약속';
+  const common={evidence_ids:['event-0'],saved:false,bookmark_revision:0};
+  f.rows[0].expressions=[
+   {...common,key:'error',kind:'error',expression:'I made a mistake.',original:'I did a mistake.',meaning:'실수했어요.',reason:'실수하다는 make a mistake로 표현해요.',learning:{focus:'lexical',form:'collocation'}},
+   {...common,key:'colloquial',kind:'reusable',expression:"I'm down.",meaning:'좋아, 나도 할래.',reason:'참여 의사를 표현해요.',learning:{focus:'lexical',form:'colloquial',source_quote:'“나도 할래”를 영어로 어떻게 말해?',source_is_question:true,usage:'친구의 제안에 가볍게 동의할 때 써요.',register:'informal',example:{prompt:'Want to grab coffee?',response:"I'm down."},alternative:"Sure, I'd love to."}},
+   {...common,key:'positive',kind:'positive',expression:'Let me put it another way.',original:'Let me put it another way.',meaning:'다르게 설명해 볼게요.',reason:'오해를 바로잡으며 설명을 이어갔어요.',learning:{focus:'interaction',form:'general'}}
+  ];f.transcript=[{id:'event-0',session_id:f.rows[0].session.id,speaker:'user',text:'“나도 할래”를 영어로 어떻게 말해?'}];f.controller.clear();await f.controller.show();
+ });
+ assert.deepEqual(await root.locator('.journal-expression .journal-kind').allTextContents(),['교정','일상 구어','잘 쓴 표현']);
+ await page.screenshot({path:'test-results/review-journal/06-selected-list.png'});
+ await page.setViewportSize({width:390,height:1380});await page.screenshot({path:'test-results/review-journal/07-selected-list-tall.png'});
+ await root.locator('[data-expression-key]').nth(1).click();await root.locator('[data-note-expression="colloquial"]').waitFor();
+ await page.waitForFunction(()=>scrollY===0&&document.activeElement.dataset.noteExpression==='colloquial');
+ assert.equal(await root.locator('[data-note-expression]').count(),1);assert.equal(await root.locator('.journal-expression-title').innerText(),"I'm down.");
+ assert.equal(await root.locator('.journal-expression-type').innerText(),'일상 구어');assert.doesNotMatch(await root.innerText(),/I made a mistake|Let me put it another way|와의 학습 노트/);
+ assert.match(await root.innerText(),/내가 물어본 말/);assert.match(await root.innerText(),/사용 예/);assert.match(await root.innerText(),/Sure, I'd love to/);
+ await page.screenshot({path:'test-results/review-journal/08-single-expression-tall.png'});
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:'test-results/review-journal/09-single-expression.png',fullPage:true});
+ await root.getByRole('button',{name:'대화에서 보기',exact:true}).click();await root.locator('[data-source-highlight]').waitFor();
+ await root.getByRole('button',{name:'표현으로 돌아가기'}).click();await root.locator('[data-note-expression="colloquial"]').waitFor();assert.equal(await root.locator('[data-note-expression]').count(),1);
+ await page.setViewportSize({width:320,height:740});await page.evaluate(()=>document.documentElement.style.fontSize='32px');assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await root.locator('.journal-note-actions').scrollIntoViewIfNeeded();assert(await root.locator('.journal-note-actions').evaluate(el=>el.getBoundingClientRect().bottom<document.querySelector('.glass-dock').getBoundingClientRect().top));
+ await page.screenshot({path:'test-results/review-journal/10-single-large-text.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});await page.evaluate(()=>document.documentElement.style.fontSize='16px');
+ await page.locator('#review-back').click();
+ // A late response for B cannot replace A after navigation within the same call.
+ await page.evaluate(()=>{const f=window.journalFixture;f.gate={name:'review_note',...f.deferred()};});
+ await root.locator('[data-expression-key]').nth(1).click();
+ await page.evaluate(()=>{const f=window.journalFixture;f.late=f.gate;f.gate=null;f.controller.back();});
+ await root.locator('[data-expression-key]').first().click();await root.locator('[data-note-expression="error"]').waitFor();
+ await page.evaluate(()=>{const f=window.journalFixture;f.late.resolve(structuredClone(f.rows[0]));});
+ assert.equal(await root.locator('[data-note-expression]').count(),1);assert.equal(await root.locator('[data-note-expression="colloquial"]').count(),0);
+ await page.locator('#review-back').click();
+ // If the selected record disappears, do not substitute the remaining A/C.
+ await page.evaluate(()=>{const f=window.journalFixture;f.gate={name:'review_note',...f.deferred()};});
+ await root.locator('[data-expression-key]').nth(1).click();
+ await page.evaluate(()=>{const f=window.journalFixture;const note=structuredClone(f.rows[0]);note.expressions=note.expressions.filter(e=>e.key!=='colloquial');f.gate.resolve(note);f.gate=null;});
+ await root.getByRole('heading',{name:'표현을 확인할 수 없어요.'}).waitFor();assert.equal(await root.locator('[data-note-expression]').count(),0);assert.doesNotMatch(await root.innerText(),/I made a mistake|Let me put it another way/);
+ await page.locator('#review-back').click();
  // Empty and unavailable notes keep a source route without fabricated phrases.
  await page.evaluate(async()=>{const f=window.journalFixture;f.privateRows=structuredClone(f.rows);f.rows=[];await f.controller.show();});
- assert.equal(await root.locator('.journal-expression').count(),0);assert.match(await root.innerText(),/이 날짜 이전의 통화가 없어요/);
+ assert.equal(await root.locator('.journal-expression').count(),0);assert.match(await root.innerText(),/통화를 마치면 날짜별로 복습할 수 있어요/);
  // Late reads from A cannot populate B, or a new sign-in to the same account.
  await page.evaluate(async()=>{const f=window.journalFixture;f.gate={name:'review_journal',...f.deferred()};f.pending=f.controller.load();f.scope='service|account-b';f.controller.clear();f.gate.resolve({calls:f.privateRows,next:null});await f.pending;});assert.equal(await root.locator('.journal-expression').count(),0);
  await page.evaluate(async()=>{const f=window.journalFixture;f.gate=null;f.rows=f.privateRows;await f.controller.show();f.gate={name:'review_bookmark',...f.deferred()};document.querySelector('.journal-bookmark').click();});
@@ -91,5 +133,5 @@ try {
  assert.equal(await page.evaluate(()=>window.journalFixture.requests.some(r=>/practice|learning_action|enroll/.test(r.name))),false,'reading and bookmarks never count as practice');
  assert.deepEqual(errors,[]);
  assert.deepEqual(consoleErrors,[]);
- console.log('Review journal browser PASS: date/call groups, all expressions and uneven kinds, expression-to-call anchor, source and back restoration, acknowledged bookmarks, saved tab, old-page/date navigation, 320px/large type, desktop, stale-account isolation; actual shipped HTML/CSS/module with synthetic inputs.');
+ console.log('Review journal browser PASS: date/call groups, all expressions and uneven kinds, single-expression detail, source and back restoration, acknowledged bookmarks, saved tab, old-page/date navigation, 320px/large type, desktop, stale-account isolation; actual shipped HTML/CSS/module with synthetic inputs.');
 }finally{await browser.close();server.kill('SIGTERM');}

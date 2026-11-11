@@ -122,10 +122,10 @@ export async function testTabUI(browser,base){
   await page.locator('[data-view="review"]').click();
   await page.locator('#review-journal [data-expression-key]').first().click();
   await page.locator('#review-journal [data-note-expression="cafe"]').waitFor();
-  assert.equal(await page.locator('#review-journal [data-note-expression]').count(),2,'real app integration opens the whole call note');
+  assert.equal(await page.locator('#review-journal [data-note-expression]').count(),1,'real app integration opens only the selected expression');
   await page.locator('#review-journal [data-note-expression="cafe"]').getByRole('button',{name:'대화에서 보기',exact:true}).click();
   await page.locator('#review-journal [data-source-highlight]').waitFor();
-  await page.locator('#review-journal').getByRole('button',{name:'학습 노트로 돌아가기'}).click();
+  await page.locator('#review-journal').getByRole('button',{name:'표현으로 돌아가기'}).click();
   await page.locator('#review-back').click();
   await page.locator('#review-journal .journal-expression').first().waitFor();
   assert.equal(reviewCalls,0,'journal browsing and source jumps reuse stored analysis');

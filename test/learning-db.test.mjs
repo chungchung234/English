@@ -243,7 +243,9 @@ test('published memory exclusions and history cutoff revoke source eligibility a
 
 test('additive canonical migration preserves legacy APIs, normalizes legacy self reports, counts only known distinct KST days, and is idempotent',async t=>{
  const db=await database(t),s1=await session(db),s2=await session(db),a1=await analyze(db,s1,[]),a2=await analyze(db,s2,[]);
- const insert=async(s,a,pos,expression,state,stamp)=>db.query(`insert into public.learning_items(user_id,companion_id,session_id,analysis_id,position,original,expression,reason,state,practiced_at) values($1,'alex',$2,$3,$4,'legacy',$5,'legacy reason',$6,$7) returning id`,[A,s.id,a,pos,expression,state,stamp]);
+ // Explicit order: same-millisecond timestamps otherwise make the first spelling random by UUID.
+ let legacyOrder=0;
+ const insert=async(s,a,pos,expression,state,stamp)=>db.query(`insert into public.learning_items(user_id,companion_id,session_id,analysis_id,position,original,expression,reason,state,practiced_at,updated_at) values($1,'alex',$2,$3,$4,'legacy',$5,'legacy reason',$6,$7,'2026-11-10T00:00:00Z'::timestamptz+$8*interval '1 second') returning id`,[A,s.id,a,pos,expression,state,stamp,++legacyOrder]);
  await insert(s1,a1,1,'Legacy phrase.','practiced','2026-11-07T16:00:00Z'); // KST Nov 8
  await insert(s1,a1,2,'LEGACY  PHRASE!','practiced','2026-11-08T02:00:00Z'); // same day
  await insert(s1,a1,3,'Legacy phrase','practiced','2026-11-08T16:00:00Z'); // KST Nov 9

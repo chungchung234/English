@@ -138,7 +138,8 @@ test('invalid generated evidence fails the reserved run and never stores analysi
       assert.match(payload.input[0].content[0].text, /never translate source speech into an invented English quotation/);
       assert.match(payload.input[0].content[0].text, /category error only for a supported mistake in evidenced English learner speech/);
       assert.match(payload.input[0].content[0].text, /Korean speech itself is not an English grammar error/);
-      assert.match(payload.input[0].content[0].text, /Korean-to-English phrasing suggestion is optional category alternative only when requested by the learner or clearly supported by the supplied context/);
+      assert.match(payload.input[0].content[0].text, /Korean-to-English phrasing suggestion is optional only when requested by the learner or clearly supported by the supplied context/);
+      assert.match(payload.input[0].content[0].text, /Put a newly requested expression in practice with its exact question as learning.source_quote/);
       assert.doesNotMatch(payload.input[0].content[0].text, /Keep original quotations, improved expressions, and practice expressions in English/);
       assert.ok(payload.text.format.schema.properties.corrections.items.required.includes('category'));
       return response({ status: 'completed', output: [{ content: [{ type: 'output_text', text: JSON.stringify(bad) }] }] });

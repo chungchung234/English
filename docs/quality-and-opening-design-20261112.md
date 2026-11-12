@@ -2,7 +2,7 @@
 
 2026년 11월 12일 KST. 기준 소스는 `b425645`이며, 앱 동작은 공개 빌드 `git:ea6024ae7bf8dedd1bd93014c91e96ded49b85e8`와 같다. 운영 자료는 2026년 11월 12일 00:15 UTC에 확보한 2개 계정의 19개 통화, 전사 345개, 세션 분석 14개와 주간 분석 1개다. 최신 빌드 통화는 짧은 2개뿐이다. 아래는 구현 전 설계이며, 기존 배포의 품질 개선 효과를 측정한 결과가 아니다.
 
-우선순위는 스피커폰의 작은 소음에 발화가 끊기는 문제를 줄이고, 통화 전체의 대화를 함께 만들어 가며, 의도와 불확실성을 올바르게 처리하는 것이다. 시작 문구 교체만으로는 반복적인 대화 경험을 해결하지 못한다. [집계 근거](research/quality-opening-baseline-20261112.json)에는 원문과 실제 계정·통화 식별자를 넣지 않는다.
+우선순위는 브라우저 마이크의 작은 소음에 발화가 끊기는 문제를 줄이고, 통화 전체의 대화를 함께 만들어 가며, 의도와 불확실성을 올바르게 처리하는 것이다. 시작 문구 교체만으로는 반복적인 대화 경험을 해결하지 못한다. [집계 근거](research/quality-opening-baseline-20261112.json)에는 원문과 실제 계정·통화 식별자를 넣지 않는다.
 
 ## 반복 시작에 대한 판단
 
@@ -48,7 +48,7 @@
 
 | 순서 | 구현 단위 | 완료 판단 |
 | --- | --- | --- |
-| P0 0 | 스피커폰 입력 처리와 중단 원인 관측 | 작은 잡음의 오중단과 실제 사용자 끼어들기 성공·지연을 함께 확인한다 |
+| P0 0 | 브라우저 마이크 입력 처리와 중단 원인 관측 | 작은 잡음의 오중단과 실제 사용자 끼어들기 성공·지연을 함께 확인한다 |
 | P0 병행 | 대화 중 구체적 기여와 요청 반영 | 메뉴·연습으로 반복 전환하지 않고 현재 이야기에 기여하며 사용자 정정을 다음 행동에 반영한다 |
 | P0 1 | 조건부 시작 정책과 통화별 실행 상태 | 사용자 선발화·동일 통화 재연결·답변 멈춤에서 불필요한 시작 응답이 생기지 않는다 |
 | P0 2 | 최근 시작 이력과 근거 있는 주제 선택 | 실제 시작의 행동·주제 반복을 측정할 수 있고, 부적격 기억을 사용하지 않는다 |
@@ -220,9 +220,9 @@ type EvidenceResolution = {
 
 기존 분석은 `legacy_unassessed`로 읽기를 유지한다. 과거 노트를 일괄 덮어쓰지 않으며 재처리는 명시적 작업으로 수행한다. 캐시와 저장 guard에는 원문 digest, grounding 정책·schema 버전, 기억 revision·보류 상태를 포함해 늦은 결과가 이미 보류된 해석을 되살리지 못하게 한다. `analysisSchema`·`validateAnalysis`뿐 아니라 `mergeAnalyses`·`sourceIds`·SQL materializer를 함께 갱신한다. 긴 통화의 chunk 병합에서 근거 상태나 보류 항목이 유실되거나 assistant 문맥이 사용자 근거로 승격되지 않게 한다.
 
-## 스피커폰의 소음 중단
+## 브라우저 마이크의 소음 중단
 
-사용자가 확인한 환경은 휴대폰 스피커폰이다. 현재 `getUserMedia()`는 `echoCancellation:true`, `noiseSuppression:true`를 요청하며 AGC는 지정하지 않는다. 요청과 실효 적용·음향 효과는 다르다. 공급자 설정은 `semantic_vad`, `eagerness:low`, `interrupt_response:true`이고 입력 `noise_reduction`은 명시하지 않는다. 현재 유효 세션 값을 확인하지 않았으므로 필터가 꺼졌다고 단정하지 않는다.
+정정된 환경은 브라우저에서 허용한 마이크 입력이다. 실제 전화의 스피커폰 모드는 없으며 오디오 경로를 앱이 판별했다고 가정하지 않는다. 현재 `getUserMedia()`는 `echoCancellation:true`, `noiseSuppression:true`를 요청하며 AGC는 지정하지 않는다. 요청과 실효 적용·음향 효과는 다르다. 공급자 설정은 `semantic_vad`, `eagerness:low`, `interrupt_response:true`이고 입력 `noise_reduction`은 명시하지 않는다. 현재 유효 세션 값을 확인하지 않았으므로 필터가 꺼졌다고 단정하지 않는다.
 
 평상시 `speech_started` 처리는 상태 표시를 바꾸며 로컬 취소를 보내지는 않는다. 현재 앱에서 floor의 hold/resume 호출은 연결돼 있지 않고 직접적인 `response.cancel`은 종료 경로에 있다. 시각화 분석기도 오디오 출력에 연결돼 있지 않다. 따라서 스피커 출력 재유입이나 주변 소리를 발화 시작으로 잘못 감지한 뒤 공급자가 자동으로 중단하는 경로가 우선 가설이다. 실제 타임라인 없이 이번 VOC의 원인으로 확정하지 않는다.
 
@@ -230,10 +230,10 @@ type EvidenceResolution = {
 
 ### 첫 적용 후보
 
-스피커폰을 대상으로 `audio.input.noise_reduction:{type:'far_field'}`를 명시한 후보를 비교한다. 이 필터는 VAD 이전에 적용되며 원거리 마이크에 맞춘 처리다. 휴대폰 스피커폰에서 효과가 있다는 보장은 아니며 에코 제거의 대체재도 아니다. 이어폰은 별도의 근거리 후보로 분리한다. 브라우저 종류만 보고 출력 경로를 확정하지 않는다. [입력 처리 명세](https://developers.openai.com/api/reference/resources/realtime/subresources/calls/methods/create)
+브라우저 마이크 입력에 `audio.input.noise_reduction:{type:'far_field'}`를 명시한 기본 필터 후보를 비교한다. 이 필터는 VAD 이전에 적용되며 원거리 마이크에 맞춘 처리다. 휴대폰 스피커폰에서 효과가 있다는 보장은 아니며 에코 제거의 대체재도 아니다. 브라우저 종류만 보고 마이크 종류나 출력 경로를 확정하지 않으며, 실제 장치 전환 기능처럼 보이는 선택 UI를 두지 않는다. [입력 처리 명세](https://developers.openai.com/api/reference/resources/realtime/subresources/calls/methods/create)
 
 ```ts
-// 스피커폰 검증 후보. 아직 운영에 적용한 설정이 아니다.
+// 브라우저 입력 필터. 실제 장치나 출력 경로의 자동 판별을 의미하지 않는다.
 audio.input = {
   noise_reduction: { type: 'far_field' },
   transcription: { model: 'gpt-realtime-whisper', delay: 'medium' },
@@ -317,4 +317,4 @@ checkpoint 초기 출력안은 `summary` 최대 900자, `open_threads` 최대 3�
 | 기존 기록·복습 UI | 확정된 교정/대안만 표시, 기존 전사·의도 재검토 동선 재사용 |
 | 운영/평가 스크립트 | 집계의 분모·버전·수집률, 실제 의미 검토와 합성 회귀를 분리 |
 
-이 문서는 전체 설계와 집계 근거다. 후속으로 승인된 페르소나·대화 정책·스피커폰 입력 처리의 실제 적용 범위와 검증은 [적용 기록](reciprocal-companion-audio-release-20261112.md)에 구분한다. 영속 오프닝 계획·근거 보류 v2 등 이 문서의 모든 제안이 구현됐다는 의미는 아니다.
+이 문서는 전체 설계와 집계 근거다. 후속으로 승인된 페르소나·대화 정책·브라우저 마이크 입력 처리의 실제 적용 범위와 검증은 [적용 기록](reciprocal-companion-audio-release-20261112.md)에 구분한다. 영속 오프닝 계획·근거 보류 v2 등 이 문서의 모든 제안이 구현됐다는 의미는 아니다.

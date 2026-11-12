@@ -53,7 +53,8 @@ export function verifyMemory(memory, profile, sessions, events) {
 // transcripts, SDP, credentials, event IDs, or response IDs.
 export function installRealtimeSmokeObserver({ base, session }) {
   localStorage.setItem('loop.auth:' + base, JSON.stringify({ ...session, expires_at: Math.floor(Date.now() / 1000) + session.expires_in }));
-  const manual = { capability: false, requested: false, returnedPolicy: false, openingEmpty: false, completeInstructions: false,
+  const manual = { capability: false, requested: false, returnedPolicy: false, openingContextValid: false, currentInputNone: false,
+    openingBaseIsolated: false, historicalContextPresent: false, preparedTopicPresent: false, completeInstructions: false,
     effectivePolicy: false, startupSent: 0, startupAcknowledged: 0, startupCompleted: 0,
     replySent: 0, replyAcknowledged: 0, replyCompleted: 0, userBeforeStartup: false, invalidRequests: 0, unexpectedResponses: 0, failedResponses: 0, providerErrors: 0 };
   const observed = globalThis.__liveSmoke = { userTurns: 0, userCommits: 0, assistantTurns: 0, assistantAfterUser: 0, voices: [], connectionState: 'new', manual };
@@ -79,11 +80,47 @@ export function installRealtimeSmokeObserver({ base, session }) {
       openingInstructions = typeof data?.opening_instructions === 'string' ? data.opening_instructions : null;
       manual.completeInstructions = [voiceInstructions, openingInstructions].every(value => typeof value === 'string' && value.startsWith('ROLE_AND_SAFETY:') && value.includes('PERSONA:') && value.includes('TRUSTED_TIME_CONTEXT_JSON:'));
       try {
-        const [openingBase, purpose] = openingInstructions.split('\nCURRENT_RESPONSE_PURPOSE:\n');
-        const context = JSON.parse(openingBase.split('UNTRUSTED_CONTEXT_JSON:\n')[1]), memory = context.memory;
-        manual.openingEmpty = Boolean(purpose?.trim()) && context.scenario === '' && context.prepared_target === null && context.continuity === null &&
+        const block = name => JSON.parse(openingInstructions.match(new RegExp('(?:^|\\n)' + name + ':\\n([^\\n]+)'))?.[1] || 'null');
+        const context = block('UNTRUSTED_CONTEXT_JSON'), opening = block('UNTRUSTED_OPENING_CONTEXT_JSON'), memory = context.memory;
+        const purpose = openingInstructions.split('\nCURRENT_RESPONSE_PURPOSE:\n')[1];
+        manual.openingBaseIsolated = context.scenario === '' && context.prepared_target === null && context.continuity === null &&
           empty(memory.facts) && empty(memory.memories) && empty(memory.focus) && empty(memory.conversation_memories) && memory.recent_conversation === null;
-      } catch { manual.openingEmpty = false; }
+        const record = value => Boolean(value && typeof value === 'object' && !Array.isArray(value));
+        const text = value => typeof value === 'string' && Boolean(value.trim());
+        const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+        const instant = value => typeof value === 'string' && Number.isFinite(Date.parse(value));
+        const prepared = opening?.prepared_topic, continuity = opening?.continuity, history = opening?.recent_openings;
+        const zone = value => { try { return typeof value === 'string' && Boolean(new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone); } catch { return false; } };
+        const day = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+          Number.isFinite(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;
+        const timing = continuity?.plan_timing;
+        const validTiming = continuity === null || timing === null || record(timing) && continuity?.state === 'planned' && day(timing.local_date) &&
+          zone(timing.time_zone) && timing.time_zone === continuity.source_time_zone && ['upcoming', 'today', 'past'].includes(timing.relation);
+        const validPrepared = prepared === null || record(prepared) && text(prepared.text) && prepared.text.length <= 300 &&
+          prepared.source === 'current_session_user_prepared' && (prepared.role === undefined || prepared.role === 'optional_topic_not_spoken_utterance');
+        const validContinuity = continuity === null || record(continuity) && uuid(continuity.session_id) && uuid(continuity.evidence_id) &&
+          ['source_started_at', 'source_ended_at', 'source_spoken_at'].every(key => instant(continuity[key])) && text(continuity.note) && text(continuity.quote) &&
+          (continuity.source_time_zone === null || zone(continuity.source_time_zone)) &&
+          ['stated', 'planned', 'resolved'].includes(continuity.state) && (continuity.when === null || text(continuity.when)) &&
+          (continuity.role === undefined || continuity.role === 'historical_background') &&
+          Object.hasOwn(continuity, 'plan_timing') && validTiming && continuity.must_not_infer_outcome === true;
+        const validHistory = Array.isArray(history) && history.length <= 3 && history.every(item => record(item) && uuid(item.session_id) &&
+          instant(item.occurred_at) && text(item.text) && item.text.length <= 240 && item.role === 'style_only');
+        const validStrategy = opening?.strategy === 'prepared_topic' ? prepared !== null && continuity === null :
+          opening?.strategy === 'supported_continuity' ? prepared === null && continuity !== null :
+            opening?.strategy === 'open_conversation' && prepared === null && continuity === null;
+        const validAction = opening?.strategy === 'prepared_topic' ? opening.action === 'enter_prepared_topic' :
+          opening?.strategy === 'supported_continuity' ? opening.action === ({ resolved: 'add_perspective_to_known_result', planned: 'pick_up_unresolved_plan', stated: 'connect_to_prior_detail' })[continuity?.state] :
+            opening?.strategy === 'open_conversation' && opening.action === 'contribute_concrete_perspective';
+        const keys = ['version', 'purpose', 'current_utterance', 'strategy', 'action', 'prepared_topic', 'continuity', 'recent_openings', 'reason'];
+        manual.currentInputNone = record(opening) && Object.hasOwn(opening, 'current_utterance') && opening.current_utterance === null;
+        manual.historicalContextPresent = Boolean(continuity || Array.isArray(history) && history.length);
+        manual.preparedTopicPresent = Boolean(prepared);
+        manual.openingContextValid = Boolean(purpose?.trim()) && record(opening) && opening.version === 'opening-context-v1' &&
+          opening.purpose === 'call_opening' && Object.keys(opening).every(key => keys.includes(key)) && manual.currentInputNone &&
+          validPrepared && validContinuity && validHistory && validStrategy && validAction &&
+          ['prepared_topic', 'eligible_continuity', 'suppressed', 'forgotten_fact', 'invalid_clock', 'no_recent_handoff', 'stale_source', 'no_suitable_thread'].includes(opening.reason);
+      } catch { manual.openingContextValid = false; }
     }
     return result;
   };
@@ -158,7 +195,8 @@ export function installRealtimeSmokeObserver({ base, session }) {
 export function verifyManualRealtimeObservation(observed) {
   ensure(observed?.capability && observed.requested, 'Published client did not negotiate manual turn control.');
   ensure(observed.returnedPolicy && observed.effectivePolicy, 'Backend or actual provider did not confirm disabled automatic responses and interruptions.');
-  ensure(observed.completeInstructions && observed.openingEmpty, 'Manual opening did not receive complete instructions with empty historical context.');
+  ensure(observed.completeInstructions && observed.openingBaseIsolated && observed.openingContextValid && observed.currentInputNone,
+    'Manual opening did not preserve complete instructions and a typed historical/background context distinct from current input.');
   ensure(observed.invalidRequests === 0 && observed.unexpectedResponses === 0 && observed.failedResponses === 0 && observed.providerErrors === 0, 'Manual response request or provider receipt violated the turn contract.');
   const completedOpening = observed.startupSent === 1 && observed.startupAcknowledged === 1 && observed.startupCompleted === 1;
   const learnerFirst = observed.startupSent === 0 && observed.startupAcknowledged === 0 && observed.startupCompleted === 0 && observed.userBeforeStartup;
@@ -306,7 +344,7 @@ async function main() {
       verifyManualRealtimeObservation(await page.evaluate(() => globalThis.__liveSmoke.manual));
       await page.screenshot({ path: `test-results/live-${profile.id}-call.png`, fullPage: true });
       pass(`${profile.name}: actual WebRTC connected, provider confirmed ${profile.voice}, and both speech transcripts reached the app.`);
-      pass(`${profile.name}: manual policy confirmed by backend and provider; empty-history opening or learner-first skip, metadata-correlated response acknowledgements, curated item-reference reply, completed generation and drained audio output verified.`);
+      pass(`${profile.name}: manual policy confirmed by backend and provider; typed-background opening with no current utterance or learner-first skip, metadata-correlated response acknowledgements, curated item-reference reply, completed generation and drained audio output verified. This checks the protocol, not conversational quality.`);
       stage = `${profile.name}: automatic transcript and feedback save`;
       await page.locator('#end-call').click();
       await page.waitForFunction(() => document.querySelector('#call-status')?.textContent === '통화와 학습 노트 서버 저장 확인', {}, { timeout: 120_000 });

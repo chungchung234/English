@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 export async function isolatedCoach(ref,userIds) {
  const slug='coach-check-'+randomUUID().slice(0,8);
  const form=new FormData();form.set('metadata',JSON.stringify({name:slug,entrypoint_path:'index.ts',verify_jwt:false}));
- for(const name of ['index.ts','core.ts','policy.ts','enhancements.ts','weekly.ts','temporal-context.ts','conversation-memory.ts','background.ts','review-learning.ts']){
+ for(const name of ['index.ts','core.ts','policy.ts','enhancements.ts','weekly.ts','temporal-context.ts','conversation-memory.ts','background.ts','review-learning.ts','opening-policy.ts']){
   let source=await readFile(new URL('../supabase/functions/coach/'+name,import.meta.url),'utf8');
   if(name==='index.ts'){
    source=source.replace("const mode=envValue('ACCESS_MODE')||'public'", "const mode='public'");

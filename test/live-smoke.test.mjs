@@ -1,3 +1,5 @@
+// Synthetic configuration and provider receipts verify the release-check
+// contract. They do not grade model-generated conversational quality.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runInNewContext } from 'node:vm';
@@ -6,11 +8,22 @@ import { installRealtimeSmokeObserver, verifyManualRealtimeObservation } from '.
 const base = 'https://synthetic-smoke.supabase.co';
 const policy = { type: 'semantic_vad', eagerness: 'low', create_response: false, interrupt_response: false };
 const emptyContext = () => ({ scenario: '', prepared_target: null, continuity: null, memory: { facts: [], memories: [], focus: [], conversation_memories: [], recent_conversation: null } });
+const emptyOpening = () => ({ version: 'opening-context-v1', purpose: 'call_opening', current_utterance: null,
+  strategy: 'open_conversation', action: 'contribute_concrete_perspective', prepared_topic: null, continuity: null, recent_openings: [], reason: 'no_recent_handoff' });
+const historicalOpening = () => ({ ...emptyOpening(), strategy: 'supported_continuity', action: 'connect_to_prior_detail', reason: 'eligible_continuity', continuity: {
+  session_id: '11111111-1111-4111-8111-111111111111', evidence_id: '22222222-2222-4222-8222-222222222222',
+  source_started_at: '2026-11-12T10:00:00Z', source_ended_at: '2026-11-12T10:02:00Z', source_spoken_at: '2026-11-12T10:01:00Z',
+  source_time_zone: 'UTC', plan_timing: null,
+  note: 'SYNTHETIC_HISTORY_NOTE', quote: 'SYNTHETIC_PRIVATE_HISTORICAL_QUOTE', state: 'stated', when: null,
+  role: 'historical_background', must_not_infer_outcome: true }, recent_openings: [{
+    session_id: '33333333-3333-4333-8333-333333333333', occurred_at: '2026-11-12T09:00:00Z',
+    text: 'SYNTHETIC_STYLE_QUESTION: What did you enjoy yesterday?', role: 'style_only' }] });
 const instructions = context => `ROLE_AND_SAFETY:\nSynthetic safety policy.\nPERSONA:\nSynthetic companion.\nTRUSTED_TIME_CONTEXT_JSON:\n{}\nUNTRUSTED_CONTEXT_JSON:\n${JSON.stringify(context)}`;
 
-async function fixture({ opening = emptyContext(), returnedPolicy = policy, manual = true } = {}) {
+async function fixture({ opening = emptyOpening(), ordinaryOpening = emptyContext(), returnedPolicy = policy, manual = true } = {}) {
   const voice = instructions({ ...emptyContext(), memory: { ...emptyContext().memory, facts: [{ value: 'SYNTHETIC_PAST_ONLY' }] } });
-  const greeting = instructions(opening) + '\nCURRENT_RESPONSE_PURPOSE:\nSynthetic opening purpose.';
+  const greeting = instructions(ordinaryOpening) + '\nUNTRUSTED_OPENING_CONTEXT_JSON:\n' + JSON.stringify(opening) +
+    '\nCURRENT_RESPONSE_PURPOSE:\nSynthetic opening purpose. Historical background is not a current learner utterance or request.';
   class Channel {
     listeners = []; sent = [];
     send(message) { this.sent.push(JSON.parse(message)); }
@@ -98,10 +111,56 @@ test('live manual smoke rejects implicit opening context, inline follow-up text 
   }
 });
 
-test('live manual smoke rejects historical opening data and a policy mismatch in the backend response or actual provider session', async () => {
-  for (const mode of ['history', 'returned-policy', 'effective-policy']) {
-    const opening = emptyContext(); if (mode === 'history') opening.memory.facts.push({ value: 'SYNTHETIC_PAST_ONLY' });
-    const f = await fixture({ opening, returnedPolicy: mode === 'returned-policy' ? { ...policy, interrupt_response: true } : policy });
+test('live manual smoke allows selected historical/style background and a prepared topic without treating either as current speech', async () => {
+  const prepared = { ...emptyOpening(), strategy: 'prepared_topic', action: 'enter_prepared_topic', reason: 'prepared_topic', prepared_topic: {
+    text: 'SYNTHETIC_PREPARED_TOPIC', source: 'current_session_user_prepared', role: 'optional_topic_not_spoken_utterance' } };
+  const planned = historicalOpening(); planned.continuity.state = 'planned'; planned.action = 'pick_up_unresolved_plan';
+  const resolved = historicalOpening(); resolved.continuity.state = 'resolved'; resolved.action = 'add_perspective_to_known_result';
+  const upcoming = historicalOpening(); upcoming.continuity.state = 'planned'; upcoming.action = 'pick_up_unresolved_plan';
+  upcoming.continuity.when = 'tomorrow'; upcoming.continuity.quote += ' tomorrow';
+  upcoming.continuity.plan_timing = { local_date: '2026-11-13', time_zone: 'UTC', relation: 'upcoming' };
+  for (const opening of [emptyOpening(), historicalOpening(), planned, upcoming, resolved, prepared]) {
+    const f = await fixture({ opening }), response = f.create('startup'); f.finish(response, f.acknowledge(response)); f.reply();
+    assert.doesNotThrow(() => verifyManualRealtimeObservation(f.observed.manual));
+    assert.equal(f.observed.manual.openingContextValid, true); assert.equal(f.observed.manual.currentInputNone, true);
+    assert.equal(f.observed.manual.historicalContextPresent, Boolean(opening.continuity || opening.recent_openings.length));
+    assert.equal(f.observed.manual.preparedTopicPresent, Boolean(opening.prepared_topic));
+    assert.doesNotMatch(JSON.stringify(f.observed), /SYNTHETIC_HISTORY_NOTE|SYNTHETIC_STYLE_QUESTION|SYNTHETIC_PRIVATE_HISTORICAL_QUOTE|SYNTHETIC_PREPARED_TOPIC|11111111-1111/);
+  }
+});
+
+test('live manual smoke rejects raw-history leakage, false current speech, untyped background and incompatible opening context', async () => {
+  for (const mode of ['ordinary-history', 'current-speech', 'missing-current', 'untyped-style', 'current-role', 'wrong-version', 'missing-context', 'inconsistent-strategy', 'missing-action', 'unknown-action', 'state-action-conflict', 'missing-plan-timing', 'nonplanned-timing', 'invalid-plan-day', 'invalid-plan-zone', 'mismatched-plan-zone', 'inferred-outcome']) {
+    const ordinaryOpening = emptyContext(), opening = historicalOpening();
+    if (mode === 'ordinary-history') ordinaryOpening.memory.facts.push({ value: 'SYNTHETIC_PAST_ONLY' });
+    if (mode === 'current-speech') opening.current_utterance = 'SYNTHETIC_CURRENT_SPEECH';
+    if (mode === 'missing-current') delete opening.current_utterance;
+    if (mode === 'untyped-style') opening.recent_openings[0].role = 'user_fact';
+    if (mode === 'current-role') opening.continuity.role = 'current_utterance';
+    if (mode === 'wrong-version') opening.version = 'unrecognized-opening-version';
+    if (mode === 'inconsistent-strategy') opening.strategy = 'open_conversation';
+    if (mode === 'missing-action') delete opening.action;
+    if (mode === 'unknown-action') opening.action = 'repeat_a_help_menu';
+    if (mode === 'state-action-conflict') opening.action = 'pick_up_unresolved_plan';
+    if (mode === 'missing-plan-timing') delete opening.continuity.plan_timing;
+    if (mode === 'nonplanned-timing') opening.continuity.plan_timing = { local_date: '2026-11-13', time_zone: 'UTC', relation: 'upcoming' };
+    if (['invalid-plan-day', 'invalid-plan-zone', 'mismatched-plan-zone'].includes(mode)) {
+      opening.continuity.state = 'planned'; opening.action = 'pick_up_unresolved_plan';
+      opening.continuity.plan_timing = { local_date: '2026-11-13', time_zone: 'UTC', relation: 'upcoming' };
+      if (mode === 'invalid-plan-day') opening.continuity.plan_timing.local_date = '2026-02-30';
+      if (mode === 'invalid-plan-zone') opening.continuity.plan_timing.time_zone = opening.continuity.source_time_zone = 'Not/A_Time_Zone';
+      if (mode === 'mismatched-plan-zone') opening.continuity.plan_timing.time_zone = 'Asia/Seoul';
+    }
+    if (mode === 'inferred-outcome') opening.continuity.must_not_infer_outcome = false;
+    const f = await fixture({ opening: mode === 'missing-context' ? null : opening, ordinaryOpening });
+    const response = f.create('startup'); f.finish(response, f.acknowledge(response)); f.reply();
+    assert.throws(() => verifyManualRealtimeObservation(f.observed.manual), /typed/, mode);
+  }
+});
+
+test('live manual smoke rejects a policy mismatch in the backend response or actual provider session', async () => {
+  for (const mode of ['returned-policy', 'effective-policy']) {
+    const f = await fixture({ returnedPolicy: mode === 'returned-policy' ? { ...policy, interrupt_response: true } : policy });
     if (mode === 'effective-policy') f.observed.manual.effectivePolicy = false;
     const response = f.create('startup'); f.finish(response, f.acknowledge(response)); f.reply();
     assert.throws(() => verifyManualRealtimeObservation(f.observed.manual), undefined, mode);

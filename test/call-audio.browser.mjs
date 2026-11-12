@@ -160,6 +160,14 @@ try {
   assert.equal(await page.evaluate(() => window.testMessages.filter(event => event.type === 'response.cancel').length), localCancels);
   await emit({ type: 'input_audio_buffer.speech_stopped' }); await emit({ type: 'input_audio_buffer.committed', item_id: 'fixture-user-turn' });
   await emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'fixture-user-turn', transcript: 'Please keep our conversation natural.' });
+  const previousNotice = await page.locator('#notice').textContent();
+  await emit({ type: 'response.created', response: { id: 'fixture-private-truncated-response' } });
+  await emit({ type: 'response.done', response: { id: 'fixture-private-truncated-response', status: 'incomplete', status_details: { type: 'incomplete', reason: 'max_output_tokens' } } });
+  await eventually(() => Promise.resolve(diagnostics.some(row => row.code === 'RESPONSE_MAX_OUTPUT_TOKENS' && row.request_type === 'response.create')), 'a confirmed generation cap must be observable separately from voice cancellation');
+  assert.equal(await page.locator('#notice').textContent(), previousNotice, 'a token cap receipt must not invent a connection warning');
+  assert.equal(await page.locator('#end-call').isEnabled(), true);
+  await emit({ type: 'response.done', response: { id: 'fixture-private-completed-response', status: 'completed', status_details: { reason: 'max_output_tokens' } } });
+  assert.equal(diagnostics.filter(row => row.code === 'RESPONSE_MAX_OUTPUT_TOKENS').length, 1, 'only an actual incomplete receipt confirms truncation');
   await finish();
 
   await openSettings(); await page.setViewportSize({ width: 320, height: 568 });

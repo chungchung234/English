@@ -395,6 +395,10 @@ dialog.usage-guide::backdrop{background:transparent}
 #next-plan{font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
 .call-floor-controls{text-align:center;margin:8px 0 0}
+.call-floor-controls .text-button{margin:2px 5px;min-height:44px;padding:8px 16px;border:1px solid currentColor;border-radius:12px}
+.voice-input-help{margin:6px auto 0;max-width:290px;font-size:12px;line-height:1.6;color:var(--secondary)}
+body[data-call-state=live] .call-floor-controls .text-button{color:#f5f7fc;background:#ffffff12}
+body[data-call-state=live] .voice-input-help{color:#ced8ed}
 #hold-call{min-height:44px;padding:8px 16px;color:inherit;font-size:14px}
 #hold-call[aria-pressed=true]{text-decoration:underline;text-underline-offset:4px}
 #hold-status{margin:0 auto 8px;max-width:32ch;font-size:12px;line-height:1.55;color:inherit;opacity:.82;overflow-wrap:anywhere}

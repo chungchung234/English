@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff"><meta name="apple-mobile-web-app-capable" content="yes">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; media-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; media-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'">
 <title>시시콜콜 · 영어 통화</title><link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -70,6 +70,7 @@
 <p id="call-completion-status" class="call-completion-status" role="timer" aria-live="off" hidden></p><button id="view-ending-transcript" class="text-button" hidden>대화 내역 먼저 보기</button>
 <div class="live-actions"><button id="mute-call" class="live-control" aria-label="음소거" aria-pressed="false"><span class="control-disc"><img src="assets/microphone.svg" alt=""></span><span>음소거</span></button><button id="speed-call" class="live-control" aria-label="말하기 속도 0.85배" aria-haspopup="dialog" aria-controls="speed-dialog" disabled><span id="speed-current" class="control-disc">0.85×</span><span>속도</span></button><button id="hint-call" data-cue="Suggest one short English sentence I could say next in this conversation, then let me speak." class="live-control" aria-label="힌트" disabled><span class="control-disc"><span class="hint-glyph" aria-hidden="true"></span></span><span>힌트</span></button></div>
 <button id="cancel-connection" class="connection-cancel glass-button" hidden>연결 취소</button>
+<div id="qualified-turn-actions" class="call-floor-controls" hidden><button id="stop-response" class="text-button" hidden disabled>답변 멈춤</button><button id="manual-reply" class="text-button" hidden disabled>답변 요청</button><p id="voice-input-help" class="voice-input-help" hidden>응답이 없으면 말을 마친 뒤 답변 요청을 눌러 주세요.</p></div>
 <details id="call-quick-help" class="call-quick-help"><summary>통화 도움말</summary><p>힌트를 누르면 다음에 말할 짧은 영어 문장을 제안해 줘요. 속도는 AI 음성에만 적용돼요.</p></details>
 <p id="speed-pending" class="speed-pending" role="status" aria-live="polite" hidden></p>
 

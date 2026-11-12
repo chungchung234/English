@@ -1,0 +1,35 @@
+{
+  "fixture": true,
+  "actualWasm": true,
+  "productionHashCspVerified": true,
+  "acousticEffectivenessVerified": false,
+  "cases": [
+    {
+      "case": "real-wasm-qualified-turn-ownership",
+      "generated": 3,
+      "checkpoint": 2,
+      "ended": true
+    },
+    {
+      "case": "startup-noise-does-not-silence-call",
+      "generated": 1,
+      "ended": true
+    },
+    {
+      "case": "detector-unavailable-explicit-reply",
+      "generated": 2,
+      "ended": true
+    },
+    {
+      "case": "production-hashed-csp-native-web-audio-callback",
+      "generated": 2,
+      "ended": true,
+      "scriptHashVerified": true
+    },
+    {
+      "case": "legacy-capability-compatibility",
+      "generated": 1,
+      "ended": true
+    }
+  ]
+}

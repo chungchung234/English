@@ -48,6 +48,124 @@ export function verifyMemory(memory, profile, sessions, events) {
   }
 }
 
+// Runs inside the temporary browser account. Payloads are inspected only in
+// memory; the observable result contains counts/booleans, never instructions,
+// transcripts, SDP, credentials, event IDs, or response IDs.
+export function installRealtimeSmokeObserver({ base, session }) {
+  localStorage.setItem('loop.auth:' + base, JSON.stringify({ ...session, expires_at: Math.floor(Date.now() / 1000) + session.expires_in }));
+  const manual = { capability: false, requested: false, returnedPolicy: false, openingEmpty: false, completeInstructions: false,
+    effectivePolicy: false, startupSent: 0, startupAcknowledged: 0, startupCompleted: 0,
+    replySent: 0, replyAcknowledged: 0, replyCompleted: 0, userBeforeStartup: false, invalidRequests: 0, unexpectedResponses: 0, failedResponses: 0, providerErrors: 0 };
+  const observed = globalThis.__liveSmoke = { userTurns: 0, userCommits: 0, assistantTurns: 0, assistantAfterUser: 0, voices: [], connectionState: 'new', manual };
+  let voiceInstructions = null, openingInstructions = null;
+  const requests = new Map(), responses = new Map(), items = new Set(), transcribedUsers = new Set();
+  const empty = value => Array.isArray(value) && value.length === 0;
+  const policyIsManual = policy => policy?.type === 'semantic_vad' && policy.eagerness === 'low' && policy.create_response === false && policy.interrupt_response === false;
+  const fetchOriginal = globalThis.fetch;
+  globalThis.fetch = async function (input, options) {
+    const result = await fetchOriginal.call(this, input, options);
+    const url = typeof input === 'string' ? input : input?.url;
+    if (typeof url !== 'string' || !url.startsWith(base + '/functions/v1/coach/') || !result.ok) return result;
+    if (url.endsWith('/config')) {
+      const data = await result.clone().json().catch(() => null);
+      manual.capability = data?.capabilities?.manual_turns_v1 === true;
+    }
+    if (url.endsWith('/voice')) {
+      let body; try { body = JSON.parse(options?.body); } catch { /* Invalid bodies remain a failed observation. */ }
+      manual.requested = body?.turnControl === 'manual_turns_v1';
+      const data = await result.clone().json().catch(() => null), policy = data?.audio_policy;
+      manual.returnedPolicy = policy?.turn_control === 'manual_turns_v1' && policyIsManual(policy.turn_detection);
+      voiceInstructions = typeof data?.voice_instructions === 'string' ? data.voice_instructions : null;
+      openingInstructions = typeof data?.opening_instructions === 'string' ? data.opening_instructions : null;
+      manual.completeInstructions = [voiceInstructions, openingInstructions].every(value => typeof value === 'string' && value.startsWith('ROLE_AND_SAFETY:') && value.includes('PERSONA:') && value.includes('TRUSTED_TIME_CONTEXT_JSON:'));
+      try {
+        const [openingBase, purpose] = openingInstructions.split('\nCURRENT_RESPONSE_PURPOSE:\n');
+        const context = JSON.parse(openingBase.split('UNTRUSTED_CONTEXT_JSON:\n')[1]), memory = context.memory;
+        manual.openingEmpty = Boolean(purpose?.trim()) && context.scenario === '' && context.prepared_target === null && context.continuity === null &&
+          empty(memory.facts) && empty(memory.memories) && empty(memory.focus) && empty(memory.conversation_memories) && memory.recent_conversation === null;
+      } catch { manual.openingEmpty = false; }
+    }
+    return result;
+  };
+  function complete(record) {
+    if (!record || record.finished || !record.acknowledged || !record.completed || !record.audioDone || !record.played) return;
+    record.finished = true;
+    if (record.valid) manual[record.purpose === 'startup' ? 'startupCompleted' : 'replyCompleted']++;
+  }
+  const create = RTCPeerConnection.prototype.createDataChannel;
+  RTCPeerConnection.prototype.createDataChannel = function (...args) {
+    const channel = create.apply(this, args), send = channel.send;
+    observed.connectionState = this.connectionState;
+    this.addEventListener('connectionstatechange', () => { observed.connectionState = this.connectionState; });
+    channel.send = function (message) {
+      let event; try { event = JSON.parse(message); } catch { return send.call(this, message); }
+      if (event.type === 'response.create' && manual.requested) {
+        // Official Realtime contract: input:[] overrides conversation input;
+        // item_reference points to an existing item in this same session, and
+        // response metadata disambiguates response.created/response.done.
+        const response = event.response, nonce = response?.metadata?.turn_nonce, purpose = response?.metadata?.purpose;
+        const startup = purpose === 'startup', reply = purpose === 'reply', input = response?.input;
+        const validInput = startup ? empty(input) : reply && Array.isArray(input) && input.length > 0 &&
+          input.every(item => item.type === 'item_reference' && typeof item.id === 'string' && items.has(item.id)) && input.some(item => transcribedUsers.has(item.id));
+        const valid = (startup || reply) && typeof nonce === 'string' && nonce.length > 0 && !requests.has(nonce) && response.conversation === 'auto' &&
+          validInput && response.instructions === (startup ? openingInstructions : voiceInstructions);
+        if (!valid) manual.invalidRequests++;
+        if (startup || reply) manual[startup ? 'startupSent' : 'replySent']++;
+        if (typeof nonce === 'string' && !requests.has(nonce)) requests.set(nonce, { nonce, purpose, valid, acknowledged: false, completed: false, audioDone: false, played: false, finished: false });
+      }
+      return send.call(this, message);
+    };
+    channel.addEventListener('message', message => {
+      let event; try { event = JSON.parse(message.data); } catch { return; }
+      if (event.type === 'input_audio_buffer.committed') { observed.userCommits++; if (event.item_id) items.add(event.item_id); }
+      if (event.type === 'conversation.item.input_audio_transcription.completed' && event.transcript?.trim()) {
+        observed.userTurns++; if (event.item_id) { items.add(event.item_id); transcribedUsers.add(event.item_id); }
+        if (manual.startupSent === 0) manual.userBeforeStartup = true;
+      }
+      if (event.type === 'response.output_audio_transcript.done' && event.transcript?.trim()) {
+        observed.assistantTurns++; if (observed.userCommits > 0) observed.assistantAfterUser++;
+      }
+      if (event.type === 'session.created' || event.type === 'session.updated') {
+        const voice = event.session?.audio?.output?.voice || event.session?.voice;
+        if (typeof voice === 'string' && !observed.voices.includes(voice)) observed.voices.push(voice);
+        if (policyIsManual(event.session?.audio?.input?.turn_detection)) manual.effectivePolicy = true;
+      }
+      if (!manual.requested) return; // Preserve observations for legacy clients.
+      if (event.type === 'error') manual.providerErrors++;
+      if (event.type === 'response.created') {
+        const response = event.response, record = requests.get(response?.metadata?.turn_nonce);
+        if (!record || record.purpose !== response?.metadata?.purpose || !response.id || (record.id && record.id !== response.id)) manual.unexpectedResponses++;
+        else if (!record.acknowledged) {
+          record.id = response.id; record.acknowledged = true; responses.set(response.id, record);
+          manual[record.purpose === 'startup' ? 'startupAcknowledged' : 'replyAcknowledged']++;
+        }
+      }
+      if (event.type === 'response.output_item.added' && event.item?.id) items.add(event.item.id);
+      const record = responses.get(event.response_id || event.response?.id);
+      if (event.type === 'response.done' && record) {
+        if (event.response.metadata?.turn_nonce !== record.nonce || event.response.metadata?.purpose !== record.purpose) manual.unexpectedResponses++;
+        else if (event.response.status === 'completed') record.completed = true;
+        else manual.failedResponses++;
+      }
+      if (event.type === 'response.output_audio.done' && record) record.audioDone = true;
+      if (event.type === 'output_audio_buffer.stopped' && record) record.played = true;
+      complete(record);
+    });
+    return channel;
+  };
+}
+
+export function verifyManualRealtimeObservation(observed) {
+  ensure(observed?.capability && observed.requested, 'Published client did not negotiate manual turn control.');
+  ensure(observed.returnedPolicy && observed.effectivePolicy, 'Backend or actual provider did not confirm disabled automatic responses and interruptions.');
+  ensure(observed.completeInstructions && observed.openingEmpty, 'Manual opening did not receive complete instructions with empty historical context.');
+  ensure(observed.invalidRequests === 0 && observed.unexpectedResponses === 0 && observed.failedResponses === 0 && observed.providerErrors === 0, 'Manual response request or provider receipt violated the turn contract.');
+  const completedOpening = observed.startupSent === 1 && observed.startupAcknowledged === 1 && observed.startupCompleted === 1;
+  const learnerFirst = observed.startupSent === 0 && observed.startupAcknowledged === 0 && observed.startupCompleted === 0 && observed.userBeforeStartup;
+  ensure(completedOpening || learnerFirst, 'Opening was neither completed with matching provider receipts nor skipped for learner-first speech.');
+  ensure(observed.replySent > 0 && observed.replyAcknowledged > 0 && observed.replyCompleted > 0, 'Curated item-reference reply did not receive its matching provider acknowledgement and completed audio output.');
+}
+
 async function main() {
   const ref = process.env.SUPABASE_PROJECT_REF || 'domkmxmwmihcfadophfg';
   const base = `https://${ref}.supabase.co`, site = process.env.SITE_URL;
@@ -162,33 +280,7 @@ async function main() {
       // each call; this avoids depending on Chromium's shared capture lifetime.
       browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined, headless: true, args: ['--no-sandbox', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', `--use-file-for-fake-audio-capture=${process.env.SMOKE_AUDIO}`] });
       const context = await browser.newContext({ permissions: ['microphone'], viewport: { width: 390, height: 844 } });
-      await context.addInitScript(({ base, session }) => {
-        localStorage.setItem('loop.auth:' + base, JSON.stringify({ ...session, expires_at: Math.floor(Date.now() / 1000) + session.expires_in }));
-        // Observe real provider events, retaining only counts and public voice
-        // names. No event body, SDP, or transcript is copied into test output.
-        globalThis.__liveSmoke = { userTurns: 0, userCommits: 0, assistantTurns: 0, assistantAfterUser: 0, voices: [], connectionState: 'new' };
-        const create = RTCPeerConnection.prototype.createDataChannel;
-        RTCPeerConnection.prototype.createDataChannel = function (...args) {
-          const channel = create.apply(this, args);
-          globalThis.__liveSmoke.connectionState = this.connectionState;
-          this.addEventListener('connectionstatechange', () => { globalThis.__liveSmoke.connectionState = this.connectionState; });
-          channel.addEventListener('message', message => {
-            let event; try { event = JSON.parse(message.data); } catch { return; }
-            const observed = globalThis.__liveSmoke;
-            if (event.type === 'input_audio_buffer.committed') observed.userCommits++;
-            if (event.type === 'conversation.item.input_audio_transcription.completed' && event.transcript?.trim()) observed.userTurns++;
-            if (event.type === 'response.output_audio_transcript.done' && event.transcript?.trim()) {
-              observed.assistantTurns++;
-              if (observed.userCommits > 0) observed.assistantAfterUser++;
-            }
-            if (event.type === 'session.created' || event.type === 'session.updated') {
-              const voice = event.session?.audio?.output?.voice || event.session?.voice;
-              if (typeof voice === 'string' && !observed.voices.includes(voice)) observed.voices.push(voice);
-            }
-          });
-          return channel;
-        };
-      }, { base, session: learner });
+      await context.addInitScript(installRealtimeSmokeObserver, { base, session: learner });
       page = await context.newPage(); page.setDefaultTimeout(90_000);
       await page.goto(site, { waitUntil: 'networkidle' });
       await page.locator('#workspace').waitFor({ state: 'visible' });
@@ -205,8 +297,16 @@ async function main() {
       await page.waitForFunction(expected => globalThis.__liveSmoke.voices.includes(expected), profile.voice, { timeout: 30_000 });
       await page.waitForFunction(() => globalThis.__liveSmoke.userTurns > 0 && Array.from(document.querySelectorAll('#transcript li')).some(li => li.querySelector('b')?.textContent === 'YOU' && /friend|park|caf[eé]|yesterday|today/i.test(li.textContent)), {}, { timeout: 90_000 });
       await page.waitForFunction(name => globalThis.__liveSmoke.assistantAfterUser > 0 && Array.from(document.querySelectorAll('#transcript li')).some(li => li.querySelector('b')?.textContent === name.toUpperCase()), profile.name, { timeout: 90_000 });
+      stage = `${profile.name}: negotiated manual turns and provider response receipts`;
+      await page.waitForFunction(() => {
+        const observed = globalThis.__liveSmoke.manual;
+        return observed.invalidRequests || observed.unexpectedResponses || observed.failedResponses || observed.providerErrors ||
+          (observed.replyCompleted > 0 && (observed.startupCompleted === 1 || (observed.startupSent === 0 && observed.userBeforeStartup)));
+      }, {}, { timeout: 90_000 });
+      verifyManualRealtimeObservation(await page.evaluate(() => globalThis.__liveSmoke.manual));
       await page.screenshot({ path: `test-results/live-${profile.id}-call.png`, fullPage: true });
       pass(`${profile.name}: actual WebRTC connected, provider confirmed ${profile.voice}, and both speech transcripts reached the app.`);
+      pass(`${profile.name}: manual policy confirmed by backend and provider; empty-history opening or learner-first skip, metadata-correlated response acknowledgements, curated item-reference reply, completed generation and drained audio output verified.`);
       stage = `${profile.name}: automatic transcript and feedback save`;
       await page.locator('#end-call').click();
       await page.waitForFunction(() => document.querySelector('#call-status')?.textContent === '통화와 학습 노트 서버 저장 확인', {}, { timeout: 120_000 });

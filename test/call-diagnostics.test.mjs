@@ -114,3 +114,59 @@ test('storage denial, corrupt caches, invalid clocks and signed-out records cann
   const corrupt = fixture({ storage: store }); assert.deepEqual(corrupt.client.list(), []);
   assert.doesNotThrow(() => corrupt.client.record(base)); assert.equal(corrupt.client.list().length, 1);
 });
+
+test('audio diagnostics retain only enum settings and local response UUIDs, without raw provider or device data', async () => {
+  const sent = [], f = fixture({ send: async rows => { sent.push(structuredClone(rows)); return { event_ids: rows.map(row => row.event_id) }; } });
+  const audio = { requested_mode: 'speakerphone', expected_noise: 'far_field', effective_noise: 'near_field',
+    capture_echo: 'on', capture_noise: 'off', capture_gain: 'unreported', vad_type: 'semantic_vad', interrupt_response: 'on',
+    output_state: 'playing', cancel_origin: 'provider_turn_detected', response_key: '11111111-1111-4111-8111-111111111111' };
+  assert.equal(f.client.record({ ...base, kind: 'audio_interruption', audio_context: { ...audio,
+    message: 'private provider message', transcript: 'private speech', sdp: 'private negotiation', deviceId: 'private device',
+    response_id: 'resp_private_provider_id', raw_event: { token: 'private credential' } } }), true);
+  assert.deepEqual(f.client.list()[0].audio_context, audio);
+  assert(!JSON.stringify([...f.store.rows.values()]).includes('private'));
+  const exposed = f.client.list(); exposed[0].audio_context.effective_noise = 'caller mutation';
+  audio.requested_mode = 'headset';
+  await f.client.flush();
+  assert.equal(sent[0][0].audio_context.requested_mode, 'speakerphone', 'record owns a copy of settings');
+  assert.equal(sent[0][0].audio_context.effective_noise, 'near_field', 'queue views cannot mutate nested receipts');
+  assert.deepEqual(f.client.list(), []);
+});
+
+test('empty or invalid audio context cannot create the new kinds; old diagnostic payloads remain compatible', () => {
+  const invalid = [undefined, null, {}, [], 'private speech', { deviceId: 'private device' },
+    { requested_mode: true }, { expected_noise: 'off' }, { effective_noise: 'provider_default' }, { capture_echo: true },
+    { capture_noise: 'enabled' }, { capture_gain: 1 }, { vad_type: null }, { interrupt_response: false },
+    { output_state: 'buffer contents' }, { cancel_origin: 'raw reason' }, { response_key: 'resp_provider_id' }];
+  for (const kind of ['audio_configuration', 'audio_interruption']) {
+    const { client } = fixture();
+    for (const audio_context of invalid) assert.equal(client.record({ ...base, kind, audio_context }), false);
+  }
+  const { client } = fixture();
+  assert.equal(client.record({ ...base, audio_context: { deviceId: 'private device', expected_noise: 'invalid' } }), true);
+  assert(!Object.hasOwn(client.list()[0], 'audio_context'));
+  assert.equal(client.record({ ...base, kind: 'audio_configuration', audio_context: {
+    requested_mode: 'headset', effective_noise: 'invalid', capture_echo: true, response_key: 'resp_provider_id' } }), true);
+  assert.deepEqual(client.list()[1].audio_context, { requested_mode: 'headset' });
+});
+
+test('deduplication preserves distinct responses and effective settings, while canonical context survives reload and exact retries', async () => {
+  let calls = 0; const sent = [], store = storage(), f = fixture({ storage: store, send: async rows => {
+    sent.push(structuredClone(rows));
+    if (++calls === 1) { rows[0].audio_context.cancel_origin = 'transport mutation'; throw Error('offline'); }
+    return { event_ids: rows.map(row => row.event_id) };
+  } });
+  const one = { ...base, kind: 'audio_interruption', audio_context: { response_key: '11111111-1111-4111-8111-111111111111', effective_noise: 'far_field', output_state: 'playing' } };
+  assert.equal(f.client.record(one), true);
+  assert.equal(f.client.record({ ...one, audio_context: { output_state: 'playing', effective_noise: 'far_field', response_key: one.audio_context.response_key } }), false, 'key ordering does not invent a new interruption');
+  assert.equal(f.client.record({ ...one, audio_context: { ...one.audio_context, response_key: '22222222-2222-4222-8222-222222222222' } }), true, 'two responses cancelled within ten seconds remain distinct');
+  assert.equal(f.client.record({ ...one, audio_context: { ...one.audio_context, effective_noise: 'near_field' } }), true, 'effective setting changes remain observable');
+  assert.equal(f.client.list().length, 3);
+  const reloaded = fixture({ storage: store });
+  assert.equal(reloaded.client.record(one), false, 'a reload still deduplicates the same queued receipt');
+  await f.client.flush(); await f.client.flush();
+  assert.deepEqual(sent[0], sent[1], 'an offline retry retains the original nested settings');
+  assert.deepEqual(f.client.list(), []);
+  assert.equal(f.client.record(one), false, 'acknowledged response still has a ten-second burst guard');
+  assert.equal(f.client.record({ ...one, audio_context: { ...one.audio_context, response_key: '33333333-3333-4333-8333-333333333333' } }), true);
+});

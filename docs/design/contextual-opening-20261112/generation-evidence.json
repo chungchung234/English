@@ -1,0 +1,142 @@
+{
+  "scope": "fixed invented data; actual provider WebSocket; production renderers",
+  "runs": [
+    {
+      "name": "typed_context_initial",
+      "case_count": 12,
+      "response_count": 12,
+      "completed": 12,
+      "provider_errors": 0,
+      "parse_errors": 0,
+      "unexpected_responses": 0,
+      "temporary_function_removed": true
+    },
+    {
+      "name": "action_at_512",
+      "case_count": 12,
+      "response_count": 12,
+      "completed": 3,
+      "provider_errors": 0,
+      "parse_errors": 0,
+      "unexpected_responses": 0,
+      "temporary_function_removed": true
+    },
+    {
+      "name": "move_and_timing_at_1024",
+      "case_count": 12,
+      "response_count": 12,
+      "completed": 12,
+      "provider_errors": 0,
+      "parse_errors": 0,
+      "unexpected_responses": 0,
+      "temporary_function_removed": true
+    },
+    {
+      "name": "resolved_and_neutral_confirmation",
+      "case_count": 6,
+      "response_count": 6,
+      "completed": 6,
+      "provider_errors": 0,
+      "parse_errors": 0,
+      "unexpected_responses": 0,
+      "temporary_function_removed": true
+    }
+  ],
+  "same_prompt_cap_diagnostic": [
+    {
+      "id": "E02_512",
+      "max_output_tokens": 512,
+      "status": "completed",
+      "status_details_type": "none",
+      "status_details_reason": "none",
+      "usage": {
+        "input_tokens": 3340,
+        "output_tokens": 484,
+        "total_tokens": 3824,
+        "input_audio_tokens": 0,
+        "input_text_tokens": 3340,
+        "input_cached_tokens": 2880,
+        "output_audio_tokens": 363,
+        "output_text_tokens": 121,
+        "output_reasoning_tokens": 21,
+        "input_cached_audio_tokens": 0,
+        "input_cached_text_tokens": 2880
+      }
+    },
+    {
+      "id": "E02_1024",
+      "max_output_tokens": 1024,
+      "status": "completed",
+      "status_details_type": "none",
+      "status_details_reason": "none",
+      "usage": {
+        "input_tokens": 3340,
+        "output_tokens": 444,
+        "total_tokens": 3784,
+        "input_audio_tokens": 0,
+        "input_text_tokens": 3340,
+        "input_cached_tokens": 832,
+        "output_audio_tokens": 334,
+        "output_text_tokens": 110,
+        "output_reasoning_tokens": 21,
+        "input_cached_audio_tokens": 0,
+        "input_cached_text_tokens": 832
+      }
+    },
+    {
+      "id": "E11_512",
+      "max_output_tokens": 512,
+      "status": "incomplete",
+      "status_details_type": "incomplete",
+      "status_details_reason": "max_output_tokens",
+      "usage": {
+        "input_tokens": 3499,
+        "output_tokens": 512,
+        "total_tokens": 4011,
+        "input_audio_tokens": 0,
+        "input_text_tokens": 3499,
+        "input_cached_tokens": 2816,
+        "output_audio_tokens": 371,
+        "output_text_tokens": 141,
+        "output_reasoning_tokens": 42,
+        "input_cached_audio_tokens": 0,
+        "input_cached_text_tokens": 2816
+      }
+    },
+    {
+      "id": "E11_1024",
+      "max_output_tokens": 1024,
+      "status": "completed",
+      "status_details_type": "none",
+      "status_details_reason": "none",
+      "usage": {
+        "input_tokens": 3499,
+        "output_tokens": 708,
+        "total_tokens": 4207,
+        "input_audio_tokens": 0,
+        "input_text_tokens": 3499,
+        "input_cached_tokens": 0,
+        "output_audio_tokens": 510,
+        "output_text_tokens": 198,
+        "output_reasoning_tokens": 50,
+        "input_cached_audio_tokens": 0,
+        "input_cached_text_tokens": 0
+      }
+    }
+  ],
+  "diagnostic_temporary_function_removed": true,
+  "latest_confirmed_sample_content_review": {
+    "scope": "assistant reading of six final synthetic responses; not a quality score or a user study",
+    "completed_cases": 6,
+    "cooking_source_used": 3,
+    "known_outcome_reasked": 0,
+    "unspoken_current_request_answer_observed": 0,
+    "service_offer_footer_observed": 4,
+    "remaining_pattern": "all three cooking openings suggested a next variation; limited persona diversity"
+  },
+  "limitations": [
+    "small synthetic single-turn samples, not statistically representative",
+    "no real user satisfaction or learning outcomes measured",
+    "no actual WebRTC playback, pronunciation, prosody or phone acoustics tested"
+  ]
+}

@@ -41,4 +41,18 @@
 
 출력 안전 상한을 1024로 조정하고 요청 한도를 job metadata에 기록한다. 이는 발화 길이 목표가 아니다. 자연스러운 대화 기여를 완결할 여유를 두며, reasoning low·50분 통화 한도·잡음 중단 제어는 유지한다. 이후 실제 `incomplete/max_output_tokens` 수신은 고정 코드의 비내용 진단으로 남겨 소음·사용자 중단과 구분한다. 연결 불안정 경고를 새로 띄우지는 않는다.
 
-배포와 검증 결과는 완료 후 추가한다.
+1024와 대화 단위·계획 날짜를 반영한 12개 합성 생성은 모두 `completed`로 끝났다. 그 뒤 알려진 결과에 대한 재질문과 neutral 소재 seed를 추가 보완하고, 영향을 받는 세 persona의 일반 시작 3개·요리 맥락 3개를 각각 한 번씩 재검사했다. 이 최종 6개도 모두 완료됐으며, 요리 근거를 사용한 3개는 알려진 결과를 다시 묻지 않았다. 실제로 말하지 않은 현재 요청에 답하거나, 없는 사용자 과거·계획 결과를 단정한 사례는 이 6개에서 관찰하지 못했다. 마지막 6개에 포함되지 않은 준비 주제·계획·억제 검증은 앞 단계 결과와 코드 회귀로 구분한다.
+
+준비 주제·미래 계획 두 사례는 현재 production renderer로 원래 snapshot을 다시 렌더링해 opening/session 지침과 1024 상한이 당시 실제 생성에 쓴 값과 정확히 같음을 별도로 확인했다. [비호출 비교 근거](design/contextual-opening-20261112/unchanged-cases-verification.json)에 기록했으며, 이는 새로운 모델 응답을 생성한 검사가 아니다.
+
+최종 6개의 읽기 검토에서도 서비스형 마무리가 4개에 남았고, 요리 3개는 모두 다음 재료 변형 제안으로 전개됐다. 이 변경은 구조·시작 맥락·미완료 개선 범위이며 친구 같은 자연스러움이 해결됐다는 근거는 아니다. 페르소나 차이와 통화 전체의 서비스형 제안 반복은 실제 새 통화 자료로 후속 평가해야 한다. [생성 및 진단 집계](design/contextual-opening-20261112/generation-evidence.json)는 실패한 단계도 함께 남기고 실제 사용자 품질 점수와 구분한다. 모든 실제 프로브는 고정 합성 자료만 사용했고, 기존 키는 서버 내부에서만 재사용했으며, 임시 함수를 삭제하고 관리 목록에서도 부재를 확인했다.
+
+## 배포 확인
+
+[PR 18](https://github.com/chungchung234/English/pull/18)의 앱 커밋은 `55cb16cd582b440736a8e9e5cae7edb8ac13751f`다. [CI 및 배포](https://github.com/chungchung234/English/actions/runs/43217266583)의 전체 테스트 430개·전체 브라우저 검사·서버·Pages 배포·배포 후 접근 정책 검사가 성공했다. CI 임시 계정은 기존 초대 접근 정책에 따라 실제 통화를 실행하지 않았고, 위 별도 WS 합성 생성 검증과 구분한다.
+
+[공개 사이트](https://chungchung234.github.io/English/)의 원본 HTML/JS·SRI/hash CSP·런타임 `LOOP_CLIENT_BUILD`가 앱 커밋과 일치했다. [공개 빌드 근거](design/contextual-opening-20261112/public-artifact.json)와 [공개 흐름 검증](design/contextual-opening-20261112/public-fixture-results.json)을 남겼다. 인증·provider/API만 fixture로 대체하고 공개 HTML과 JS는 수정하지 않았다. typed 과거 맥락과 시작 입력 분리, 실제 WASM/native WebAudio, 중단·재접속·checkpoint·수동 복구가 통과했다. [공개 390px](design/contextual-opening-20261112/public-playing-390.png)과 [공개 320px 큰 글자](design/contextual-opening-20261112/public-manual-reply-320.png)를 직접 확인했다. 이 브라우저 검사는 모델 대화 품질이나 실제 휴대폰 음향을 검증한 것이 아니다.
+
+후속 문서 커밋은 앱 동작을 바꾸지 않는다. 새 정책은 새 통화부터 적용되며, 이전 클라이언트를 계속 쓰는 탭은 현재 통화를 종료한 뒤 새로고침해야 한다.
+
+운영 함수 본문에서 initiative-opening-v3 / qualified-turns-v3 / opening-context-v1과 실제 action·출처·날짜·1024 한도 연결을 확인했다. 기존 DB 제약·migration 체크섬·RLS/RPC 권한도 읽기 전용으로 확인했다. [확인 집계](design/contextual-opening-20261112/production-inspection.json)는 운영 coach 82개·DB 15개와 로컬 브라우저 계약 9개를 구분하며 모두 통과했다. 검수기의 초기 false는 export 문법·포맷 변환을 지원하지 못한 것이었고, 누락 guard 변형을 계속 거부하는 self-test로 보완한 뒤 재확인했다. 소스 조회 외 운영 사용자 자료 쓰기나 추가 모델 호출은 하지 않았다.

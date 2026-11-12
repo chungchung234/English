@@ -1,0 +1,18 @@
+{
+  "synthetic_only": true,
+  "scope": "pure local comparison, no new provider calls",
+  "checks": [
+    {
+      "case": "E10",
+      "type": "prepared_topic",
+      "production_prompts_unchanged": true,
+      "cap_unchanged": true
+    },
+    {
+      "case": "E11",
+      "type": "future_plan",
+      "production_prompts_unchanged": true,
+      "cap_unchanged": true
+    }
+  ]
+}

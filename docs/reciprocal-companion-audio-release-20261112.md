@@ -28,6 +28,15 @@ Mia는 작은 세부를 차분히 받아주고, Alex는 관점과 비교를 보�
 
 기준 변경 커밋은 `1ebe0f0`이다. `npm run check`, 단위·DB 검사 332개, 설정을 포함한 빌드, 합성 기억 10개·표현 관찰 14개를 통과했다. 신규 `call-audio` 브라우저 검사는 기본 스피커폰·이어폰 선택의 키보드 조작·계정별 저장·재접속·효과 설정과 취소 원인 기록을 확인했다. 기존 presence·10분 신뢰성 브라우저 검사도 통과했다.
 
-[390px 설정](design/companion-audio-20261112/settings-390.png)과 [320px 큰 글자 설정](design/companion-audio-20261112/settings-320.png)을 실제로 열어 라디오·문구·초점·스크롤과 넘침을 확인했다. 인증·공급자 음성·API는 fixture다. 이 검사를 실제 휴대폰 소음 억제나 친구 같은 대화 품질의 검증으로 보고하지 않는다. 기존 전체 화면 회귀와 실제 공개 빌드·운영 함수 확인은 배포 완료 후 보완한다.
+[390px 설정](design/companion-audio-20261112/settings-390.png)과 [320px 큰 글자 설정](design/companion-audio-20261112/settings-320.png)을 실제로 열어 라디오·문구·초점·스크롤과 넘침을 확인했다. 인증·공급자 음성·API는 fixture다. 이 검사를 실제 휴대폰 소음 억제나 친구 같은 대화 품질의 검증으로 보고하지 않는다. 기존 주요 브라우저 회귀도 통과했다.
 
 이번 적용은 페르소나·대화 정책·마이크 환경 선택·필터·설정/취소 관측이다. [전체 설계](quality-and-opening-design-20261112.md)의 영속 오프닝 계획·공통 근거 보류 v2·실시간 비용 관측·앱이 발화를 판별해 중단하는 후속 제어는 별도 구현 범위다. 실제 휴대폰에서는 작은 잡음의 오중단과 조용한 실제 발화·짧은 중단 요청의 보존을 함께 비교해야 한다.
+
+
+## 운영 반영 확인
+
+[PR 15](https://github.com/chungchung234/English/pull/15)를 병합한 앱 커밋은 `8cea9e488f0cb43e7f36ec55cf8d99ec618db236`이다. [배포 실행](https://github.com/chungchung234/English/actions/runs/43154867629)의 전체 검사·DB/함수·Pages 배포·배포 후 access/voice 경로 검사가 성공했다. 공개 사이트의 `LOOP_CLIENT_BUILD`가 `git:8cea9e488f0cb43e7f36ec55cf8d99ec618db236`과 일치하고, 새 설정 HTML과 `assets/app.185377966118.js`가 반영됐다. 이 기록을 보완한 후속 문서 커밋은 앱 동작을 바꾸지 않는다.
+
+운영 DB에서 신규 migration 체크섬·JSONB 제약·RLS·승인 계정 권한을 확인했다. 실제 배포된 coach 본문에서 두 정책 버전·모드별 필터·제한된 fallback이 모두 확인됐다. 승인 계정의 authenticated 역할로 기존/신규 진단 ACK·멱등 재시도·잘못된 context 거부를 검증한 뒤 트랜잭션 전체를 롤백했으며 임시 통화와 진단이 남지 않았다. 실제 계정 식별자·메일·원문·토큰은 검증 출력에 포함하지 않았다.
+
+공개 사이트의 HTML과 배포 번들을 그대로 읽는 브라우저 검사에서도 마이크 설정·재접속·계정 격리·진단·발화 감지 시 표시 동작이 통과했다. [공개 390px](design/companion-audio-20261112/live-settings-390.png)과 [공개 320px 큰 글자](design/companion-audio-20261112/live-settings-320.png)는 인증·공급자/API를 모의 처리한 화면이며, 실제 승인 계정의 통화나 휴대폰 음향 효과 검증은 아니다.

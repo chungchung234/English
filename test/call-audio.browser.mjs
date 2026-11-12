@@ -1,4 +1,4 @@
-// Real browser controls, microphone tracks and local account preferences.
+// Real browser controls, microphone tracks and account-scoped diagnostics.
 // Provider configuration, interruption events and diagnostic HTTP are fixtures;
 // these assertions do not establish acoustic noise suppression effectiveness.
 import assert from 'node:assert/strict';
@@ -9,7 +9,7 @@ import { chromium } from 'playwright';
 const port = 49445, base = `http://127.0.0.1:${port}`, project = 'https://call-audio-test.supabase.co';
 const userA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', userB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 let activeUser = userA;
-const sessions = [], saved = new Map(), diagnostics = [], voiceRequests = [], errors = [], routeErrors = [];
+const sessions = [], saved = new Map(), diagnostics = [], diagnosticDeliveries = [], voiceRequests = [], errors = [], routeErrors = [];
 const policy = { type: 'semantic_vad', eagerness: 'low', create_response: true, interrupt_response: true };
 const eventually = async (check, label) => {
   const deadline = Date.now() + 15000;
@@ -28,6 +28,12 @@ const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PAT
 try {
   const context = await browser.newContext({ permissions: ['microphone'], viewport: { width: 390, height: 844 } });
   await context.addInitScript(() => {
+    const getItem = Storage.prototype.getItem;
+    window.legacyMicrophoneReads = [];
+    Storage.prototype.getItem = function (key) {
+      if (String(key).startsWith('loop.microphone-mode:')) window.legacyMicrophoneReads.push(key);
+      return getItem.call(this, key);
+    };
     const settings = MediaStreamTrack.prototype.getSettings;
     MediaStreamTrack.prototype.getSettings = function () {
       return { ...settings.call(this), echoCancellation: true, noiseSuppression: true, autoGainControl: false,
@@ -68,12 +74,14 @@ try {
       else if (url.pathname.endsWith('/coach/memory')) data = { memories: [] };
       else if (url.pathname.endsWith('/coach/memory-prepare')) data = { status: 'unavailable' };
       else if (url.pathname.endsWith('/coach/voice')) {
-        voiceRequests.push(body); const mode = body.microphoneMode || 'speakerphone';
+        voiceRequests.push(body);
         data = { sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n', audio_policy: {
-          microphone_mode: mode, expected_noise_reduction: mode === 'headset' ? 'near_field' : 'far_field', turn_detection: policy } };
+          microphone_mode: 'unknown', expected_noise_reduction: 'far_field', turn_detection: policy } };
       } else if (url.pathname.endsWith('/coach/review')) return route.fulfill({ status: 503, json: { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'No model output in fixture.' } } });
       else if (url.pathname.endsWith('/rpc/record_call_diagnostics')) {
-        const rows = body.p_events || []; diagnostics.push(...rows); data = { event_ids: rows.map(row => row.event_id) };
+        const rows = body.p_events || [], owner = request.headers().authorization?.replace('Bearer fixture-jwt-', '');
+        assert(rows.every(row => sessions.find(session => session.id === row.session_id)?.user_id === owner), 'diagnostic delivery must stay with its authenticated account');
+        diagnosticDeliveries.push({ owner, count: rows.length }); diagnostics.push(...rows); data = { event_ids: rows.map(row => row.event_id) };
       } else if (url.pathname.endsWith('/rpc/learning_snapshot')) data = { items: [], recommended_item_ids: [], next_plan: null,
         feedback: sessions.filter(s => s.user_id === activeUser && s.companion_id === body.p_companion_id).map(s => ({ session_id: s.id, current: false, job_state: 'not_requested',
           has_user_speech: [...saved.values()].some(e => e.session_id === s.id && e.speaker === 'user') })) };
@@ -95,14 +103,15 @@ try {
   });
   const loginAs = async uid => {
     activeUser = uid;
-    await page.evaluate(({ project, uid }) => localStorage.setItem('loop.auth:' + project, JSON.stringify({ access_token: 'fixture-jwt', refresh_token: 'fixture-refresh', expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: uid } })), { project, uid });
+    await page.evaluate(({ project, uid }) => localStorage.setItem('loop.auth:' + project, JSON.stringify({ access_token: 'fixture-jwt-' + uid, refresh_token: 'fixture-refresh', expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: uid } })), { project, uid });
     await page.reload({ waitUntil: 'domcontentloaded' }); await page.locator('#workspace').waitFor({ state: 'visible' });
   };
   const emit = event => page.evaluate(event => window.testPeer.emit(event), event);
   const openSettings = async () => {
     if (await page.locator('#session-review-exit').isVisible()) await page.locator('#session-review-exit').click();
     await page.locator('[data-view="contacts"]').click();
-    await page.locator('#account-open').click(); await page.locator('#microphone-settings').waitFor({ state: 'visible' });
+    await page.locator('#account-open').click(); await page.locator('#account-dialog').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#microphone-settings,[name="microphone-mode"]').count(), 0, 'browser calls must not expose a nonexistent speakerphone/headset mode selector');
   };
   const closeSettings = () => page.locator('[data-close="account-dialog"]').click();
   const start = async () => {
@@ -118,16 +127,21 @@ try {
     assert.equal(sessions[0].status, 'ended');
   };
 
-  await page.goto(base, { waitUntil: 'domcontentloaded' }); await loginAs(userA);
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.evaluate(({ project, userA, userB }) => {
+    localStorage.setItem('loop.microphone-mode:' + project + '|' + userA, 'headset');
+    localStorage.setItem('loop.microphone-mode:' + project + '|' + userB, 'speakerphone');
+  }, { project, userA, userB });
+  await loginAs(userA);
   await openSettings();
-  assert.equal(await page.locator('[name="microphone-mode"]:checked').inputValue(), 'speakerphone');
-  await page.locator('#microphone-settings').scrollIntoViewIfNeeded();
-  await mkdir('test-results', { recursive: true }); await page.screenshot({ path: 'test-results/call-audio-settings-390.png', fullPage: true });
+  assert.doesNotMatch(await page.locator('#account-dialog').innerText(), /스피커폰|이어폰·헤드셋|마이크 사용 환경/);
+  await mkdir('test-results', { recursive: true }); await page.screenshot({ path: 'test-results/call-audio-browser-390.png', fullPage: true });
   await closeSettings(); await start();
-  assert.equal(voiceRequests.at(-1).microphoneMode, 'speakerphone');
+  assert.equal(Object.hasOwn(voiceRequests.at(-1), 'microphoneMode'), false, 'old saved preferences must not add a microphoneMode field to voice requests');
+  assert.deepEqual(await page.evaluate(() => window.legacyMicrophoneReads), [], 'the app must not read removed microphone preferences');
   await emit({ type: 'session.created', session: { audio: { input: { noise_reduction: { type: 'far_field' }, turn_detection: policy } } } });
   await emit({ type: 'session.updated', session: { audio: { output: { speed: .85 } } } });
-  await eventually(() => Promise.resolve(diagnostics.some(row => row.kind === 'audio_configuration' && row.audio_context?.effective_noise === 'far_field' &&
+  await eventually(() => Promise.resolve(diagnostics.some(row => row.kind === 'audio_configuration' && row.audio_context?.requested_mode === 'unknown' && row.audio_context?.effective_noise === 'far_field' &&
     row.audio_context?.vad_type === 'semantic_vad' && row.audio_context?.interrupt_response === 'on')), 'effective provider configuration should reach diagnostics');
   await eventually(() => Promise.resolve(diagnostics.some(row => row.audio_context?.capture_echo === 'on' && row.audio_context?.capture_noise === 'on' &&
     row.audio_context?.capture_gain === 'off')), 'capture processing flags should reach diagnostics');
@@ -149,34 +163,43 @@ try {
   await finish();
 
   await openSettings(); await page.setViewportSize({ width: 320, height: 568 });
-  await page.locator('#microphone-settings').evaluate(root => {
-    for (const node of root.querySelectorAll('legend,p,label span')) node.style.fontSize = parseFloat(getComputedStyle(node).fontSize) * 1.25 + 'px';
+  await page.locator('#account-dialog').evaluate(root => {
+    for (const node of root.querySelectorAll('h2,h3,p,label,button')) node.style.fontSize = parseFloat(getComputedStyle(node).fontSize) * 1.25 + 'px';
   });
-  const speakerphone = page.locator('[name="microphone-mode"][value="speakerphone"]');
-  await speakerphone.focus(); await speakerphone.press('ArrowRight');
-  assert.equal(await page.locator('[name="microphone-mode"]:checked').inputValue(), 'headset', 'native radio keyboard control should select the next microphone environment');
-  assert.equal(await page.evaluate(({ project, uid }) => localStorage.getItem('loop.microphone-mode:' + project + '|' + uid), { project, uid: userA }), 'headset');
-  await page.locator('[name="microphone-mode"][value="headset"]').scrollIntoViewIfNeeded();
+  await page.locator('#usage-guide-replay').focus(); await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'account-memory', 'remaining account controls must stay usable from the keyboard');
+  await page.locator('#account-memory').scrollIntoViewIfNeeded();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
-  assert(await page.locator('#microphone-settings').evaluate(node => { const box = node.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth; }));
-  await page.screenshot({ path: 'test-results/call-audio-settings-320.png', fullPage: true });
+  assert(await page.locator('#account-dialog').evaluate(node => { const box = node.getBoundingClientRect(); return box.left >= 0 && box.right <= innerWidth; }));
+  await page.screenshot({ path: 'test-results/call-audio-browser-320.png', fullPage: true });
+  await page.locator('#logout').scrollIntoViewIfNeeded();
+  assert(await page.locator('#logout').evaluate(node => {
+    const box = node.getBoundingClientRect(), dialog = document.querySelector('#account-dialog').getBoundingClientRect();
+    return box.top >= dialog.top && box.bottom <= dialog.bottom && box.bottom <= innerHeight;
+  }), 'account controls below the initial compact viewport must remain reachable by scrolling');
   await closeSettings(); await page.setViewportSize({ width: 390, height: 844 });
   await loginAs(userA); await openSettings();
-  assert.equal(await page.locator('[name="microphone-mode"]:checked').inputValue(), 'headset', 'reopening the app should retain the account preference');
   await closeSettings(); await start();
-  assert.equal(voiceRequests.at(-1).microphoneMode, 'headset');
-  await emit({ type: 'session.created', session: { audio: { input: { noise_reduction: { type: 'near_field' }, turn_detection: policy } } } });
-  await eventually(() => Promise.resolve(diagnostics.some(row => row.audio_context?.requested_mode === 'headset' && row.audio_context?.expected_noise === 'near_field' &&
-    row.audio_context?.effective_noise === 'near_field')), 'headset configuration should retain expected and observed near-field values');
+  assert.equal(Object.hasOwn(voiceRequests.at(-1), 'microphoneMode'), false);
+  assert.deepEqual(await page.evaluate(() => window.legacyMicrophoneReads), [], 'revisiting with an old headset preference must not reintroduce mode selection');
+  await emit({ type: 'session.created', session: { audio: { input: { noise_reduction: { type: 'far_field' }, turn_detection: policy } } } });
+  await eventually(() => Promise.resolve(diagnostics.some(row => row.session_id === sessions[0].id && row.audio_context?.requested_mode === 'unknown' &&
+    row.audio_context?.expected_noise === 'far_field' && row.audio_context?.effective_noise === 'far_field')), 'browser input filtering must not imply a known device/output route');
   await finish();
   await loginAs(userB); await openSettings();
-  assert.equal(await page.locator('[name="microphone-mode"]:checked').inputValue(), 'speakerphone', 'another account must start with its own default');
-  await closeSettings(); await loginAs(userA); await openSettings();
-  assert.equal(await page.locator('[name="microphone-mode"]:checked').inputValue(), 'headset');
+  await closeSettings(); await start();
+  assert.equal(Object.hasOwn(voiceRequests.at(-1), 'microphoneMode'), false);
+  assert.deepEqual(await page.evaluate(() => window.legacyMicrophoneReads), []);
+  await emit({ type: 'session.created', session: { audio: { input: { noise_reduction: { type: 'far_field' }, turn_detection: policy } } } });
+  await eventually(() => Promise.resolve(diagnosticDeliveries.some(delivery => delivery.owner === userB && delivery.count > 0)), 'a second account should receive only its own diagnostic delivery');
+  await finish();
+  await loginAs(userA); await openSettings();
   assert.doesNotMatch(JSON.stringify(diagnostics), /fixture-private|Please keep our conversation natural|deviceId|groupId|label/);
+  assert(voiceRequests.every(request => !Object.hasOwn(request, 'microphoneMode')));
+  assert.deepEqual(await page.evaluate(() => window.legacyMicrophoneReads), []);
   assert.deepEqual(errors, []); assert.deepEqual(routeErrors, []);
-  await writeFile('test-results/call-audio-result.json', JSON.stringify({ fixture: true, requestedModes: voiceRequests.map(request => request.microphoneMode),
+  await writeFile('test-results/call-audio-result.json', JSON.stringify({ fixture: true, microphoneModeFieldSent: false, legacyPreferenceRead: false,
     diagnosticCount: diagnostics.length, kinds: [...new Set(diagnostics.map(row => row.kind))], acousticEffectivenessVerified: false }, null, 2));
-  console.log('PASS: microphone mode defaults, keyboard selection, account-scoped revisit persistence, requested/effective audio diagnostics, privacy filtering, and provider-specific interruption attribution; speech detection alone neither cancels playback nor changes the speaking display. Actual noise suppression quality is not measured.');
+  console.log('PASS: browser microphone has no artificial mode selector, old preferences are never read or transmitted, account controls remain usable at 390/320px, unknown-route audio diagnostics stay private and account-scoped, and speech detection alone neither cancels playback nor changes the speaking display. Actual noise suppression quality is not measured.');
   await context.close();
 } finally { await browser.close(); server.kill('SIGTERM'); }

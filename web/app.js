@@ -11,7 +11,7 @@ import { createPostCallTranscript } from './post-call-transcript.js';
 import { createVoiceTurnControls } from './voice-turn-controls.js';
 import { createRealtimeRequests } from './realtime-requests.js';
 import { createCallDiagnostics } from '../src/call-diagnostics.mjs';
-import { createCallAudioObserver, validMicrophoneMode } from './call-audio.js';
+import { createCallAudioObserver } from './call-audio.js';
 import { createConversationClock, deviceTimeZone, formatInstant, recordTimeLabel, sessionTimeLabel, sessionTimeZone } from './conversation-time.js';
 import { createOutbox, flushOutbox } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
@@ -288,18 +288,6 @@ function renderFloor(current) {
 }
 function savedSpeechSpeed() {
   try { const value=Number(localStorage.getItem('loop.speech-speed:'+scope));return validSpeed(value)?value:SPEED.default; } catch { return SPEED.default; }
-}
-const microphonePreferences=new Map();
-function savedMicrophoneMode() {
-  if(microphonePreferences.has(scope))return microphonePreferences.get(scope);
-  let mode='speakerphone';
-  try{const value=localStorage.getItem('loop.microphone-mode:'+scope);if(validMicrophoneMode(value))mode=value;}catch{/* Keep the default when storage is unavailable. */}
-  if(scope)microphonePreferences.set(scope,mode);
-  return mode;
-}
-function renderMicrophoneMode() {
-  const mode=savedMicrophoneMode();
-  document.querySelectorAll('[name="microphone-mode"]').forEach(input=>{input.checked=input.value===mode;input.disabled=memoryBusy();});
 }
 function disposeCallAudio(current) {
   navigator.mediaDevices?.removeEventListener?.('devicechange',current.captureAudioSettings);
@@ -706,10 +694,10 @@ async function startCall() {
     attempt.sessionId=session.id;checkAttempt();
     if(!callStarting||scope!==callScope||companionId!==selectedCompanion)throw Error('통화 연결이 취소되었습니다.');
     const pc=new RTCPeerConnection();
-    current={cues,ready:false,dataOpen:false,greeted:false,omitLearningContext,microphoneMode:savedMicrophoneMode(),id:session.id,companionId:selectedCompanion,scope:callScope,pc,stream,remoteStream:null,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,acceptingFinalEvents:false,speaking:false,responding:false,aiSpeaking:false,muted:false,awaitingCommit:false,items:[],lastCompact:Date.now(),lastCompactAttempt:0,needsCompact:false,compacting:false,compactFailures:0,startedAt:null,startedMono:null,deadline:null,durationTimer:null,clockInterval:null};
+    current={cues,ready:false,dataOpen:false,greeted:false,omitLearningContext,id:session.id,companionId:selectedCompanion,scope:callScope,pc,stream,remoteStream:null,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,acceptingFinalEvents:false,speaking:false,responding:false,aiSpeaking:false,muted:false,awaitingCommit:false,items:[],lastCompact:Date.now(),lastCompactAttempt:0,needsCompact:false,compacting:false,compactFailures:0,startedAt:null,startedMono:null,deadline:null,durationTimer:null,clockInterval:null};
     attempt.current=current;
     current.transcript=new Map();current.itemTimes=new Map();current.sentRequests=new Map();call=current;
-    current.audioObserver=createCallAudioObserver({mode:current.microphoneMode,emit:issue=>recordCallIssue(current,issue),outputState:()=>current.aiSpeaking?'playing':current.responding?'generating':'idle'});
+    current.audioObserver=createCallAudioObserver({emit:issue=>recordCallIssue(current,issue),outputState:()=>current.aiSpeaking?'playing':current.responding?'generating':'idle'});
     current.captureAudioSettings=()=>{if(call===current&&!current.ending)current.audioObserver.capture(current.stream);};
     current.captureAudioSettings();navigator.mediaDevices.addEventListener?.('devicechange',current.captureAudioSettings);
     current.requests=createRealtimeRequests({send:event=>sendRealtime(current,event),onIssue:issue=>recordCallIssue(current,issue)});
@@ -807,7 +795,7 @@ async function startCall() {
     const offer=await pc.createOffer();checkAttempt();await pc.setLocalDescription(offer);checkAttempt();
     if(call!==current||current.ending)return;$('call-status').textContent=companionName()+'에게 전화 거는 중';
     current.omitLearningContext ||= learning.hasPendingExclusions();
-    const answer=await edge('voice',{sessionId:session.id,sdp:offer.sdp,omitLearningContext:current.omitLearningContext,speechSpeed:current.initialSpeed,microphoneMode:current.microphoneMode},{signal:attempt.controller.signal});
+    const answer=await edge('voice',{sessionId:session.id,sdp:offer.sdp,omitLearningContext:current.omitLearningContext,speechSpeed:current.initialSpeed},{signal:attempt.controller.signal});
     checkAttempt();if(call!==current||current.ending)return;
     applyConversationContext(current,answer);
     current.audioObserver.expected(answer.audio_policy);
@@ -1270,8 +1258,7 @@ companionButtons.forEach(button=>{
   };
 });
 document.querySelectorAll('[data-open]').forEach(button=>button.onclick=()=>{if(call || callStarting || callEnding)return;openDialog(button.dataset.open);});
-if($('account-open'))$('account-open').onclick=()=>{if(!memoryBusy()){renderMicrophoneMode();openDialog('account-dialog');}};
-document.querySelectorAll('[name="microphone-mode"]').forEach(input=>input.onchange=()=>{if(memoryBusy()||!scope||!validMicrophoneMode(input.value)){renderMicrophoneMode();return;}microphonePreferences.set(scope,input.value);try{localStorage.setItem('loop.microphone-mode:'+scope,input.value);}catch{/* Use the selected mode for this page even when storage is unavailable. */}});
+if($('account-open'))$('account-open').onclick=()=>{if(!memoryBusy()){openDialog('account-dialog');}};
 const openMemory=protect(async()=>{if(memoryBusy())return notice('통화를 마친 뒤 기억을 관리할 수 있어요.');closeDialog('account-dialog');openDialog('memory-dialog');$('memory-index-status').textContent='';$('memory-index-more').hidden=true;await loadMemoryControls();});
 if($('memory-manage-open'))$('memory-manage-open').onclick=openMemory;if($('account-memory'))$('account-memory').onclick=openMemory;
 if($('memory-index'))$('memory-index').onclick=protect(indexMemory);if($('memory-index-more'))$('memory-index-more').onclick=protect(indexMemory);

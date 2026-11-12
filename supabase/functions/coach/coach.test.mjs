@@ -252,12 +252,12 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.equal(result.status, 200); const data = await result.json(); assert.equal(data.sdp, sdp);
       assert.equal(data.clock.time_zone, null); assert.equal(data.clock.session_created_at, null); assert(Number.isFinite(Date.parse(data.clock.server_now_utc)));
       assert.deepEqual(data.memory_context, { status: 'empty', memory_count: 0, fact_count: 0, last_session_created_at: null, has_undated_memory: false });
-      assert.deepEqual(data.audio_policy, { version: '2026-11-12-speakerphone-v1', microphone_mode: 'speakerphone', requested_noise_reduction: 'far_field', expected_noise_reduction: 'far_field', fallback: null,
+      assert.deepEqual(data.audio_policy, { version: '2026-11-12-browser-microphone-v2', microphone_mode: 'unknown', requested_noise_reduction: 'far_field', expected_noise_reduction: 'far_field', fallback: null,
         turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: true, interrupt_response: true } });
     }
     const {memory_context,context_sources,context_fingerprint,context_bytes,...metadata}=completed.p_result;
     assert.deepEqual(metadata, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',policy_version:'2026-11-10-v2',voice_policy_version:'2026-11-12-reciprocal-companion-v1',
-      audio_policy_version:'2026-11-12-speakerphone-v1',requested_microphone_mode:'speakerphone',requested_noise_reduction:'far_field',expected_noise_reduction:'far_field',audio_policy_fallback:null });
+      audio_policy_version:'2026-11-12-browser-microphone-v2',requested_microphone_mode:'unknown',requested_noise_reduction:'far_field',expected_noise_reduction:'far_field',audio_policy_fallback:null });
     assert(context_bytes>0);assert.equal(memory_context.status,'empty');assert.deepEqual(context_sources,{memory_session_ids:[],recent_session_id:null,conversation_session_ids:[]});assert.match(context_fingerprint,/^[a-f0-9]{64}$/);
   } finally { globalThis.fetch = original; }
 });
@@ -277,7 +277,7 @@ test('voice rejects invalid speed before reading history or spending a request',
 test('voice rejects unrecognized microphone modes before history or provider spending', async () => {
   const original = globalThis.fetch;
   try {
-    for (const microphoneMode of [null, '', 'auto', 'far_field', 'Speakerphone', 1, true, {}, ['headset']]) {
+    for (const microphoneMode of [null, '', 'auto', 'unknown', 'far_field', 'Speakerphone', 1, true, {}, ['headset']]) {
       let calls = 0;
       globalThis.fetch = async url => { calls++; assert.ok(String(url).includes('/auth/')); return response(authUser); };
       const result = await handler(request('voice', { sessionId, sdp, microphoneMode }));
@@ -306,7 +306,7 @@ async function withVoiceProvider(provider, run) {
 }
 const omittedVoice = body => request('voice', { sessionId, sdp, omitLearningContext: true, ...body });
 
-test('headset explicitly selects near-field filtering while retaining the full-duplex voice contract', async () => {
+test('an explicit cached-client headset hint remains compatible with the full-duplex voice contract', async () => {
   await withVoiceProvider(configuration => {
     assert.deepEqual(configuration.audio.input.noise_reduction, { type: 'near_field' });
     assert.deepEqual(configuration.audio.input.turn_detection, { type: 'semantic_vad', eagerness: 'low', create_response: true, interrupt_response: true });
@@ -321,6 +321,19 @@ test('headset explicitly selects near-field filtering while retaining the full-d
     assert.equal(state.reserved, 1); assert.equal(state.calls.length, 1);
     assert.equal(state.completed[0].p_result.requested_microphone_mode, 'headset');
     assert.equal(state.completed[0].p_result.requested_noise_reduction, 'near_field');
+  });
+});
+
+test('an explicit cached-client speakerphone hint remains compatible without becoming a browser route claim', async () => {
+  await withVoiceProvider(configuration => {
+    assert.deepEqual(configuration.audio.input.noise_reduction, { type: 'far_field' });
+    return new Response(sdp);
+  }, async state => {
+    const result = await handler(omittedVoice({ microphoneMode: 'speakerphone' })); assert.equal(result.status, 200);
+    const { audio_policy: policy } = await result.json();
+    assert.equal(policy.version, '2026-11-12-browser-microphone-v2'); assert.equal(policy.microphone_mode, 'speakerphone');
+    assert.equal(policy.requested_noise_reduction, 'far_field'); assert.equal(policy.expected_noise_reduction, 'far_field');
+    assert.equal(state.calls.length, 1); assert.equal(state.completed[0].p_result.requested_microphone_mode, 'speakerphone');
   });
 });
 

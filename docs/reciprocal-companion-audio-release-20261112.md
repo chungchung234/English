@@ -50,4 +50,6 @@ Mia는 작은 세부를 차분히 받아주고, Alex는 관점과 비교를 보�
 
 정정 코드의 타입·구문 검사와 설정을 포함한 빌드, 관련 서버 검사 85개·오디오 관측/진단 검사 21개가 통과했다. 개정 브라우저 검사는 모드 선택 UI가 없고, 과거 저장값을 읽지 않으며, 새 voice 요청에 `microphoneMode`를 보내지 않는 것을 확인했다. 환경 미확인·실효 필터 관측·중단 원인·두 계정의 진단 소유권도 확인했다.
 
-[정정 390px](design/companion-audio-20261112/browser-microphone-390.png)과 [정정 320px 큰 글자](design/companion-audio-20261112/browser-microphone-320.png)를 실제로 열어 선택 UI 제거와 키보드 초점·스크롤을 확인했다. 인증·음성·API는 fixture다. 위 첫 배포의 선택 UI 캡처는 역사적 증거이며 정정 후 화면을 나타내지 않는다. 정정 배포의 실제 빌드 식별자는 완료 후 보완한다.
+[정정 390px](design/companion-audio-20261112/browser-microphone-390.png)과 [정정 320px 큰 글자](design/companion-audio-20261112/browser-microphone-320.png)를 실제로 열어 선택 UI 제거와 키보드 초점·스크롤을 확인했다. 인증·음성·API는 fixture다. 위 첫 배포의 선택 UI 캡처는 역사적 증거이며 정정 후 화면을 나타내지 않는다. [정정 PR 16](https://github.com/chungchung234/English/pull/16)의 앱 커밋은 `e72320c9e74833808284946fe235d88f150da551`이며 [배포 실행](https://github.com/chungchung234/English/actions/runs/43157238696)의 전체 검사·함수·웹·배포 후 점검이 성공했다. 공개 빌드가 `git:e72320c9e74833808284946fe235d88f150da551`과 일치하고, 공개 HTML에 선택 UI가 없으며 배포 번들에 이전 선호 저장 키가 없음을 확인했다.
+
+운영 함수 본문에서도 새 audio policy v2·모드 생략 시 unknown·명시적 legacy 값만 허용·기본 필터 유지가 확인됐다. 기존 DB 제약과 RLS/RPC 권한은 읽기 전용으로 재확인했고 추가 운영 쓰기는 하지 않았다. 공개 사이트의 실제 HTML·번들을 그대로 사용하는 모의 API 브라우저 검사에서도 선택 UI 부재·과거 선호 미조회/미전송·unknown 진단·계정 격리·중단 관측이 통과했다. [공개 정정 390px](design/companion-audio-20261112/public-browser-microphone-390.png)과 [공개 정정 320px](design/companion-audio-20261112/public-browser-microphone-320.png)를 확인했다. 이 검사는 실제 휴대폰의 음향 억제 효과를 측정한 것이 아니다. 후속 기록 커밋은 앱 동작을 바꾸지 않는다.

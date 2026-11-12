@@ -17,7 +17,9 @@ const clientBuild=ciCommit?'git:'+ciCommit.trim().toLowerCase():'source:'+create
 const script=`globalThis.LOOP_PUBLIC_CONFIG=${json};\nglobalThis.LOOP_CLIENT_BUILD=${JSON.stringify(clientBuild)};\n${bundled}`;
 const hash=text=>createHash('sha256').update(text).digest('base64');
 const scriptAsset=`assets/app.${createHash('sha256').update(script).digest('hex').slice(0,12)}.js`;
-const policy=`default-src 'self'; script-src 'sha256-${hash(script)}'; style-src 'sha256-${hash(style)}'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; media-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'`;
+// The bundled, pinned WebRTC VAD instantiates embedded WASM locally. Permit
+// WebAssembly compilation only; JavaScript eval and untrusted scripts stay off.
+const policy=`default-src 'self'; script-src 'sha256-${hash(script)}' 'wasm-unsafe-eval'; style-src 'sha256-${hash(style)}'; connect-src 'self' https://*.supabase.co wss://*.supabase.co; media-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'none'`;
 // Callback replacements preserve dollar sequences in minified code and its CSP hash.
 let html=sourceHtml.replace(/<meta http-equiv="Content-Security-Policy"[^>]+>/,`<meta http-equiv="Content-Security-Policy" content="${policy}">`)
 .replace('<link rel="stylesheet" href="style.css">',()=>`<style>${style}</style>`)
@@ -44,4 +46,5 @@ console.log(`Built public website: dist/index.html (${Buffer.byteLength(html)} b
 
 await writeFile(new URL('dist/THIRD_PARTY_LICENSES.txt',root),(await Promise.all([
  'web/assets/PHOSPHOR-LICENSE','node_modules/@supabase/auth-js/LICENSE','node_modules/tslib/LICENSE.txt',
+ 'node_modules/@ozymandiasthegreat/vad/LICENSE','node_modules/@ozymandiasthegreat/vad/AUTHORS','node_modules/@ozymandiasthegreat/vad/PATENTS',
 ].map(read))).join('\n\n'));

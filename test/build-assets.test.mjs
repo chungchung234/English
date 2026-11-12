@@ -22,6 +22,8 @@ test('phone build caches content-hashed application and AI assets with verified 
  const scriptTag=html.match(/<script type="module" src="(assets\/app\.[a-f0-9]{12}\.js)" integrity="sha256-([^"]+)" crossorigin="anonymous"><\/script>/);assert(scriptTag);
  const script=await readFile(new URL('../dist/'+scriptTag[1],import.meta.url),'utf8');
  const digest=createHash('sha256').update(script).digest('base64');assert.equal(scriptTag[2],digest);assert(html.includes(`script-src 'sha256-${digest}'`));
+ assert(html.includes("'wasm-unsafe-eval'"),'the embedded local VAD can instantiate WebAssembly under production CSP');
+ assert(!html.includes("'unsafe-eval'")&&!html.includes("'unsafe-inline'"),'WASM permission does not allow arbitrary JavaScript evaluation');
  assert(scriptTag[1].includes(createHash('sha256').update(script).digest('hex').slice(0,12)));
  assert.equal(new URL(scriptTag[1],'https://example.com/English/').pathname,'/English/'+scriptTag[1]);
  const headers=await readFile(new URL('../dist/_headers',import.meta.url),'utf8');assert.match(headers,/max-age=31536000, immutable/);

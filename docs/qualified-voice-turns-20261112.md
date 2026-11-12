@@ -34,8 +34,16 @@ provider의 speech candidate와 최근 로컬 음성 근거가 함께 있을 때
 
 실제 WASM을 합성 WAV에 적용해 조용한 음성, 44.1/48kHz, 무음·단발 충격·정상 백색잡음, 지연/감쇠된 동일 파형을 확인한다. 브라우저 검사는 provider/API를 fixture로 대체하며 ACK·음성 판별·중단·수동 복구·저장·checkpoint의 연결을 검증한다. native WebAudio 그래프와 배포 형식의 hash CSP/SRI에서도 WASM 동작을 확인한다. 모바일 화면과 큰 글자 조작을 별도로 검수한다.
 
-보완 전 로컬 전체 회귀 379개가 통과했고, 보완 후 제어기/음성 판별 43개, 개정 브라우저 5개 시나리오가 통과했다. 서로 겹치는 검사이므로 합산한 개수가 아니다. 후자는 checkpoint 2회에서 같은 인정된 저장 UUID만 사용하며, 잡음·취소된 AI 원문은 저장 상태로 남고 요약에서 제외됨을 확인했다. 기존 브라우저·통화 신뢰성·오디오 회귀도 통과했다. [390px 재생 화면](design/qualified-voice-turns-20261112/playing-390.png), [320px 큰 글자 복구 화면](design/qualified-voice-turns-20261112/manual-reply-320.png)을 직접 확인했다. [검증 집계](design/qualified-voice-turns-20261112/fixture-results.json)는 실제 음향 효과를 검증하지 않았음을 명시한다.
+최종 CI 전체 회귀 393개와 전체 브라우저 검사가 통과했다. 개정 브라우저 5개 시나리오에서는 checkpoint 2회에서 같은 인정된 저장 UUID만 사용하며, 잡음·취소된 AI 원문은 저장 상태로 남고 요약에서 제외됨을 확인했다. 기존 브라우저·통화 신뢰성·오디오 회귀도 통과했다. [390px 재생 화면](design/qualified-voice-turns-20261112/playing-390.png), [320px 큰 글자 복구 화면](design/qualified-voice-turns-20261112/manual-reply-320.png)을 직접 확인했다. [검증 집계](design/qualified-voice-turns-20261112/fixture-results.json)는 실제 음향 효과를 검증하지 않았음을 명시한다.
 
 이 검사는 실제 휴대폰의 잔향·왜곡 에코·방송 음성·속삭임과 모든 잡음의 정확도를 입증하지 않는다. 다른 사람이나 방송의 지속적인 말소리는 사용자 의도와 구분되지 않을 수 있다. 실제 기기에서 잡음 오중단 감소와 짧고 조용한 발화 보존을 함께 비교해야 한다. 새 제어를 쓰려면 진행 중 통화를 종료한 뒤 기존 탭을 새로고침하거나 다시 열어야 한다. 저장소 삭제는 요구하지 않는다.
 
-배포 커밋·CI·공개 빌드·운영 함수 확인 결과는 배포 완료 후 이 문서에 추가한다.
+실제 공급자 계약도 별도로 확인했다. 계정·DB·allowlist를 바꾸지 않는 짧은 임시 함수에서 기존 서버 자격을 재사용했고, API 키를 추출하거나 외부 결과에 넣지 않았다. WebRTC SDP 교환은 HTTP 200이었으나 검사 환경에서 RTC 데이터 채널이 열리지 않아 실제 재생은 미검증이다. 이후 서버 WebSocket 1세션에서 manual false/false·far_field 실효 ACK, 정확히 2회의 `input:[]` 시작 응답과 `item_reference` 후속 응답, 양쪽 metadata·completed·audio.done을 확인했다. 오류는 0이며 WS를 닫고 임시 함수를 삭제한 뒤 관리 목록에서도 부재를 확인했다. [안전 집계](design/qualified-voice-turns-20261112/provider-contract.json)는 WebRTC 재생 버퍼와 실제 기기 음향이 검사 범위가 아님을 구분한다.
+
+## 배포 확인
+
+[PR 17](https://github.com/chungchung234/English/pull/17)을 병합한 앱 커밋은 `47f15298763890a1690446d97f6899656515bece`다. [CI 및 배포](https://github.com/chungchung234/English/actions/runs/43208912117)의 전체 검사·서버·Pages 배포·배포 후 access 검사가 성공했다. 배포 후 CI의 임시 계정은 승인되지 않았으므로 실제 voice 경로는 기존 접근 정책대로 실행하지 않았다. 위 별도 WS 검증과 혼동하지 않는다.
+
+[공개 사이트](https://chungchung234.github.io/English/)의 실제 HTML·JS 바이트와 SRI/hash CSP·런타임 `LOOP_CLIENT_BUILD`가 의도한 앱 커밋과 일치했다. [공개 빌드 근거](design/qualified-voice-turns-20261112/public-artifact.json)와 [공개 번들 회귀 결과](design/qualified-voice-turns-20261112/public-fixture-results.json)를 남겼다. 인증·provider/API만 fixture로 대체하고 공개 HTML·JS는 수정하지 않았다. 같은 5개 흐름과 native WebAudio/WASM이 통과했고 [공개 390px](design/qualified-voice-turns-20261112/public-playing-390.png), [공개 320px 큰 글자](design/qualified-voice-turns-20261112/public-manual-reply-320.png)를 직접 확인했다. 후속 문서 커밋은 앱 동작을 바꾸지 않는다.
+
+운영 함수 본문에서 `greeting-purpose-v2` / `qualified-turns-v3`, capability 협상·처음부터 manual false/false·기억 없는 전체 opening·목적 지침 반환·checkpoint 부분집합 검증과 캐시 격리를 확인했다. 기존 DB migration 체크섬·제약·RLS/RPC 권한도 읽기 전용으로 확인했다. [운영 확인 집계](design/qualified-voice-turns-20261112/production-inspection.json)의 41개 항목이 모두 통과했으며 운영 계정·통화·전사에는 쓰지 않았다.

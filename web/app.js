@@ -804,6 +804,7 @@ async function startCall() {
         const tokens=event.response?.usage?.input_tokens||0;
         const responseError=event.response?.status_details?.error;
         if(responseError)recordCallIssue(current,{kind:'provider_error',code:responseError.code||'unknown',request_type:'response.create'});
+        if(event.response?.status==='incomplete'&&event.response?.status_details?.reason==='max_output_tokens')recordCallIssue(current,{kind:'provider_error',code:'RESPONSE_MAX_OUTPUT_TOKENS',request_type:'response.create'});
         if(event.response?.status==='completed')current.contextBlocked=false;
         current.contextBlocked ||= contextLimitError(responseError?.code);
         current.needsCompact ||= current.contextBlocked || tokens>=18000;

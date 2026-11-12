@@ -61,7 +61,7 @@ def deploy_function_https(ref, token):
     parts = []
     metadata = json.dumps({'name': 'coach', 'entrypoint_path': 'index.ts', 'verify_jwt': False}).encode()
     parts.append(b'--'+boundary.encode()+b'\r\nContent-Disposition: form-data; name="metadata"\r\n\r\n'+metadata+b'\r\n')
-    for name in ('index.ts', 'core.ts', 'policy.ts', 'enhancements.ts', 'weekly.ts', 'temporal-context.ts', 'conversation-memory.ts','background.ts', 'review-learning.ts'):
+    for name in ('index.ts', 'core.ts', 'policy.ts', 'enhancements.ts', 'weekly.ts', 'temporal-context.ts', 'conversation-memory.ts','background.ts', 'review-learning.ts', 'opening-policy.ts'):
         parts.append(b'--'+boundary.encode()+b'\r\nContent-Disposition: form-data; name="file"; filename="'+name.encode()+b'"\r\nContent-Type: application/typescript\r\n\r\n'+(ROOT/'supabase/functions/coach'/name).read_bytes()+b'\r\n')
     parts.append(b'--'+boundary.encode()+b'--\r\n')
     request = urllib.request.Request(f'https://api.supabase.com/v1/projects/{ref}/functions/deploy?slug=coach',

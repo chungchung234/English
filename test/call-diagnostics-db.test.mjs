@@ -73,6 +73,40 @@ test('call diagnostics isolate accounts, accept exact retries, reject content, a
   assert.deepEqual((await record([late])).event_ids,[late.event_id]);
  });
 
+ await t.test('audio settings and interruption provenance are strict, private, and part of immutable receipt identity',async()=>{
+  const context={requested_mode:'speakerphone',expected_noise:'far_field',effective_noise:'far_field',capture_echo:'on',capture_noise:'on',capture_gain:'unreported',vad_type:'semantic_vad',interrupt_response:'on',output_state:'playing',cancel_origin:'provider_turn_detected',response_key:randomUUID()};
+  const configuration=event(own,{kind:'audio_configuration',code:'AUDIO_CONFIGURATION',audio_context:context});
+  const interruption=event(own,{kind:'audio_interruption',code:'TURN_DETECTED',audio_context:context});
+  assert.deepEqual(await record([configuration,interruption]),{event_ids:[configuration.event_id,interruption.event_id],dropped_event_ids:[]});
+  assert.deepEqual((await record([{...configuration,audio_context:Object.fromEntries(Object.entries(context).reverse())}])).event_ids,[configuration.event_id]);
+  const stored=(await asUser(A,()=>db.query('select audio_context from public.call_diagnostics where event_id=$1',[interruption.event_id]))).rows[0].audio_context;
+  assert.deepEqual(stored,context);
+  assert.deepEqual((await asUser(B,()=>db.query('select event_id from public.call_diagnostics where event_id=$1',[interruption.event_id]))).rows,[]);
+  await assert.rejects(record([{...interruption,audio_context:{...context,effective_noise:'near_field'}}]),/ID reused/);
+  await assert.rejects(record([{...interruption,audio_context:{...context,response_key:randomUUID()}}]),/ID reused/);
+  const missing={...interruption};delete missing.audio_context;await assert.rejects(record([missing]),/requires context/);
+  await assert.rejects(record([{...first,audio_context:context}]),/ID reused/,'an old receipt cannot acquire new audio metadata on retry');
+  assert.equal((await db.query('select audio_context from public.call_diagnostics where event_id=$1',[first.event_id])).rows[0].audio_context,null);
+  assert.deepEqual((await record([event(own,{audio_context:{requested_mode:'unknown'}})])).dropped_event_ids,[],'old diagnostic kinds can optionally carry safe settings');
+  for(const audio_context of [null,{},[],true,'private message',{deviceId:'private device'},
+   {...context,message:'private speech'},{...context,transcript:'private speech'},{...context,sdp:'private negotiation'},
+   {...context,response_id:'resp_provider_id'},{...context,raw_event:{token:'private credential'}},
+  ])await assert.rejects(record([event(own,{kind:'audio_interruption',audio_context})]),/audio context/);
+  for(const key of Object.keys(context)){
+   for(const value of ['not_an_enum',true,1,null,[],{}])await assert.rejects(record([event(own,{kind:'audio_configuration',audio_context:{...context,[key]:value}})]),/audio context/);
+  }
+  const allowed={requested_mode:['speakerphone','headset','unknown'],expected_noise:['far_field','near_field','provider_default','unreported'],effective_noise:['far_field','near_field','off','unreported'],capture_echo:['on','off','unreported'],capture_noise:['on','off','unreported'],capture_gain:['on','off','unreported'],vad_type:['semantic_vad','server_vad','off','unreported'],interrupt_response:['on','off','unreported'],output_state:['playing','generating','idle','unknown'],cancel_origin:['provider_turn_detected','client_hold','client_end','client_other','unattributed']};
+  for(const [key,values] of Object.entries(allowed))for(const value of values){
+   const item=event(own,{kind:'audio_configuration',audio_context:{[key]:value}});
+   assert.deepEqual((await record([item])).event_ids,[item.event_id]);
+  }
+  const good=event(own,{kind:'audio_configuration',audio_context:context});
+  await assert.rejects(record([good,event(own,{kind:'audio_interruption',audio_context:{...context,deviceId:'private'}})]),/audio context/);
+  assert.deepEqual((await db.query('select event_id from public.call_diagnostics where event_id=$1',[good.event_id])).rows,[],'unsafe context rejects the whole batch');
+  await assert.rejects(db.query(`insert into public.call_diagnostics(event_id,user_id,session_id,occurred_at,client_build,kind,code,request_type,elapsed_ms,connection_state,data_state,phase,audio_context)
+   select $1,user_id,session_id,occurred_at,client_build,kind,code,request_type,elapsed_ms,connection_state,data_state,phase,$2::jsonb from public.call_diagnostics where event_id=$3`,[randomUUID(),JSON.stringify({deviceId:'private'}),first.event_id]),/check constraint/,'the table itself also rejects unsafe context');
+ });
+
  await t.test('200 receipts per call, explicit capped acknowledgements, and no starvation of later calls',async()=>{
   const capped=await session(A),events=Array.from({length:200},()=>event(capped));
   for(let i=0;i<events.length;i+=20)assert.equal((await record(events.slice(i,i+20))).event_ids.length,20);

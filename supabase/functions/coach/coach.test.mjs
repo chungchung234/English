@@ -221,6 +221,7 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.equal(session.model, 'gpt-realtime-2.1-mini');
       assert.equal(session.max_output_tokens, 512);
       assert.deepEqual(session.audio.input.turn_detection, { type: 'semantic_vad', eagerness: 'low', create_response: true, interrupt_response: true });
+      assert.deepEqual(session.audio.input.noise_reduction, { type: 'far_field' });
       assert.equal(Object.hasOwn(session.audio.input.transcription, 'language'), false, 'Mixed-language original speech must use automatic language detection');
       assert.match(session.instructions, /Speak only in English throughout the call/);
       assert.match(session.instructions, /including when the learner speaks Korean or asks for a Korean answer or explanation/);
@@ -230,7 +231,10 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.match(session.instructions, /Stop when the requested point is complete and let the learner speak/);
       assert.match(session.instructions, /Understand wait, stop, and repair signals in either English or Korean/);
       assert.doesNotMatch(session.instructions, /10–25|at most two sentences/);
-      assert.match(session.instructions, /For the first turn only, begin with a short warm English greeting/);
+      assert.match(session.instructions, /Give any learner speech already received priority over an opening/);
+      assert.match(session.instructions, /do not insert a greeting, generic check-in, or previous-call callback that resets their topic/);
+      assert.match(session.instructions, /Only if there is no learner content yet, open with one brief warm English greeting at most once during this call/);
+      assert.doesNotMatch(session.instructions, /For the first turn only, begin with a short warm English greeting/);
       assert.doesNotMatch(session.instructions, /explain briefly in Korean/);
       assert.equal(session.audio.input.transcription.model, 'gpt-realtime-whisper');
       assert.equal(session.audio.output.voice, 'cedar');
@@ -248,9 +252,12 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.equal(result.status, 200); const data = await result.json(); assert.equal(data.sdp, sdp);
       assert.equal(data.clock.time_zone, null); assert.equal(data.clock.session_created_at, null); assert(Number.isFinite(Date.parse(data.clock.server_now_utc)));
       assert.deepEqual(data.memory_context, { status: 'empty', memory_count: 0, fact_count: 0, last_session_created_at: null, has_undated_memory: false });
+      assert.deepEqual(data.audio_policy, { version: '2026-11-12-speakerphone-v1', microphone_mode: 'speakerphone', requested_noise_reduction: 'far_field', expected_noise_reduction: 'far_field', fallback: null,
+        turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: true, interrupt_response: true } });
     }
     const {memory_context,context_sources,context_fingerprint,context_bytes,...metadata}=completed.p_result;
-    assert.deepEqual(metadata, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',policy_version:'2026-11-10-v2',voice_policy_version:'2026-11-11-conversation-handoff-v3' });
+    assert.deepEqual(metadata, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',policy_version:'2026-11-10-v2',voice_policy_version:'2026-11-12-reciprocal-companion-v1',
+      audio_policy_version:'2026-11-12-speakerphone-v1',requested_microphone_mode:'speakerphone',requested_noise_reduction:'far_field',expected_noise_reduction:'far_field',audio_policy_fallback:null });
     assert(context_bytes>0);assert.equal(memory_context.status,'empty');assert.deepEqual(context_sources,{memory_session_ids:[],recent_session_id:null,conversation_session_ids:[]});assert.match(context_fingerprint,/^[a-f0-9]{64}$/);
   } finally { globalThis.fetch = original; }
 });
@@ -264,6 +271,131 @@ test('voice rejects invalid speed before reading history or spending a request',
       const result = await handler(request('voice', { sessionId, sdp, speechSpeed, omitLearningContext }));
       assert.equal(result.status, 400); assert.equal((await result.json()).error.code, 'INVALID_SPEECH_SPEED'); assert.equal(calls, 1);
     }
+  } finally { globalThis.fetch = original; }
+});
+
+test('voice rejects unrecognized microphone modes before history or provider spending', async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const microphoneMode of [null, '', 'auto', 'far_field', 'Speakerphone', 1, true, {}, ['headset']]) {
+      let calls = 0;
+      globalThis.fetch = async url => { calls++; assert.ok(String(url).includes('/auth/')); return response(authUser); };
+      const result = await handler(request('voice', { sessionId, sdp, microphoneMode }));
+      assert.equal(result.status, 400); assert.equal((await result.json()).error.code, 'INVALID_MICROPHONE_MODE'); assert.equal(calls, 1);
+    }
+  } finally { globalThis.fetch = original; }
+});
+
+async function withVoiceProvider(provider, run) {
+  const original = globalThis.fetch, state = { calls: [], completed: [], failed: 0, reserved: 0 };
+  globalThis.fetch = async (url, options) => {
+    const path = String(url);
+    if (path.includes('/auth/')) return response(authUser);
+    if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, status: 'active', companion_id: 'alex', scenario: 'Everyday conversation' }]);
+    if (path.includes('/reserve_run')) { state.reserved++; return response({ reserved: true, job_id: sessionId, lease_token: eventId }); }
+    if (path.includes('/complete_run')) { const body = JSON.parse(options.body); state.completed.push(body); return response(body.p_result); }
+    if (path.includes('/fail_run')) { state.failed++; return response(true); }
+    if (path.includes('/realtime/calls')) {
+      assert.ok(options.body instanceof FormData); assert.equal(options.body.get('sdp'), sdp);
+      const configuration = JSON.parse(options.body.get('session')); state.calls.push(configuration);
+      return provider(configuration, state.calls.length);
+    }
+    throw Error('Unexpected voice transport fixture');
+  };
+  try { await run(state); } finally { globalThis.fetch = original; }
+}
+const omittedVoice = body => request('voice', { sessionId, sdp, omitLearningContext: true, ...body });
+
+test('headset explicitly selects near-field filtering while retaining the full-duplex voice contract', async () => {
+  await withVoiceProvider(configuration => {
+    assert.deepEqual(configuration.audio.input.noise_reduction, { type: 'near_field' });
+    assert.deepEqual(configuration.audio.input.turn_detection, { type: 'semantic_vad', eagerness: 'low', create_response: true, interrupt_response: true });
+    assert.deepEqual(configuration.audio.input.transcription, { model: 'gpt-realtime-whisper', delay: 'medium' });
+    assert.equal(configuration.model, 'gpt-realtime-2.1-mini'); assert.equal(configuration.audio.output.speed, 1.15);
+    return new Response(sdp);
+  }, async state => {
+    const result = await handler(omittedVoice({ microphoneMode: 'headset', speechSpeed: 1.15 }));
+    assert.equal(result.status, 200); const body = await result.json();
+    assert.equal(body.audio_policy.microphone_mode, 'headset'); assert.equal(body.audio_policy.requested_noise_reduction, 'near_field');
+    assert.equal(body.audio_policy.expected_noise_reduction, 'near_field'); assert.equal(body.audio_policy.fallback, null);
+    assert.equal(state.reserved, 1); assert.equal(state.calls.length, 1);
+    assert.equal(state.completed[0].p_result.requested_microphone_mode, 'headset');
+    assert.equal(state.completed[0].p_result.requested_noise_reduction, 'near_field');
+  });
+});
+
+test('only an explicit unsupported noise-reduction field allows one compatibility retry on the same lease', async () => {
+  for (const code of ['unknown_parameter', 'unsupported_parameter']) for (const param of ['session.audio.input.noise_reduction', 'audio.input.noise_reduction']) {
+    await withVoiceProvider((configuration, attempt) => {
+      if (attempt === 1) {
+        assert.deepEqual(configuration.audio.input.noise_reduction, { type: 'far_field' });
+        return new Response(JSON.stringify({ error: { code, param, message: 'private provider rejection details' } }), { status: 400 });
+      }
+      assert.equal(Object.hasOwn(configuration.audio.input, 'noise_reduction'), false);
+      return new Response(sdp);
+    }, async state => {
+      const result = await handler(omittedVoice({ microphoneMode: 'speakerphone' }));
+      assert.equal(result.status, 200); const body = await result.json();
+      assert.equal(body.audio_policy.requested_noise_reduction, 'far_field'); assert.equal(body.audio_policy.expected_noise_reduction, 'provider_default');
+      assert.equal(body.audio_policy.fallback, 'unsupported_noise_reduction');
+      assert.equal(state.calls.length, 2); assert.equal(state.reserved, 1); assert.equal(state.completed.length, 1); assert.equal(state.failed, 0);
+      const { noise_reduction: ignored, ...firstInput } = state.calls[0].audio.input;
+      assert.deepEqual(state.calls[1], { ...state.calls[0], audio: { ...state.calls[0].audio, input: firstInput } }, 'the fallback changes only the unsupported optional field');
+      assert.equal(state.completed[0].p_result.audio_policy_fallback, 'unsupported_noise_reduction');
+      assert.doesNotMatch(JSON.stringify(state.completed), /private provider|test-openai|test-service|v=0|127\.0\.0\.1/);
+    });
+  }
+});
+
+test('ambiguous provider failures never retry or expose a provider body', async () => {
+  const failures = [
+    { status: 400, error: { code: 'invalid_value', param: 'session.audio.input.noise_reduction' } },
+    { status: 400, error: { code: 'unknown_parameter', param: 'session.audio.input.noise_reduction.type' } },
+    { status: 400, error: { code: 'unsupported_parameter', param: 'session.instructions' } },
+    { status: 400, error: { code: 'unknown_parameter' } },
+    { status: 400, raw: 'private malformed provider body' },
+    { status: 401, error: { code: 'unknown_parameter', param: 'session.audio.input.noise_reduction' } },
+    { status: 429, error: { code: 'unsupported_parameter', param: 'session.audio.input.noise_reduction' } },
+    { status: 503, error: { code: 'unsupported_parameter', param: 'session.audio.input.noise_reduction' } },
+    { transport: true },
+  ];
+  for (const failure of failures) await withVoiceProvider(() => {
+    if (failure.transport) throw Error('private transport details');
+    return new Response(failure.raw || JSON.stringify({ error: { ...failure.error, message: 'private provider details' } }), { status: failure.status });
+  }, async state => {
+    const result = await handler(omittedVoice({})); assert.equal(result.status, failure.transport ? 503 : 502);
+    assert.equal(state.calls.length, 1); assert.equal(state.reserved, 1); assert.equal(state.completed.length, 0); assert.equal(state.failed, 1);
+    assert.doesNotMatch(await result.text(), /private|test-openai|test-service/);
+  });
+});
+
+test('a rejected compatibility retry never loops or persists a successful voice connection', async () => {
+  await withVoiceProvider(() => new Response(JSON.stringify({ error: { code: 'unknown_parameter', param: 'session.audio.input.noise_reduction' } }), { status: 400 }), async state => {
+    const result = await handler(omittedVoice({})); assert.equal(result.status, 502);
+    assert.equal(state.calls.length, 2); assert.equal(state.reserved, 1); assert.equal(state.completed.length, 0); assert.equal(state.failed, 1);
+  });
+});
+
+test('a memory revision change after a rejected noise field prevents a stale compatibility retry', async () => {
+  const original = globalThis.fetch; let provider = 0, completed = false, failed = false;
+  globalThis.fetch = async (url, options) => {
+    const path = String(url);
+    if (path.includes('/auth/')) return response(authUser);
+    if (path.includes('/sessions?')) return response([{ id: sessionId, user_id: userId, companion_id: 'alex', scenario: 'Travel', status: 'active' }]);
+    if (path.includes('/learning_voice_context')) return response({ focus: [], suppress_memory: false });
+    if (path.includes('/learning_usage_prepare')) return response({ targets: [], source_version: 'session-v1' });
+    if (path.includes('/memory_context')) return memoryResponse([], [], provider ? 2 : 1);
+    if (path.includes('/learning_context')) return response([]);
+    if (path.includes('/reserve_run')) return response({ reserved: true, job_id: sessionId, lease_token: eventId });
+    if (path.includes('/realtime/calls')) { provider++; return new Response(JSON.stringify({ error: { code: 'unknown_parameter', param: 'session.audio.input.noise_reduction' } }), { status: 400 }); }
+    if (path.includes('/complete_run')) { completed = true; return response(true); }
+    if (path.includes('/fail_run')) { failed = true; return response(true); }
+    throw Error('Unexpected compatibility privacy fixture');
+  };
+  try {
+    const result = await handler(request('voice', { sessionId, sdp })); assert.equal(result.status, 409); assert.equal((await result.json()).error.code, 'MEMORY_CHANGED');
+    assert.equal(provider, 1, 'a conclusive unsupported-field error cannot authorize use of newly excluded memory');
+    assert.equal(completed, false); assert.equal(failed, true);
   } finally { globalThis.fetch = original; }
 });
 
@@ -416,6 +548,9 @@ test('each stored companion controls its voice, persona, and isolated retrieved 
           assert.equal(session.instructions.includes('welcoming the learner into the scenario'), false);
           assert.ok(session.instructions.includes(`${name} practice phrase`));
           assert.ok(session.instructions.includes(`${name} approved focus`));
+          assert.match(session.instructions, /memory\.focus and historical practice expressions are reference context, not permission to initiate a practice invitation/);
+          assert.match(session.instructions, /If prepared_target is absent, continue general conversation without an unsolicited practice invitation; help with an expression whenever the learner asks/);
+          assert.doesNotMatch(session.instructions, /naturally invite the learner to try that one expression once/);
           assert.equal(session.instructions.includes(`${name} self-reported phrase`), false);
           assert.ok(session.instructions.includes('evidence of reuse or mastery'));
           for(const [,other] of profiles)if(other!==name)assert.equal(session.instructions.includes(other+' self-reported phrase'),false);
@@ -1070,7 +1205,8 @@ test('server suppression removes historical learning and embedding spend while r
         if (path.includes('/realtime/calls')) {
           const instructions = JSON.parse(options.body.get('session')).instructions;
           published = JSON.parse(instructions.split('UNTRUSTED_CONTEXT_JSON:\n')[1]).memory;
-          assert.ok(instructions.includes('one expression once'));
+          assert.match(instructions, /memory\.focus and historical practice expressions are reference context, not permission to initiate a practice invitation/);
+          assert.match(instructions, /If prepared_target is absent, continue general conversation without an unsolicited practice invitation/);
           assert.ok(instructions.includes('Do not force repetition'));
           assert.equal(instructions.includes('PRIVATE EXCLUDED HISTORY'), false);
           assert.equal(instructions.includes('PRIVATE FORGOTTEN NAME'), false);

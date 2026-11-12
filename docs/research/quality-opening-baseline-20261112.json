@@ -1,0 +1,212 @@
+{
+  "schema_version": 1,
+  "snapshot_utc": "2026-11-12 00:15:09.663882+00",
+  "source_commit": "b42564539ff32aa6e28f7613f1d607e6de63e7ac",
+  "public_build": "git:ea6024ae7bf8dedd1bd93014c91e96ded49b85e8",
+  "scope": "19 recorded calls across two accounts; latest client build has two short calls; pooled counts are not current-policy quality rates",
+  "data_counts": {
+    "sessions": 19,
+    "ended": 17,
+    "active": 2,
+    "flagged_record_incomplete": 0,
+    "transcript_events": 345,
+    "user_events": 173,
+    "assistant_events": 172,
+    "sessions_with_both_speakers": 16,
+    "sessions_without_user_events": 3,
+    "session_analyses": 14,
+    "weekly_analyses": 1
+  },
+  "opening_definitions": {
+    "event_order": "timestamp then pseudonymized event identifier; this is record order, not guaranteed audible turn order",
+    "first_ai_message": "first recorded assistant event in each call, including calls where a user event precedes it",
+    "ai_prefix_block": "all consecutive assistant events before first recorded user event; entire call if no user event exists",
+    "first_response_ai_block": "consecutive assistant events immediately after first recorded user event, until next user event",
+    "greeting_detection": "case-insensitive greeting word at beginning: common greeting variants plus morning salutation",
+    "exact_duplicate": "full text equality",
+    "normalized_duplicate": "NFKC + lowercase + ASCII alphanumeric token normalization; punctuation and spacing removed",
+    "adjacent_pair": "successive calls within the same account and companion, even if other companions were called between them",
+    "manual_opening_families": {
+      "daily_detail_invitation": "asks about recent or current everyday activities, feelings or small details",
+      "conversation_or_help_menu": "asks learner to choose what to discuss, practice or receive help with",
+      "grounded_memory_callback": "specific callback supported by supplied historical user evidence",
+      "response_to_initial_user": "responds after user appears first in recorded event order"
+    },
+    "semantic_counts": "manual descriptive coding, not measured similarity or a quality score",
+    "repeated_greeting_warning": "responding to a user greeting is ordinary reciprocity; first-three greeting counts must not be read as duplicate playback defects"
+  },
+  "opening_overall": {
+    "calls": 19,
+    "calls_with_recorded_user": 16,
+    "ai_first_calls": 17,
+    "user_first_calls": 2,
+    "generic_ai_prefix_calls": 16,
+    "multi_message_ai_prefix_calls": [
+      "C03",
+      "C06",
+      "C10",
+      "C12"
+    ],
+    "multi_greeting_ai_prefix_calls": [
+      "C03",
+      "C06",
+      "C10"
+    ],
+    "multi_greeting_first_response_block_calls": [
+      "C06",
+      "C08"
+    ],
+    "at_least_two_greetings_in_first_three_ai_messages_calls": [
+      "C01",
+      "C03",
+      "C04",
+      "C06",
+      "C07",
+      "C08",
+      "C09",
+      "C10",
+      "C11",
+      "C14",
+      "C15",
+      "C16",
+      "C17",
+      "C18",
+      "C19"
+    ],
+    "pure_greeting_first_user_calls": [
+      "C06",
+      "C16",
+      "C17",
+      "C18",
+      "C19"
+    ],
+    "first_ai_greeting_count": 19,
+    "common_two_word_greeting_lead_shape_counts": {
+      "form_A": 10,
+      "form_B": 8,
+      "other": 1
+    }
+  },
+  "opening_adjacent_comparison": {
+    "first_ai_distinct_texts": 19,
+    "first_ai_distinct_normalized_texts": 19,
+    "same_account_companion_adjacent_pairs": 14,
+    "exact_first_ai_matches": 0,
+    "normalized_first_ai_matches": 0,
+    "both_generic_invitation_pairs": 9,
+    "same_manual_generic_family_pairs": 7,
+    "adjacent_pairs_with_nonempty_ai_prefixes": 11
+  },
+  "opening_cohorts": {
+    "early_short_exploratory_calls": {
+      "calls": 13,
+      "calls_with_recorded_user": 10,
+      "ai_first_calls": 11,
+      "user_first_calls": 2,
+      "generic_ai_prefix_calls": 11,
+      "multi_message_ai_prefix_calls": [
+        "C03",
+        "C06",
+        "C10",
+        "C12"
+      ],
+      "multi_greeting_ai_prefix_calls": [
+        "C03",
+        "C06",
+        "C10"
+      ],
+      "multi_greeting_first_response_block_calls": [
+        "C06",
+        "C08"
+      ],
+      "at_least_two_greetings_in_first_three_ai_messages_calls": [
+        "C01",
+        "C03",
+        "C04",
+        "C06",
+        "C07",
+        "C08",
+        "C09",
+        "C10",
+        "C11"
+      ],
+      "pure_greeting_first_user_calls": [
+        "C06"
+      ]
+    },
+    "latest_client_build_two_short_calls": {
+      "calls": 2,
+      "calls_with_recorded_user": 2,
+      "ai_first_calls": 2,
+      "user_first_calls": 0,
+      "generic_ai_prefix_calls": 1,
+      "multi_message_ai_prefix_calls": [],
+      "multi_greeting_ai_prefix_calls": [],
+      "multi_greeting_first_response_block_calls": [],
+      "at_least_two_greetings_in_first_three_ai_messages_calls": [
+        "C18",
+        "C19"
+      ],
+      "pure_greeting_first_user_calls": [
+        "C18",
+        "C19"
+      ]
+    },
+    "previous_client_build_four_calls": {
+      "calls": 4,
+      "calls_with_recorded_user": 4,
+      "ai_first_calls": 4,
+      "user_first_calls": 0,
+      "generic_ai_prefix_calls": 4,
+      "multi_message_ai_prefix_calls": [],
+      "multi_greeting_ai_prefix_calls": [],
+      "multi_greeting_first_response_block_calls": [],
+      "at_least_two_greetings_in_first_three_ai_messages_calls": [
+        "C14",
+        "C15",
+        "C16",
+        "C17"
+      ],
+      "pure_greeting_first_user_calls": [
+        "C16",
+        "C17"
+      ]
+    }
+  },
+  "opening_limitations": [
+    "Only two accounts and 19 calls; early short calls can include exploratory QA.",
+    "Only two brief calls are from the latest client build; do not generalize pooled rates to current policy.",
+    "Assistant messages and same-speaker blocks are not necessarily audible turns; no original audio or response lifecycle receipts were supplied.",
+    "No definite current-daypart mismatch was found; this does not verify all clock behavior.",
+    "Historical callback absence is not failure when history is irrelevant or sensitive.",
+    "The previous-client-build cohort has three longer calls and one brief memory-check call; it is not four long calls."
+  ],
+  "quality_source_integrity": {
+    "cited_items": 51,
+    "passed": 51,
+    "corrections": 19,
+    "original_substrings_passed": 19,
+    "categories": {
+      "error": 17,
+      "alternative": 2
+    },
+    "candidate_interpretation": "Single qualitative review candidates, not an established error rate or ASR ground truth.",
+    "checked_item_types": [
+      "strengths",
+      "corrections",
+      "practice",
+      "patterns",
+      "memory_facts"
+    ],
+    "count_scope": "51 checked item groups; not the count of unique evidence IDs or all possible contextual citation fields."
+  },
+  "realtime_cost_measured": false,
+  "data_handling": "Aggregate only. No raw transcripts, real account/session/event identifiers or credentials.",
+  "conversation_style_descriptive": {
+    "assistant_events": 172,
+    "if_you_want_events": 21,
+    "definition": "Case insensitive word-bounded exact phrase if you want in recorded assistant text; an event counts once.",
+    "interpretation": "Descriptive phrase presence, not an error rate. Appropriate offers and responses to user help requests are included.",
+    "latest_policy_limit": "Two brief calls cannot establish long conversation behavior or user-perceived friendliness."
+  }
+}

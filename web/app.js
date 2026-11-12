@@ -11,6 +11,7 @@ import { createPostCallTranscript } from './post-call-transcript.js';
 import { createVoiceTurnControls } from './voice-turn-controls.js';
 import { createRealtimeRequests } from './realtime-requests.js';
 import { createCallDiagnostics } from '../src/call-diagnostics.mjs';
+import { createCallAudioObserver, validMicrophoneMode } from './call-audio.js';
 import { createConversationClock, deviceTimeZone, formatInstant, recordTimeLabel, sessionTimeLabel, sessionTimeZone } from './conversation-time.js';
 import { createOutbox, flushOutbox } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
@@ -18,7 +19,7 @@ import { mountEmailLogin } from '../src/email-login.mjs';
 import { createAuthSession, LoginFlowError } from '../src/auth-session.mjs';
 import { clientBuild, telemetryMetadata, createConnectedTelemetry, createTelemetryDiagnostics } from '../src/learning-telemetry.mjs';
 const $ = id => document.getElementById(id);
-$('privacy-dialog').querySelector('.privacy-copy').append(' 복습한 내용과 선택도 함께 저장돼요. 통화 문제를 확인하기 위한 오류 코드와 연결 상태도 저장해요.');
+$('privacy-dialog').querySelector('.privacy-copy').append(' 복습한 내용과 선택도 함께 저장돼요. 통화 문제를 확인하기 위한 오류 코드·연결 상태·마이크 처리 설정도 저장해요.');
 const outbox = createOutbox();
 const presence = createAIPresence();
 const config = globalThis.LOOP_PUBLIC_CONFIG ? validatePublicConfig(globalThis.LOOP_PUBLIC_CONFIG.url,globalThis.LOOP_PUBLIC_CONFIG.key) : null;
@@ -288,6 +289,22 @@ function renderFloor(current) {
 function savedSpeechSpeed() {
   try { const value=Number(localStorage.getItem('loop.speech-speed:'+scope));return validSpeed(value)?value:SPEED.default; } catch { return SPEED.default; }
 }
+const microphonePreferences=new Map();
+function savedMicrophoneMode() {
+  if(microphonePreferences.has(scope))return microphonePreferences.get(scope);
+  let mode='speakerphone';
+  try{const value=localStorage.getItem('loop.microphone-mode:'+scope);if(validMicrophoneMode(value))mode=value;}catch{/* Keep the default when storage is unavailable. */}
+  if(scope)microphonePreferences.set(scope,mode);
+  return mode;
+}
+function renderMicrophoneMode() {
+  const mode=savedMicrophoneMode();
+  document.querySelectorAll('[name="microphone-mode"]').forEach(input=>{input.checked=input.value===mode;input.disabled=memoryBusy();});
+}
+function disposeCallAudio(current) {
+  navigator.mediaDevices?.removeEventListener?.('devicechange',current.captureAudioSettings);
+  current.audioObserver?.dispose();
+}
 function renderSpeechSpeed(state) {
   $('speed-current').textContent=formatSpeed(state.applied);
   $('speed-call').setAttribute('aria-label','말하기 속도 '+formatSpeed(state.applied).replace('×','배'));
@@ -332,6 +349,7 @@ function sendRealtime(current,event) {
   current.sentRequests.set(message.event_id,message.type);
   if(current.sentRequests.size>256)current.sentRequests.delete(current.sentRequests.keys().next().value);
   current.dc.send(JSON.stringify(message));
+  current.audioObserver?.sent(message,current.ending?'client_end':current.floor?.state.desiredHold?'client_hold':'client_other');
 }
 const contextLimitError=code=>/context.*(length|limit)|too_many_tokens/i.test(code||'');
 function scheduleCompaction(current) {
@@ -379,7 +397,7 @@ function activateCall(current) {
   if(!current.compacting){current.stream.getAudioTracks().forEach((track,i)=>track.enabled=!current.inputBlocked&&!current.muted&&(!current.compactionInput||current.compactionInput[i]));current.compactionInput=null;}
   startCallClock(current);if(current.ending)return;
   attachCallAudio(current);notice(current.inputBlocked?'기록을 저장하지 못해 마이크를 껐어요. 통화를 마친 뒤 기록을 확인해 주세요.':'');presence.setState(current.inputBlocked?'error':current.aiSpeaking?'speaking':current.responding?'thinking':'listening');$('call-status').textContent=current.inputBlocked?'저장 오류 · 통화를 마쳐 주세요':companionName()+'와 통화 중 · 편하게 말씀하세요';
-  if(!current.greeted&&!current.inputBlocked&&!current.floor.blocksResponse){current.greeted=true;current.responding=true;sendRealtime(current,{type:'response.create'});}
+  if(!current.greeted&&!current.inputBlocked&&!current.speaking&&!current.responding&&!current.awaitingCommit&&!current.transcribing.size&&!current.floor.blocksResponse){current.greeted=true;current.responding=true;sendRealtime(current,{type:'response.create'});}
   updateCallControls();
 }
 function openDialog(id) { const dialog=$(id); if(dialog && !dialog.open) {clearNotice();dialog.showModal();presence.refresh();} }
@@ -641,7 +659,7 @@ async function compactCall(current) {
 function disposeConnection(attempt) {
   attempt.cues?.dispose();attempt.stream?.getTracks().forEach(track=>track.stop());
   const current=attempt.current;
-  if(current){current.connectedTelemetry?.stop();current.requests?.dispose();current.speed?.dispose();current.floor?.dispose();clearCallClock(current);current.pc.close();}
+  if(current){current.connectedTelemetry?.stop();current.requests?.dispose();current.speed?.dispose();current.floor?.dispose();clearCallClock(current);disposeCallAudio(current);current.pc.close();}
 }
 async function finishCancelledConnection(attempt) {
   if(!attempt.sessionId||attempt.sessionClosed||scope!==attempt.scope)return;
@@ -688,9 +706,12 @@ async function startCall() {
     attempt.sessionId=session.id;checkAttempt();
     if(!callStarting||scope!==callScope||companionId!==selectedCompanion)throw Error('통화 연결이 취소되었습니다.');
     const pc=new RTCPeerConnection();
-    current={cues,ready:false,dataOpen:false,greeted:false,omitLearningContext,id:session.id,companionId:selectedCompanion,scope:callScope,pc,stream,remoteStream:null,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,acceptingFinalEvents:false,speaking:false,responding:false,aiSpeaking:false,muted:false,awaitingCommit:false,items:[],lastCompact:Date.now(),lastCompactAttempt:0,needsCompact:false,compacting:false,compactFailures:0,startedAt:null,startedMono:null,deadline:null,durationTimer:null,clockInterval:null};
+    current={cues,ready:false,dataOpen:false,greeted:false,omitLearningContext,microphoneMode:savedMicrophoneMode(),id:session.id,companionId:selectedCompanion,scope:callScope,pc,stream,remoteStream:null,seen:new Set(),transcribing:new Set(),transcriptionError:false,ending:false,acceptingFinalEvents:false,speaking:false,responding:false,aiSpeaking:false,muted:false,awaitingCommit:false,items:[],lastCompact:Date.now(),lastCompactAttempt:0,needsCompact:false,compacting:false,compactFailures:0,startedAt:null,startedMono:null,deadline:null,durationTimer:null,clockInterval:null};
     attempt.current=current;
     current.transcript=new Map();current.itemTimes=new Map();current.sentRequests=new Map();call=current;
+    current.audioObserver=createCallAudioObserver({mode:current.microphoneMode,emit:issue=>recordCallIssue(current,issue),outputState:()=>current.aiSpeaking?'playing':current.responding?'generating':'idle'});
+    current.captureAudioSettings=()=>{if(call===current&&!current.ending)current.audioObserver.capture(current.stream);};
+    current.captureAudioSettings();navigator.mediaDevices.addEventListener?.('devicechange',current.captureAudioSettings);
     current.requests=createRealtimeRequests({send:event=>sendRealtime(current,event),onIssue:issue=>recordCallIssue(current,issue)});
     current.time_zone=session.time_zone??callTimeZone;current.created_at=session.created_at;current.clock=createConversationClock({timeZone:current.time_zone});
     current.floor=createVoiceTurnControls({send:event=>{const wasResponding=current.responding;if(event.type==='response.create')current.responding=true;try{sendRealtime(current,event);}catch(error){current.responding=wasResponding;throw error;}},
@@ -719,6 +740,8 @@ async function startCall() {
     dc.onmessage=e=>{
       if(call!==current || (current.ending&&!current.acceptingFinalEvents))return;
       let event;try{event=JSON.parse(e.data);}catch{return;}
+      current.audioObserver.event(event);
+      if(['input_audio_buffer.speech_started','input_audio_buffer.committed','response.created'].includes(event.type))current.greeted=true;
       const requestResult=current.requests.event(event);
       if(event.type==='conversation.item.deleted'&&event.item_id)current.items=current.items.filter(id=>id!==event.item_id);
       if(event.type==='error')recordCallIssue(current,{kind:'provider_error',code:event.error?.code||'unknown',
@@ -729,11 +752,11 @@ async function startCall() {
       if(['session.created','session.updated'].includes(event.type)&&typeof event.session?.instructions==='string'&&event.session.instructions.trim())current.voiceInstructions=event.session.instructions;
       const speedError=current.speed.event(event);
       if(!current.ending&&current.ready) {
-        if(event.type==='input_audio_buffer.speech_started'){presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
-        if(event.type==='input_audio_buffer.speech_stopped' || event.type==='response.created'){presence.setState('thinking');$('call-status').textContent='답변을 준비하고 있어요';}
+        if(event.type==='input_audio_buffer.speech_started'&&!current.aiSpeaking){presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
+        if((event.type==='input_audio_buffer.speech_stopped' || event.type==='response.created')&&!current.aiSpeaking){presence.setState('thinking');$('call-status').textContent='답변을 준비하고 있어요';}
         if(event.type==='output_audio_buffer.started'){current.aiSpeaking=true;presence.setState('speaking');$('call-status').textContent=companionName()+'가 말하고 있어요';}
         if(event.type==='output_audio_buffer.stopped' || event.type==='output_audio_buffer.cleared'){current.aiSpeaking=false;presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
-        if(event.type==='response.done' && event.response?.status && event.response.status!=='completed'){presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
+        if(event.type==='response.done' && event.response?.status && event.response.status!=='completed'&&!current.aiSpeaking){presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
       }
       if(event.type==='conversation.item.created' || event.type==='conversation.item.added') {
         if(event.item?.id && !current.items.includes(event.item.id))current.items.push(event.item.id);
@@ -784,14 +807,15 @@ async function startCall() {
     const offer=await pc.createOffer();checkAttempt();await pc.setLocalDescription(offer);checkAttempt();
     if(call!==current||current.ending)return;$('call-status').textContent=companionName()+'에게 전화 거는 중';
     current.omitLearningContext ||= learning.hasPendingExclusions();
-    const answer=await edge('voice',{sessionId:session.id,sdp:offer.sdp,omitLearningContext:current.omitLearningContext,speechSpeed:current.initialSpeed},{signal:attempt.controller.signal});
+    const answer=await edge('voice',{sessionId:session.id,sdp:offer.sdp,omitLearningContext:current.omitLearningContext,speechSpeed:current.initialSpeed,microphoneMode:current.microphoneMode},{signal:attempt.controller.signal});
     checkAttempt();if(call!==current||current.ending)return;
     applyConversationContext(current,answer);
+    current.audioObserver.expected(answer.audio_policy);
     await pc.setRemoteDescription({type:'answer',sdp:answer.sdp});
   } catch(e) {
     cues.dispose();if(callCues===cues)callCues=null;
     stream?.getTracks().forEach(track=>track.stop());
-    if(current){current.connectedTelemetry?.stop();current.requests?.dispose();current.speed?.dispose();current.floor?.dispose();clearCallClock(current);current.pc.close();}
+    if(current){current.connectedTelemetry?.stop();current.requests?.dispose();current.speed?.dispose();current.floor?.dispose();clearCallClock(current);disposeCallAudio(current);current.pc.close();}
     if(attempt.cancelled||scope!==attempt.scope){await finishCancelledConnection(attempt);return;}
     if(!current||call===current){call=null;presence.detachAudio();$('remote-audio').srcObject=null;}
     const help=microphoneHelp(e)||(['BUDGET_EXCEEDED','COST_BUDGET_EXCEEDED'].includes(e.code)?['오늘 이용 한도에 도달했어요','한도가 초기화된 뒤 다시 통화해 주세요.']:e.code==='ACCOUNT_NOT_ALLOWED'?['이 계정으로 통화할 수 없어요','초대받은 계정인지 확인해 주세요. 내 계정에서 로그아웃한 뒤 다른 계정으로 로그인할 수 있어요.']:['연결하지 못했어요','네트워크 연결을 확인한 뒤 다시 시도해 주세요.']);
@@ -812,6 +836,7 @@ function endCall() {
   // Reserve the end synchronously before any transcription/network awaits.
   current.durationMs=Math.min(CALL_DURATION,callElapsed(current));current.ending=true;current.connectedTelemetry?.stop();current.acceptingFinalEvents=true;callEnding=true;clearCallClock(current);navigationControls();updateCallControls();$('end-call').disabled=true;
   current.requests?.dispose();current.speed?.dispose();current.floor?.dispose();closeDialog('speed-dialog');
+  navigator.mediaDevices?.removeEventListener?.('devicechange',current.captureAudioSettings);
   current.stream.getTracks().forEach(track=>track.stop());
   presence.detachAudio();$('remote-audio').pause();$('remote-audio').srcObject=null;
   current.remoteStream?.getAudioTracks().forEach(track=>track.enabled=false);
@@ -866,7 +891,7 @@ function endCall() {
       const finishResponse=await rpc('finish_session',{p_session_id:current.id});
       const finished=Array.isArray(finishResponse)&&finishResponse.length===1?finishResponse[0]:finishResponse;
       if(finished?.id!==current.id||finished.status!=='ended'||typeof finished.ended_at!=='string'||!Number.isFinite(Date.parse(finished.ended_at)))throw Error('대화가 저장됐는지 확인하지 못했어요. 최근 통화에서 다시 확인해 주세요.');
-      current.ended_at=finished.ended_at;current.pc.close();
+      current.ended_at=finished.ended_at;disposeCallAudio(current);current.pc.close();
       if(scope!==current.scope)throw Error('계정이 바뀌었어요. 원래 계정에서 통화 저장 상태를 확인해 주세요.');
       selectedReviewSessionId=current.id;historyFilter=null;
       current.transcriptPhase='saved';current.completion.settle('saved');transcriptReview.changed(current);
@@ -877,7 +902,7 @@ function endCall() {
       if(!current.wrapupHome)current.nextView='review';
     } catch(e) {
       current.acceptingFinalEvents=false;current.transcriptPhase='partial';current.completion.settle('partial');transcriptReview.changed(current);
-      current.pc.close();if(call===current)call=null;if(!current.wrapupHome)current.nextView='review';historyFilter=null;
+      disposeCallAudio(current);current.pc.close();if(call===current)call=null;if(!current.wrapupHome)current.nextView='review';historyFilter=null;
       if(document.body.dataset.callPhase!=='ending')$('call-status').textContent='통화 종료 · 일부 기록 확인 필요';
       if(scope===current.scope) {
         notice('');mountLearningSession(current.id,{status:'active'});learning.interrupted({id:current.id,companion_id:current.companionId,status:'active'},e.message);
@@ -1245,7 +1270,8 @@ companionButtons.forEach(button=>{
   };
 });
 document.querySelectorAll('[data-open]').forEach(button=>button.onclick=()=>{if(call || callStarting || callEnding)return;openDialog(button.dataset.open);});
-if($('account-open'))$('account-open').onclick=()=>{if(!memoryBusy()){openDialog('account-dialog');}};
+if($('account-open'))$('account-open').onclick=()=>{if(!memoryBusy()){renderMicrophoneMode();openDialog('account-dialog');}};
+document.querySelectorAll('[name="microphone-mode"]').forEach(input=>input.onchange=()=>{if(memoryBusy()||!scope||!validMicrophoneMode(input.value)){renderMicrophoneMode();return;}microphonePreferences.set(scope,input.value);try{localStorage.setItem('loop.microphone-mode:'+scope,input.value);}catch{/* Use the selected mode for this page even when storage is unavailable. */}});
 const openMemory=protect(async()=>{if(memoryBusy())return notice('통화를 마친 뒤 기억을 관리할 수 있어요.');closeDialog('account-dialog');openDialog('memory-dialog');$('memory-index-status').textContent='';$('memory-index-more').hidden=true;await loadMemoryControls();});
 if($('memory-manage-open'))$('memory-manage-open').onclick=openMemory;if($('account-memory'))$('account-memory').onclick=openMemory;
 if($('memory-index'))$('memory-index').onclick=protect(indexMemory);if($('memory-index-more'))$('memory-index-more').onclick=protect(indexMemory);

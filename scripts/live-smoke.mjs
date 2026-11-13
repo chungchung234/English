@@ -32,6 +32,12 @@ export function verifyEvidence(content, events) {
       ensure(Array.isArray(item.evidence_ids) && item.evidence_ids.length > 0 && item.evidence_ids.every(id => users.has(id)), 'Feedback contains an unsupported evidence reference.');
       if (key === 'memory_facts') ensure(typeof item.quote === 'string' && item.quote.length > 0 && item.evidence_ids.some(id => users.get(id).text.includes(item.quote)), 'Memory fact quotation does not match saved user speech.');
       if (key === 'corrections') ensure(typeof item.original === 'string' && item.original.length > 0 && item.evidence_ids.some(id => users.get(id).text.includes(item.original)), 'Correction quotation does not match saved user speech.');
+      if (key === 'strengths' && item.expression !== undefined && item.expression !== '') ensure(typeof item.expression === 'string' && item.expression.trim().length > 0 && item.evidence_ids.some(id => users.get(id).text.includes(item.expression)), 'Well-used expression does not match saved user speech.');
+      if (item.learning !== undefined) {
+        const quote = item.learning?.source_quote;
+        ensure(typeof quote === 'string' && (quote === '' || quote.trim().length > 0 && item.evidence_ids.some(id => users.get(id).text.includes(quote))), 'Learning source quotation does not match saved user speech.');
+        ensure(item.learning.source_is_question !== true || quote.trim().length > 0, 'Requested expression is missing its saved user question.');
+      }
     }
   }
 }
@@ -54,11 +60,11 @@ export function verifyMemory(memory, profile, sessions, events) {
 export function installRealtimeSmokeObserver({ base, session }) {
   localStorage.setItem('loop.auth:' + base, JSON.stringify({ ...session, expires_at: Math.floor(Date.now() / 1000) + session.expires_in }));
   const manual = { capability: false, requested: false, returnedPolicy: false, openingContextValid: false, currentInputNone: false,
-    openingBaseIsolated: false, historicalContextPresent: false, preparedTopicPresent: false, completeInstructions: false,
+    liveContextValid: false, openingBaseIsolated: false, historicalContextPresent: false, preparedTopicPresent: false, completeInstructions: false,
     effectivePolicy: false, startupSent: 0, startupAcknowledged: 0, startupCompleted: 0,
     replySent: 0, replyAcknowledged: 0, replyCompleted: 0, userBeforeStartup: false, invalidRequests: 0, unexpectedResponses: 0, failedResponses: 0, providerErrors: 0 };
   const observed = globalThis.__liveSmoke = { userTurns: 0, userCommits: 0, assistantTurns: 0, assistantAfterUser: 0, voices: [], connectionState: 'new', manual };
-  let voiceInstructions = null, openingInstructions = null;
+  let voiceInstructions = null, openingInstructions = null, liveInstructionsValid = () => false;
   const requests = new Map(), responses = new Map(), items = new Set(), transcribedUsers = new Set();
   const empty = value => Array.isArray(value) && value.length === 0;
   const policyIsManual = policy => policy?.type === 'semantic_vad' && policy.eagerness === 'low' && policy.create_response === false && policy.interrupt_response === false;
@@ -80,17 +86,51 @@ export function installRealtimeSmokeObserver({ base, session }) {
       openingInstructions = typeof data?.opening_instructions === 'string' ? data.opening_instructions : null;
       manual.completeInstructions = [voiceInstructions, openingInstructions].every(value => typeof value === 'string' && value.startsWith('ROLE_AND_SAFETY:') && value.includes('PERSONA:') && value.includes('TRUSTED_TIME_CONTEXT_JSON:'));
       try {
-        const block = name => JSON.parse(openingInstructions.match(new RegExp('(?:^|\\n)' + name + ':\\n([^\\n]+)'))?.[1] || 'null');
-        const context = block('UNTRUSTED_CONTEXT_JSON'), opening = block('UNTRUSTED_OPENING_CONTEXT_JSON'), memory = context.memory;
+        const block = (instructions, name) => JSON.parse(instructions.match(new RegExp('(?:^|\\n)' + name + ':\\n([^\\n]+)'))?.[1] || 'null');
+        const context = block(openingInstructions, 'UNTRUSTED_CONTEXT_JSON'), opening = block(openingInstructions, 'UNTRUSTED_OPENING_CONTEXT_JSON'), memory = context.memory;
         const purpose = openingInstructions.split('\nCURRENT_RESPONSE_PURPOSE:\n')[1];
-        manual.openingBaseIsolated = context.scenario === '' && context.prepared_target === null && context.continuity === null &&
-          empty(memory.facts) && empty(memory.memories) && empty(memory.focus) && empty(memory.conversation_memories) && memory.recent_conversation === null;
         const record = value => Boolean(value && typeof value === 'object' && !Array.isArray(value));
+        const keysOnly = (value, keys) => record(value) && Object.keys(value).every(key => keys.includes(key));
+        const keysExactly = (value, keys) => keysOnly(value, keys) && Object.keys(value).length === keys.length;
         const text = value => typeof value === 'string' && Boolean(value.trim());
         const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
         const instant = value => typeof value === 'string' && Number.isFinite(Date.parse(value));
-        const prepared = opening?.prepared_topic, continuity = opening?.continuity, history = opening?.recent_openings;
         const zone = value => { try { return typeof value === 'string' && Boolean(new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone); } catch { return false; } };
+        const validQuote = value => keysExactly(value, ['id', 'text', 'timestamp']) && uuid(value.id) && text(value.text) && instant(value.timestamp);
+        const validConversation = value => {
+          if (!keysExactly(value, ['session_id', 'session_created_at', 'session_ended_at', 'session_time_zone', 'mode', 'summary', 'threads', 'turns']) ||
+            !uuid(value.session_id) || !instant(value.session_created_at) || !instant(value.session_ended_at) ||
+            !(value.session_time_zone === null || zone(value.session_time_zone)) || !['handoff', 'excerpt_fallback'].includes(value.mode) || value.summary !== null ||
+            !Array.isArray(value.turns) || !value.turns.length || !value.turns.every(turn => keysExactly(turn, ['id', 'speaker', 'text', 'timestamp']) && turn.speaker === 'user' &&
+              validQuote({ id: turn.id, text: turn.text, timestamp: turn.timestamp })) || !Array.isArray(value.threads)) return false;
+          const ids = new Set(value.turns.map(turn => turn.id));
+          return value.threads.every(thread => keysExactly(thread, ['note', 'state', 'when', 'follow_up', 'evidence_ids']) && text(thread.note) &&
+            ['stated', 'planned', 'resolved', 'unknown'].includes(thread.state) && (thread.when === null || text(thread.when)) && thread.follow_up === null &&
+            Array.isArray(thread.evidence_ids) && thread.evidence_ids.length === 1 && ids.has(thread.evidence_ids[0]));
+        };
+        const validLiveContext = value => {
+          if (!keysExactly(value, ['companionId', 'scenario', 'memory', 'checkpoint']) || !['alex', 'mia', 'juno'].includes(value.companionId) ||
+            !(value.scenario === null || value.scenario === 'Natural English conversation about everyday life' ||
+              typeof value.scenario === 'string' && value.scenario.startsWith('User-prepared conversation: ') && text(value.scenario.slice('User-prepared conversation: '.length))) ||
+            !keysExactly(value.memory, ['facts', 'recent_conversation', 'conversation_memories', 'memories', 'suppress_memory'])) return false;
+          const memory = value.memory;
+          return typeof memory.suppress_memory === 'boolean' && Array.isArray(memory.facts) && memory.facts.every(fact =>
+            keysOnly(fact, ['key', 'value', 'forgotten', 'manual', 'updated_at', 'spoken_at', 'session_id', 'quote', 'evidence_ids']) &&
+            ['name', 'occupation', 'location', 'goal', 'interest', 'preference'].includes(fact.key) && typeof fact.value === 'string' && typeof fact.forgotten === 'boolean') &&
+            (memory.recent_conversation === null || validConversation(memory.recent_conversation)) &&
+            Array.isArray(memory.conversation_memories) && memory.conversation_memories.every(validConversation) &&
+            Array.isArray(memory.memories) && memory.memories.every(item => keysExactly(item, ['session_id', 'session_created_at', 'session_ended_at', 'session_time_zone', 'evidence']) &&
+              uuid(item.session_id) && (item.session_created_at === null || instant(item.session_created_at)) && (item.session_ended_at === null || instant(item.session_ended_at)) &&
+              (item.session_time_zone === null || zone(item.session_time_zone)) && Array.isArray(item.evidence) && item.evidence.length > 0 && item.evidence.every(validQuote)) &&
+            (value.checkpoint === null || keysExactly(value.checkpoint, ['summary']) && text(value.checkpoint.summary));
+        };
+        // Delivery-shape checks distinguish conversation evidence from review
+        // fields. They do not certify a quotation's truth or conversational use.
+        liveInstructionsValid = instructions => { try { return validLiveContext(block(instructions, 'UNTRUSTED_CONTEXT_JSON')); } catch { return false; } };
+        manual.liveContextValid = liveInstructionsValid(voiceInstructions) && liveInstructionsValid(openingInstructions);
+        manual.openingBaseIsolated = manual.liveContextValid && context.scenario === 'Natural English conversation about everyday life' &&
+          empty(memory.facts) && empty(memory.memories) && empty(memory.conversation_memories) && memory.recent_conversation === null && memory.suppress_memory === true && context.checkpoint === null;
+        const prepared = opening?.prepared_topic, continuity = opening?.continuity, history = opening?.recent_openings;
         const day = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
           Number.isFinite(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;
         const timing = continuity?.plan_timing;
@@ -106,19 +146,16 @@ export function installRealtimeSmokeObserver({ base, session }) {
           Object.hasOwn(continuity, 'plan_timing') && validTiming && continuity.must_not_infer_outcome === true;
         const validHistory = Array.isArray(history) && history.length <= 3 && history.every(item => record(item) && uuid(item.session_id) &&
           instant(item.occurred_at) && text(item.text) && item.text.length <= 240 && item.role === 'style_only');
-        const validStrategy = opening?.strategy === 'prepared_topic' ? prepared !== null && continuity === null :
-          opening?.strategy === 'supported_continuity' ? prepared === null && continuity !== null :
-            opening?.strategy === 'open_conversation' && prepared === null && continuity === null;
-        const validAction = opening?.strategy === 'prepared_topic' ? opening.action === 'enter_prepared_topic' :
-          opening?.strategy === 'supported_continuity' ? opening.action === ({ resolved: 'add_perspective_to_known_result', planned: 'pick_up_unresolved_plan', stated: 'connect_to_prior_detail' })[continuity?.state] :
-            opening?.strategy === 'open_conversation' && opening.action === 'contribute_concrete_perspective';
-        const keys = ['version', 'purpose', 'current_utterance', 'strategy', 'action', 'prepared_topic', 'continuity', 'recent_openings', 'reason'];
+        const validKind = opening?.context_kind === 'user_chosen_topic' ? prepared !== null && continuity === null :
+          opening?.context_kind === 'recent_conversation' ? prepared === null && continuity !== null :
+            opening?.context_kind === 'none' && prepared === null && continuity === null;
+        const keys = ['version', 'purpose', 'current_utterance', 'context_kind', 'role', 'prepared_topic', 'continuity', 'recent_openings', 'reason'];
         manual.currentInputNone = record(opening) && Object.hasOwn(opening, 'current_utterance') && opening.current_utterance === null;
         manual.historicalContextPresent = Boolean(continuity || Array.isArray(history) && history.length);
         manual.preparedTopicPresent = Boolean(prepared);
-        manual.openingContextValid = Boolean(purpose?.trim()) && record(opening) && opening.version === 'opening-context-v1' &&
-          opening.purpose === 'call_opening' && Object.keys(opening).every(key => keys.includes(key)) && manual.currentInputNone &&
-          validPrepared && validContinuity && validHistory && validStrategy && validAction &&
+        manual.openingContextValid = Boolean(purpose?.trim()) && keysExactly(opening, keys) && opening.version === 'opening-context-v2' &&
+          opening.purpose === 'call_opening' && opening.role === 'optional_conversation_context' && manual.currentInputNone &&
+          validPrepared && validContinuity && validHistory && validKind &&
           ['prepared_topic', 'eligible_continuity', 'suppressed', 'forgotten_fact', 'invalid_clock', 'no_recent_handoff', 'stale_source', 'no_suitable_thread'].includes(opening.reason);
       } catch { manual.openingContextValid = false; }
     }
@@ -166,6 +203,11 @@ export function installRealtimeSmokeObserver({ base, session }) {
         const voice = event.session?.audio?.output?.voice || event.session?.voice;
         if (typeof voice === 'string' && !observed.voices.includes(voice)) observed.voices.push(voice);
         if (policyIsManual(event.session?.audio?.input?.turn_detection)) manual.effectivePolicy = true;
+        if (manual.requested && typeof event.session?.instructions === 'string') {
+          const valid = liveInstructionsValid(event.session.instructions);
+          manual.liveContextValid = manual.liveContextValid && valid;
+          if (valid && event.type === 'session.updated') voiceInstructions = event.session.instructions;
+        }
       }
       if (!manual.requested) return; // Preserve observations for legacy clients.
       if (event.type === 'error') manual.providerErrors++;
@@ -195,8 +237,8 @@ export function installRealtimeSmokeObserver({ base, session }) {
 export function verifyManualRealtimeObservation(observed) {
   ensure(observed?.capability && observed.requested, 'Published client did not negotiate manual turn control.');
   ensure(observed.returnedPolicy && observed.effectivePolicy, 'Backend or actual provider did not confirm disabled automatic responses and interruptions.');
-  ensure(observed.completeInstructions && observed.openingBaseIsolated && observed.openingContextValid && observed.currentInputNone,
-    'Manual opening did not preserve complete instructions and a typed historical/background context distinct from current input.');
+  ensure(observed.completeInstructions && observed.liveContextValid && observed.openingBaseIsolated && observed.openingContextValid && observed.currentInputNone,
+    'Manual conversation did not preserve complete instructions, a conversation-only live context and typed optional background distinct from current input.');
   ensure(observed.invalidRequests === 0 && observed.unexpectedResponses === 0 && observed.failedResponses === 0 && observed.providerErrors === 0, 'Manual response request or provider receipt violated the turn contract.');
   const completedOpening = observed.startupSent === 1 && observed.startupAcknowledged === 1 && observed.startupCompleted === 1;
   const learnerFirst = observed.startupSent === 0 && observed.startupAcknowledged === 0 && observed.startupCompleted === 0 && observed.userBeforeStartup;

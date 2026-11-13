@@ -476,7 +476,7 @@ export function createPostCallFlow(deps) {
   function actionButton(label, item, action, payload = {}, primary = false) {
     const node = button(label, async () => {
       const confirmed = await act(item, action, payload);
-      if (confirmed) notify(action === 'defer' ? '나중에 하기로 저장했어요.' : action === 'prepare_next' ? '다음 통화를 준비했어요. 준비되면 통화를 눌러 주세요.' : '선택을 저장했어요.');
+      if (confirmed) notify(action === 'defer' ? '나중에 하기로 저장했어요.' : action === 'prepare_next' ? '다음 대화에서 떠올릴 표현으로 남겨뒀어요.' : '선택을 저장했어요.');
       render();
     }, primary);
     node.dataset.action = action;
@@ -978,7 +978,7 @@ export function createPostCallFlow(deps) {
     const expression = text('p', attempt.expression || itemOf(attempt.itemId)?.expression, 'improved'); expression.dataset.practiceExpression = '';
     const finish = text('div', '', 'learning-actions');
     const home = button('마치기', () => { closePractice(); panelOpen = false; deps.setView('contacts'); }, true); home.className = 'primary-button'; home.dataset.action = 'home';
-    const prepare = button('다음 통화 준비', () => prepareNext(attempt.itemId)); prepare.dataset.action = 'prepare-next';
+    const prepare = button('다음 대화에서 써보기', () => prepareNext(attempt.itemId)); prepare.dataset.action = 'prepare-next';
     finish.append(home, prepare);
     attempt.box.replaceChildren(heading, expression, attempt.state, finish);
     syncPracticeVisibility();
@@ -1081,7 +1081,7 @@ export function createPostCallFlow(deps) {
     applyPlan();
     if (navigation !== deps.navigationKey?.() || selected !== sourceSelection || reviewMode() !== mode || busy()) return;
     closePractice(); deps.setView('contacts');
-    notify(snapshot?.next_plan ? '다음 통화 준비를 저장했어요. 상황을 바꾸거나 원할 때 통화를 시작하세요.' : '연결할 목표 상황을 확인할 수 없어 일반 주제로 안내해요.');
+    notify(snapshot?.next_plan ? '다음 대화에서 떠올릴 표현으로 남겨뒀어요. 통화는 자유롭게 이어가세요.' : '선택한 복습 항목을 확인할 수 없어요. 다시 골라 주세요.');
   }
   async function getBackup() {
     if (!ensureIdentity()) return [];

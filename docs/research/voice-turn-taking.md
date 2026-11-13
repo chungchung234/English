@@ -1,5 +1,7 @@
 # Voice turn-taking: evidence before choosing a delay
 
+Current product authority (2026-11-13 KST): [friendly conversation first](phone-english-purpose.md). This note is research evidence and its historical implementation baseline, not a mandate for live teaching, a turn quota, or a practice agenda. Learning connects after the call through optional reflection on the actual transcript; requested in-call language help remains ordinary conversation. Historical greeting/token settings below do not describe the current deployment.
+
 Research date: 2026-11-10. Status: research and proposed evaluation only; no product or model setting changed. Scope: an English voice companion used by Korean learners; reported symptom is the AI taking the floor while the learner is still thinking. This is a targeted primary-source review, not a systematic review. Searches covered L2 pausing, conversational floor transfers, endpoint detection, fixed thresholds, and explicit floor control. Full methods were inspected for sources 2–5; source 1 is limited to the publisher's abstract. No target-user observations or participant results were collected for this project.
 
 ## Decision supported now

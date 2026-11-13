@@ -395,6 +395,9 @@ try {
   });
   await page.locator('#start-call').click(); await page.waitForFunction(() => window.acceptancePeer?.hasRemoteDescription);
   const followupSession = transport.voice.at(-1).sessionId;
+  assert.equal((await query('select scenario from public.sessions where id=$1', [followupSession])).rows[0].scenario,
+    'Natural English conversation about everyday life', 'a saved review goal must not become an automatic call topic');
+  assert.equal(await page.locator('#next-plan').isVisible(), false, 'derived review scenarios must not appear as user-chosen conversation topics');
   assert.equal((await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' })).weekly_goals.find(row => row.analysis_id === weeklyId).call_session_id, null, 'SDP completion cannot satisfy a weekly follow-up call');
   assert.equal(transport.prepared.at(-1).targets[0].item_id, recallItem.id);
   await page.evaluate(expression => {

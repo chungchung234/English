@@ -154,25 +154,30 @@ test('usage capture rejects client evidence and cross-owner sessions, and preser
   }, async () => { const result = await handler(req('usage-observe', { sessionId: session })); assert.equal(result.status, 503); assert.equal((await result.text()).includes('private source'), false); });
 });
 
-test('prepared target exclusions racing voice never return stale instructions or a successful connection', async () => {
+test('private usage preparation survives without imposing a target or target-change authority on the live call', async () => {
   const sdp = 'v=0\r\no=- 1 1 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n';
-  for (const [changeAt, expectedProvider] of [[2, 0], [3, 1]]) {
-    let reads = 0, provider = 0;
+  for (const targets of [[target()], []]) {
+    let reads = 0, provider = 0, stored;
     await mocked(async (path, body, options) => {
       if (path.includes('/sessions?')) return response([{ id: session, user_id: user, companion_id: 'alex', scenario: 'Everyday conversation', status: 'active' }]);
       if (path.includes('/memory_context')) return response({ revision: 0, facts: [], memories: [], limited: false, retrieval: 'keyword' });
-      if (path.includes('/learning_voice_context')) return response({ focus: [], suppress_memory: false });
-      if (path.includes('/learning_usage_prepare')) return response({ targets: ++reads >= changeAt ? [] : [target()], source_version: 'active-v1' });
+      if (path.includes('/learning_voice_context')) return response({ focus: [{ expression: 'PRIVATE_FOCUS_ONLY' }], suppress_memory: false });
+      if (path.includes('/learning_usage_prepare')) { reads++; return response({ targets, source_version: 'active-v1' }); }
       if (path.includes('/reserve_run')) return response({ reserved: true, job_id: analysis, lease_token: event });
       if (path.includes('/realtime/calls')) {
         provider++; const instructions = JSON.parse(options.body.get('session')).instructions;
-        assert.match(instructions, /at most one natural conversational opportunity/); assert.match(instructions, /never require the expression/); assert.match(instructions, /Do not invent or record an opportunity/);
-        const data = JSON.parse(instructions.split('UNTRUSTED_CONTEXT_JSON:\n')[1]); assert.equal(data.prepared_target.id, targetId);
+        const data = JSON.parse(instructions.split('UNTRUSTED_CONTEXT_JSON:\n')[1]);
+        assert.equal(Object.hasOwn(data, 'prepared_target'), false); assert.equal(Object.hasOwn(data.memory, 'focus'), false);
+        assert.equal(instructions.includes('PRIVATE_FOCUS_ONLY'), false); assert.equal(instructions.includes(target().expression), false);
+        assert.match(instructions, /purpose of this call is a friendly, natural English conversation/);
         return new Response(sdp);
       }
-      if (path.includes('/fail_run')) return response(true);
-      throw new Error('Stale target must never complete a voice run');
-    }, async calls => { const result = await handler(req('voice', { sessionId: session, sdp })); assert.equal(result.status, 409); assert.equal((await result.json()).error.code, 'MEMORY_CHANGED'); assert.equal(provider, expectedProvider); assert.equal(calls.some(call => call.path.includes('/complete_run')), false); });
+      if (path.includes('/complete_run')) { stored = body.p_result; return response(true); }
+      throw new Error('No target revalidation or extra model request is allowed');
+    }, async calls => {
+      const result = await handler(req('voice', { sessionId: session, sdp })); assert.equal(result.status, 200); assert.equal(provider, 1); assert.equal(reads, 1);
+      assert.equal(stored.usage_preparation, 'ready'); assert.equal(calls.some(call => call.path.includes('/fail_run')), false);
+    });
   }
 });
 

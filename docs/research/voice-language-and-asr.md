@@ -1,5 +1,7 @@
 # Voice language policy and Korean/English ASR evidence
 
+Current product authority (2026-11-13 KST): [friendly conversation first](phone-english-purpose.md). This note is research evidence and its historical implementation baseline, not a mandate for live teaching, a turn quota, or a practice agenda. Learning connects after the call through optional reflection on the actual transcript; requested in-call language help remains ordinary conversation. Historical greeting/token settings below do not describe the current deployment.
+
 Research date: 2026-11-10. Status: evidence review and proposed evaluation only. No product behavior was changed, no model was called, no credentials/accounts were created, and no learner audio or transcripts were sent to an external service for this review.
 
 ## Findings and decision boundary

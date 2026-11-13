@@ -1,5 +1,7 @@
 # Voice response length: evidence and evaluation plan
 
+Current product authority (2026-11-13 KST): [friendly conversation first](phone-english-purpose.md). This note is research evidence and its historical implementation baseline, not a mandate for live teaching, a turn quota, or a practice agenda. Learning connects after the call through optional reflection on the actual transcript; requested in-call language help remains ordinary conversation. Historical greeting/token settings below do not describe the current deployment.
+
 Reviewed 2026-11-10 UTC. Status: research and proposed evaluation only. No model requests or learner study were run for this note; all outcome fields remain unmeasured. Scope: an English voice companion for Korean learners using `gpt-realtime-2.1-mini`.
 
 ## Decision supported by the evidence

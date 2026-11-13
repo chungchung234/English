@@ -257,9 +257,8 @@ function selectCompanion(next, {refresh=true}={}) {
   if(refresh&&auth){loadPlan().catch(error=>notice(error));learning.load();loadMemory().catch(e=>notice(e));loadHistory().catch(e=>notice(e));}
 }
 async function loadPlan(){
- if(!scope)return;
- const plan=learning.getPlan();
- $('next-plan').hidden=!plan?.scenario;$('next-plan').textContent=plan?.scenario?'준비한 이야기 · '+plan.scenario:'';
+ // Review selections stay in post-call learning; they do not set a call topic.
+ $('next-plan').hidden=true;$('next-plan').textContent='';
 }
 function updateCompanion() {
   if($('companion-name')) $('companion-name').textContent = companionName();
@@ -727,14 +726,13 @@ async function startCall() {
     await sync();checkAttempt();
     await learning.load();checkAttempt();await learning.flush();checkAttempt();
     const omitLearningContext=learning.hasPendingExclusions();
-    const prepared=learning.getPlan();
     $('call-status').textContent='마이크 사용을 허용해 주세요';
     stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
     attempt.localVoice?.attach(stream);
     attempt.stream=stream;checkAttempt();$('call-status').textContent=companionName()+'에게 전화 거는 중';
     if(!callStarting||scope!==callScope||companionId!==selectedCompanion)throw Error('통화 연결이 취소되었습니다.');
     const callTimeZone=deviceTimeZone();
-    const [session]=await api('/rest/v1/sessions',{method:'POST',headers:{Prefer:'return=representation'},body:{id:crypto.randomUUID(),user_id:auth.user.id,scenario:!omitLearningContext&&prepared?.scenario?'User-prepared conversation: '+prepared.scenario:NATURAL_CONVERSATION,companion_id:selectedCompanion,client_build:releaseMetadata.client_build,time_zone:callTimeZone}});
+    const [session]=await api('/rest/v1/sessions',{method:'POST',headers:{Prefer:'return=representation'},body:{id:crypto.randomUUID(),user_id:auth.user.id,scenario:NATURAL_CONVERSATION,companion_id:selectedCompanion,client_build:releaseMetadata.client_build,time_zone:callTimeZone}});
     attempt.sessionId=session.id;checkAttempt();
     if(!callStarting||scope!==callScope||companionId!==selectedCompanion)throw Error('통화 연결이 취소되었습니다.');
     const pc=new RTCPeerConnection();

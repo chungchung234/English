@@ -148,8 +148,8 @@ export function createLearningEnhancements(host) {
   }
   function renderWeekly(target, analysis) {
     if (!analysis?.id || !analysis.content?.learning_plan) return;
-    const section = detail('다음 통화 목표'); section.dataset.weeklyAnalysisId = analysis.id;
-    section.append(text('p', '이번 주 대화를 바탕으로 제안한 목표예요. 다음 통화에서 해볼 것을 골라 보세요.', 'help'));
+    const section = detail('이어서 볼 복습'); section.dataset.weeklyAnalysisId = analysis.id;
+    section.append(text('p', '이번 주 대화를 바탕으로 제안한 항목이에요. 다시 써보고 싶은 표현을 골라 두세요.', 'help'));
     const selected = data.weekly_goals.slice().sort((a, b) => String(b.selected_at).localeCompare(String(a.selected_at)))[0];
     for (const [kind, title] of [['keep', '계속 연습할 한 가지'], ['try', '다음 주 시도할 한 가지']]) {
       const proposal = analysis.content.learning_plan[kind], item = host.itemOf(proposal?.item_id);
@@ -159,7 +159,7 @@ export function createLearningEnhancements(host) {
       const chosen = selected?.analysis_id === analysis.id && selected?.kind === kind;
       if (chosen) {
         card.append(status('선택한 목표'));
-        const prepare = button('이 목표로 다음 통화 준비', () => host.prepare(item.id)); prepare.dataset.action = 'prepare-weekly-goal'; prepare.disabled = pending(item); card.append(prepare);
+        const prepare = button('이 표현 다음에 써보기', () => host.prepare(item.id)); prepare.dataset.action = 'prepare-weekly-goal'; prepare.disabled = pending(item); card.append(prepare);
         if (selected.call_session_id) card.append(text('p', '이 목표를 준비한 뒤 통화했어요.', 'help'));
         if (selected.recall_id) card.append(text('p', '이 목표로 다시 말하기를 연습했어요.', 'help'));
       } else card.append(action('이 목표 선택', `choose-weekly-${kind}`, item, 'learning_weekly_goal_select', { p_analysis_id: analysis.id, p_kind: kind, p_expected_revision: selected?.revision || 0 }));

@@ -1,0 +1,532 @@
+{
+  "fixture": true,
+  "liveApi": false,
+  "cases": [
+    {
+      "file": "prepare-next-complete-390.png",
+      "label": "prepare-next-complete",
+      "width": 390,
+      "fontSize": "16px",
+      "text": "다시 말하기 기록을 남겼어요\n\nCould you repeat that more slowly?\n\n다시 말하기 기록을 저장했어요.\n\n마치기\n다음 대화에서 써보기",
+      "box": {
+        "x": 22,
+        "y": 154.5,
+        "width": 346,
+        "height": 296.265625,
+        "top": 154.5,
+        "right": 368,
+        "bottom": 450.765625,
+        "left": 22
+      },
+      "viewport": [
+        390,
+        844
+      ],
+      "scrollY": 0,
+      "documentWidth": 390,
+      "buttons": [
+        {
+          "text": "마치기",
+          "box": {
+            "x": 22,
+            "y": 332.765625,
+            "width": 346,
+            "height": 48,
+            "top": 332.765625,
+            "right": 368,
+            "bottom": 380.765625,
+            "left": 22
+          }
+        },
+        {
+          "text": "다음 대화에서 써보기",
+          "box": {
+            "x": 22,
+            "y": 388.765625,
+            "width": 346,
+            "height": 44,
+            "top": 388.765625,
+            "right": 368,
+            "bottom": 432.765625,
+            "left": 22
+          }
+        }
+      ]
+    },
+    {
+      "file": "prepare-next-complete-320.png",
+      "label": "prepare-next-complete",
+      "width": 320,
+      "fontSize": "20px",
+      "text": "다시 말하기 기록을 남겼어요\n\nCould you repeat that more slowly?\n\n다시 말하기 기록을 저장했어요.\n\n마치기\n다음 대화에서 써보기",
+      "box": {
+        "x": 16,
+        "y": 154.5,
+        "width": 288,
+        "height": 296.515625,
+        "top": 154.5,
+        "right": 304,
+        "bottom": 451.015625,
+        "left": 16
+      },
+      "viewport": [
+        320,
+        740
+      ],
+      "scrollY": 0,
+      "documentWidth": 320,
+      "buttons": [
+        {
+          "text": "마치기",
+          "box": {
+            "x": 16,
+            "y": 332.765625,
+            "width": 288,
+            "height": 48,
+            "top": 332.765625,
+            "right": 304,
+            "bottom": 380.765625,
+            "left": 16
+          }
+        },
+        {
+          "text": "다음 대화에서 써보기",
+          "box": {
+            "x": 16,
+            "y": 388.765625,
+            "width": 288,
+            "height": 44.25,
+            "top": 388.765625,
+            "right": 304,
+            "bottom": 433.015625,
+            "left": 16
+          }
+        }
+      ]
+    },
+    {
+      "file": "weekly-optional-review-390.png",
+      "label": "weekly-optional-review",
+      "width": 390,
+      "fontSize": "16px",
+      "text": "이어서 볼 복습\n\n이번 주 대화를 바탕으로 제안한 항목이에요. 다시 써보고 싶은 표현을 골라 두세요.\n\n계속 연습할 한 가지\n\n다음 대화에서 상대의 말을 천천히 다시 요청하기\n\nCould you repeat that more slowly?\n\n이 목표 선택\n다음 주 시도할 한 가지\n\n새 상황에서 정중하게 다시 요청하기\n\nCould you repeat that more slowly?\n\n이 목표 선택",
+      "box": {
+        "x": 22,
+        "y": 305.546875,
+        "width": 346,
+        "height": 538.84375,
+        "top": 305.546875,
+        "right": 368,
+        "bottom": 844.390625,
+        "left": 22
+      },
+      "viewport": [
+        390,
+        844
+      ],
+      "scrollY": 150,
+      "documentWidth": 390,
+      "buttons": [
+        {
+          "text": "이 목표 선택",
+          "box": {
+            "x": 22,
+            "y": 584.46875,
+            "width": 102.25,
+            "height": 44,
+            "top": 584.46875,
+            "right": 124.25,
+            "bottom": 628.46875,
+            "left": 22
+          }
+        },
+        {
+          "text": "이 목표 선택",
+          "box": {
+            "x": 22,
+            "y": 787.390625,
+            "width": 102.25,
+            "height": 44,
+            "top": 787.390625,
+            "right": 124.25,
+            "bottom": 831.390625,
+            "left": 22
+          }
+        }
+      ]
+    },
+    {
+      "file": "weekly-last-action-390.png",
+      "label": "weekly-last-action",
+      "width": 390,
+      "fontSize": "16px",
+      "box": {
+        "x": 22,
+        "y": 669.390625,
+        "width": 102.25,
+        "height": 44,
+        "top": 669.390625,
+        "right": 124.25,
+        "bottom": 713.390625,
+        "left": 22
+      },
+      "dock": {
+        "x": 16,
+        "y": 762,
+        "width": 358,
+        "height": 70,
+        "top": 762,
+        "right": 374,
+        "bottom": 832,
+        "left": 16
+      },
+      "hit": true
+    },
+    {
+      "file": "weekly-optional-review-320.png",
+      "label": "weekly-optional-review",
+      "width": 320,
+      "fontSize": "20px",
+      "text": "이어서 볼 복습\n\n이번 주 대화를 바탕으로 제안한 항목이에요. 다시 써보고 싶은 표현을 골라 두세요.\n\n계속 연습할 한 가지\n\n다음 대화에서 상대의 말을 천천히 다시 요청하기\n\nCould you repeat that more slowly?\n\n이 목표 선택\n다음 주 시도할 한 가지\n\n새 상황에서 정중하게 다시 요청하기\n\nCould you repeat that more slowly?\n\n이 목표 선택",
+      "box": {
+        "x": 16,
+        "y": 76.09375,
+        "width": 288,
+        "height": 663.9375,
+        "top": 76.09375,
+        "right": 304,
+        "bottom": 740.03125,
+        "left": 16
+      },
+      "viewport": [
+        320,
+        740
+      ],
+      "scrollY": 376,
+      "documentWidth": 320,
+      "buttons": [
+        {
+          "text": "이 목표 선택",
+          "box": {
+            "x": 16,
+            "y": 426.0625,
+            "width": 120.3125,
+            "height": 48.25,
+            "top": 426.0625,
+            "right": 136.3125,
+            "bottom": 474.3125,
+            "left": 16
+          }
+        },
+        {
+          "text": "이 목표 선택",
+          "box": {
+            "x": 16,
+            "y": 678.78125,
+            "width": 120.3125,
+            "height": 48.25,
+            "top": 678.78125,
+            "right": 136.3125,
+            "bottom": 727.03125,
+            "left": 16
+          }
+        }
+      ]
+    },
+    {
+      "file": "weekly-last-action-320.png",
+      "label": "weekly-last-action",
+      "width": 320,
+      "fontSize": "20px",
+      "box": {
+        "x": 16,
+        "y": 560.78125,
+        "width": 120.3125,
+        "height": 48.25,
+        "top": 560.78125,
+        "right": 136.3125,
+        "bottom": 609.03125,
+        "left": 16
+      },
+      "dock": {
+        "x": 16,
+        "y": 658,
+        "width": 288,
+        "height": 70,
+        "top": 658,
+        "right": 304,
+        "bottom": 728,
+        "left": 16
+      },
+      "hit": true
+    },
+    {
+      "file": "contacts-with-saved-review-plan-390.png",
+      "label": "contacts-with-saved-review-plan",
+      "width": 390,
+      "fontSize": "16px",
+      "text": "Alex\nJuno\nMia\nAlex\n\n차분하고 명료한 대화\n\nAI가 먼저 인사해요. 짧게 답해도 괜찮아요.\n\n통화\n\n첫 통화에는 마이크 허용이 필요해요.\n\n사용 방법 보기\n안내 닫기\nAlex와의 통화 · 새 학습 노트",
+      "box": {
+        "x": 22,
+        "y": 34,
+        "width": 346,
+        "height": 810.484375,
+        "top": 34,
+        "right": 368,
+        "bottom": 844.484375,
+        "left": 22
+      },
+      "viewport": [
+        390,
+        844
+      ],
+      "scrollY": 36,
+      "documentWidth": 390,
+      "buttons": [
+        {
+          "text": "Alex",
+          "box": {
+            "x": 24,
+            "y": 84,
+            "width": 114,
+            "height": 44,
+            "top": 84,
+            "right": 138,
+            "bottom": 128,
+            "left": 24
+          }
+        },
+        {
+          "text": "Juno",
+          "box": {
+            "x": 138,
+            "y": 84,
+            "width": 114,
+            "height": 44,
+            "top": 84,
+            "right": 252,
+            "bottom": 128,
+            "left": 138
+          }
+        },
+        {
+          "text": "Mia",
+          "box": {
+            "x": 252,
+            "y": 84,
+            "width": 114,
+            "height": 44,
+            "top": 84,
+            "right": 366,
+            "bottom": 128,
+            "left": 252
+          }
+        },
+        {
+          "text": "통화",
+          "box": {
+            "x": 22,
+            "y": 540.09375,
+            "width": 346,
+            "height": 56,
+            "top": 540.09375,
+            "right": 368,
+            "bottom": 596.09375,
+            "left": 22
+          }
+        },
+        {
+          "text": "사용 방법 보기",
+          "box": {
+            "x": 118.75,
+            "y": 626.484375,
+            "width": 80.96875,
+            "height": 44,
+            "top": 626.484375,
+            "right": 199.71875,
+            "bottom": 670.484375,
+            "left": 118.75
+          }
+        },
+        {
+          "text": "안내 닫기",
+          "box": {
+            "x": 215.71875,
+            "y": 626.484375,
+            "width": 55.53125,
+            "height": 44,
+            "top": 626.484375,
+            "right": 271.25,
+            "bottom": 670.484375,
+            "left": 215.71875
+          }
+        },
+        {
+          "text": "다시 시도",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        {
+          "text": "Alex와의 통화 · 새 학습 노트",
+          "box": {
+            "x": 22,
+            "y": 670.484375,
+            "width": 167.9375,
+            "height": 44,
+            "top": 670.484375,
+            "right": 189.9375,
+            "bottom": 714.484375,
+            "left": 22
+          }
+        }
+      ]
+    },
+    {
+      "file": "contacts-with-saved-review-plan-320.png",
+      "label": "contacts-with-saved-review-plan",
+      "width": 320,
+      "fontSize": "20px",
+      "text": "Alex\nJuno\nMia\nAlex\n\n차분하고 명료한 대화\n\nAI가 먼저 인사해요. 짧게 답해도 괜찮아요.\n\n통화\n\n첫 통화에는 마이크 허용이 필요해요.\n\n사용 방법 보기\n안내 닫기\nAlex와의 통화 · 새 학습 노트",
+      "box": {
+        "x": 16,
+        "y": 0,
+        "width": 288,
+        "height": 788.078125,
+        "top": 0,
+        "right": 304,
+        "bottom": 788.078125,
+        "left": 16
+      },
+      "viewport": [
+        320,
+        740
+      ],
+      "scrollY": 70,
+      "documentWidth": 320,
+      "buttons": [
+        {
+          "text": "Alex",
+          "box": {
+            "x": 18,
+            "y": 50,
+            "width": 94.65625,
+            "height": 44,
+            "top": 50,
+            "right": 112.65625,
+            "bottom": 94,
+            "left": 18
+          }
+        },
+        {
+          "text": "Juno",
+          "box": {
+            "x": 112.65625,
+            "y": 50,
+            "width": 94.671875,
+            "height": 44,
+            "top": 50,
+            "right": 207.328125,
+            "bottom": 94,
+            "left": 112.65625
+          }
+        },
+        {
+          "text": "Mia",
+          "box": {
+            "x": 207.328125,
+            "y": 50,
+            "width": 94.65625,
+            "height": 44,
+            "top": 50,
+            "right": 301.984375,
+            "bottom": 94,
+            "left": 207.328125
+          }
+        },
+        {
+          "text": "통화",
+          "box": {
+            "x": 16,
+            "y": 483.6875,
+            "width": 288,
+            "height": 56,
+            "top": 483.6875,
+            "right": 304,
+            "bottom": 539.6875,
+            "left": 16
+          }
+        },
+        {
+          "text": "사용 방법 보기",
+          "box": {
+            "x": 83.75,
+            "y": 570.078125,
+            "width": 80.96875,
+            "height": 44,
+            "top": 570.078125,
+            "right": 164.71875,
+            "bottom": 614.078125,
+            "left": 83.75
+          }
+        },
+        {
+          "text": "안내 닫기",
+          "box": {
+            "x": 180.71875,
+            "y": 570.078125,
+            "width": 55.53125,
+            "height": 44,
+            "top": 570.078125,
+            "right": 236.25,
+            "bottom": 614.078125,
+            "left": 180.71875
+          }
+        },
+        {
+          "text": "다시 시도",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        {
+          "text": "Alex와의 통화 · 새 학습 노트",
+          "box": {
+            "x": 16,
+            "y": 614.078125,
+            "width": 167.9375,
+            "height": 44,
+            "top": 614.078125,
+            "right": 183.9375,
+            "bottom": 658.078125,
+            "left": 16
+          }
+        }
+      ]
+    }
+  ],
+  "visual_review": {
+    "images_opened": true,
+    "blocking_findings": [],
+    "notes": [
+      "390px and 320px completion actions are readable without horizontal clipping.",
+      "Weekly optional review label and proposals are visible; the last action scrolls above the fixed navigation and passes direct hit testing at both widths.",
+      "Saved review next_plan remains in fixture storage but #next-plan is hidden and empty on contacts."
+    ],
+    "temporary_runner_removed": true
+  }
+}

@@ -4,7 +4,7 @@ import { recentConversation, sourceInstant, sourceTimeZone, type CallClock } fro
 // Engineering bounds, not validated conversational/learning optima. Seven days
 // bounds unsolicited callbacks by source speech time; three openings in fourteen
 // days give expression variation context without replaying a conversation log.
-export const OPENING_POLICY_VERSION = 'opening-context-v1';
+export const OPENING_POLICY_VERSION = 'opening-context-v2';
 export const OPENING_BOUNDS = Object.freeze({ continuityDays: 7, styleDays: 14, styleCount: 3, styleChars: 240, topicChars: 300, maxBytes: 3600 });
 const DAY = 86_400_000, PREPARED_PREFIX = 'User-prepared conversation:';
 type Data = Record<string, unknown>;
@@ -55,16 +55,11 @@ export type SanitizedAssistantOpening = { session_id: string; occurred_at: strin
 export type OpeningPlanTiming = { local_date: string; time_zone: string; relation: 'upcoming' | 'today' | 'past' };
 export type OpeningContinuity = { session_id: string; source_started_at: string; source_ended_at: string; source_time_zone: string | null; evidence_id: string; source_spoken_at: string;
   note: string; state: 'stated' | 'planned' | 'resolved'; when: string | null; quote: string; role: 'historical_background'; must_not_infer_outcome: true; plan_timing: OpeningPlanTiming | null };
-// The renderer must turn the selected action into an actual contribution. This
-// is a generation request, not evidence that the model followed it; it imposes
-// no word count, question quota, or fixed greeting text.
-export type OpeningAction = 'enter_prepared_topic' | 'add_perspective_to_known_result' | 'pick_up_unresolved_plan' |
-  'connect_to_prior_detail' | 'contribute_concrete_perspective';
 export type OpeningContext = {
   version: typeof OPENING_POLICY_VERSION;
   purpose: 'call_opening'; current_utterance: null;
-  strategy: 'prepared_topic' | 'supported_continuity' | 'open_conversation';
-  action: OpeningAction;
+  role: 'optional_conversation_context';
+  context_kind: 'user_chosen_topic' | 'recent_conversation' | 'none';
   prepared_topic: null | { text: string; source: 'current_session_user_prepared'; role: 'optional_topic_not_spoken_utterance' };
   continuity: OpeningContinuity | null;
   recent_openings: { session_id: string; occurred_at: string; text: string; role: 'style_only' }[];
@@ -132,7 +127,8 @@ function planTiming(state: string, when: string | null, spokenAt: string, source
  * This neither retrieves sources nor verifies ownership, suppression revisions,
  * source holds or exclusions. The voice preparation path must do those checks
  * before and after selection, just as for the ordinary voice instructions.
- * It does not choose a fixed greeting, word count, or number of questions.
+ * The result describes optional context, never a task for the character to
+ * perform. It prescribes no direction, turn shape, greeting or length quota.
  */
 export function buildOpeningContext({ context, clock, recentOpenings = [] }: { context: unknown; clock: CallClock; recentOpenings?: unknown }): OpeningContext {
   const data = record(context) ? context : {}, memory = record(data.memory) ? data.memory : {};
@@ -144,13 +140,13 @@ export function buildOpeningContext({ context, clock, recentOpenings = [] }: { c
   const guardedFields = Array.isArray(memory.facts) ? memory.facts.filter(fact => record(fact) && (fact.forgotten === true || fact.value === '' || fact.manual === true))
     .map(fact => fieldTopic[String((fact as Data).key)]).filter((value): value is RegExp => Boolean(value)) : [];
   const result: OpeningContext = { version: OPENING_POLICY_VERSION, purpose: 'call_opening', current_utterance: null,
-    strategy: prepared ? 'prepared_topic' : 'open_conversation', action: prepared ? 'enter_prepared_topic' : 'contribute_concrete_perspective',
+    role: 'optional_conversation_context', context_kind: prepared ? 'user_chosen_topic' : 'none',
     prepared_topic: prepared, continuity: null, recent_openings: [],
     reason: prepared ? 'prepared_topic' : suppressed ? 'suppressed' : !instant ? 'invalid_clock' : 'no_recent_handoff' };
   if (suppressed || !instant) return result;
   result.recent_openings = openingHistory(recentOpenings, now, data.companionId);
 
-  // Only the latest eligible conversation handoff can initiate a callback.
+  // Only the latest eligible handoff may supply optional recent context.
   // Empty, missing, legacy-summary and excerpt fallbacks do not promote an
   // older conversation_memories/feedback/fact profile into a new opening.
   const recent = recentConversation(memory.recent_conversation, instant);
@@ -176,16 +172,15 @@ export function buildOpeningContext({ context, clock, recentOpenings = [] }: { c
           when: thread.when, quote: turn.text, role: 'historical_background', must_not_infer_outcome: true,
           plan_timing: planTiming(thread.state, thread.when, turn.timestamp, recent.session_time_zone, instant) };
         if (!prepared) {
-          result.strategy = 'supported_continuity'; result.reason = 'eligible_continuity';
-          result.action = thread.state === 'resolved' ? 'add_perspective_to_known_result' :
-            thread.state === 'planned' ? 'pick_up_unresolved_plan' : 'connect_to_prior_detail';
+          result.context_kind = 'recent_conversation'; result.reason = 'eligible_continuity';
         }
         break;
       }
     }
   }
-  // A current user-prepared topic owns the opening. Historical continuity is
-  // intentionally withheld so the model cannot crowd it out with a callback.
+  // An explicitly user-chosen topic takes precedence in the supplied data.
+  // It is still optional context, not a command to speak a particular line or
+  // perform a teaching/conversation task.
   if (prepared) result.continuity = null;
   while (bytes(JSON.stringify(result)) > OPENING_BOUNDS.maxBytes && result.recent_openings.length) result.recent_openings.pop();
   return result;

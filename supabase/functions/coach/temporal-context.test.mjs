@@ -93,11 +93,11 @@ test('voice sends dated grounding and isolated clock then returns only a context
       const session = JSON.parse(options.body.get('session'));
       const sections = session.instructions.split('UNTRUSTED_CONTEXT_JSON:\n'); sent = JSON.parse(sections[1]);
       modelSnapshot = JSON.parse(session.instructions.split('TRUSTED_TIME_CONTEXT_JSON:\n')[1].split('\nTIME_AND_MEMORY_POLICY:')[0]);
-      assert.match(session.instructions, /AI English conversation partner/); assert.doesNotMatch(session.instructions, /encouraging English conversation coach/);
+      assert.match(session.instructions, /friendly AI character in a personal English phone conversation/); assert.doesNotMatch(session.instructions, /encouraging English conversation coach/);
       assert.match(session.instructions, /If asked for the exact current time, qualify/); assert.match(session.instructions, /Do not assume a plan happened/);
       assert.equal(modelSnapshot.time_zone, 'Asia/Seoul'); assert(modelSnapshot.local);
-      assert.equal(sent.continuity.session_id, oldSid); assert.equal(sent.memory.memories[0].evidence[0].id, eid);
-      assert.equal(sent.memory.memories[0].session_created_at, '2026-11-09T14:00:00.000Z'); assert.equal(sent.memory.facts[0].quote, 'I enjoy walking.');
+      assert.equal(Object.hasOwn(sent, 'continuity'), false); if (!withRecent) assert.equal(sent.memory.memories[0].evidence[0].id, eid);
+      if (!withRecent) { assert.equal(sent.memory.memories[0].session_created_at, '2026-11-09T14:00:00.000Z'); assert.equal(Object.hasOwn(sent.memory.memories[0], 'summary'), false); } assert.equal(sent.memory.facts[0].quote, 'I enjoy walking.');
       await new Promise(resolve => setTimeout(resolve, 4)); return new Response(sdp);
     }
     if (path.includes('/complete_run')) {persisted=body.p_result;return json({ saved: true });}

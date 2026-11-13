@@ -44,4 +44,9 @@
 
 ## 배포 확인
 
-공개 배포 증거는 배포 완료 후 기록한다.
+- 릴리스 소스: `ef11416d7ffc556d2b6aa209d002f5adf441fd2e`, [PR #19](https://github.com/chungchung234/English/pull/19).
+- [Pages 배포 작업 43350777954](https://github.com/chungchung234/English/actions/runs/43350777954) 성공. 전체 서버/DB·브라우저·기억/학습 검사 후 coach와 공개 사이트가 배포됐다. CI의 실제 접근 제어 검사는 임시 미승인 계정으로 확인했으며, 승인 계정의 실제 음성 통화는 수행하지 않았다.
+- 배포된 coach 소스 90개 항목, DB 상태 15개 항목의 읽기 전용 검사 모두 통과. 추가 로컬 브라우저 코드 계약 11개는 공개 bundle 확인과 별도로 기록한다. [배포 검사](design/conversation-first-20261113/production-inspection.json).
+- 공개 URL `https://chungchung234.github.io/English/`의 원본 HTML/JS, 파일 이름의 내용 hash, SRI, CSP 및 실제 실행 `LOOP_CLIENT_BUILD`가 위 릴리스 SHA와 일치했다. JS는 `assets/app.1a3c3017dfcf.js`. [공개 파일 확인](design/conversation-first-20261113/public-artifact.json).
+- 공개 원본을 바꾸지 않고 인증·backend·provider 전송만 모의한 6개 통화 흐름을 모두 통과했다. 시작 소음·중단/ACK·fallback·native WASM/WebAudio·같은 통화의 일상 공유→명시 표현 질문·원문 저장을 확인했다. 390px/320px 실제 공개 클라이언트 캡처도 열어 확인했다. [공개 흐름 결과](design/conversation-first-20261113/public-fixture-results.json), [검수 기록](design/conversation-first-20261113/public-inspection.json), [CI 기록](design/conversation-first-20261113/release-ci.json). 이 검사는 실제 생성 말투나 마이크 음향 효과의 합격 판정이 아니다.
+- 이 증거를 추가하는 후속 문서 커밋은 앱 배포와 별개이며, 공개 앱 빌드는 위 `ef11416...` 릴리스를 가리킨다. 새로고침 후 시작하는 새 통화에 새 역할·맥락 경계가 적용된다.

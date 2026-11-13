@@ -1,0 +1,29 @@
+{
+  "checked_at_utc": "2026-11-13T02:24:22.812376+00:00",
+  "workflow_run_id": 43350777954,
+  "release_sha": "ef11416d7ffc556d2b6aa209d002f5adf441fd2e",
+  "pages_deployment_step": "success",
+  "artifact": {
+    "script": "assets/app.1a3c3017dfcf.js",
+    "scriptUrl": "https://chungchung234.github.io/English/assets/app.1a3c3017dfcf.js",
+    "scriptHash": "GjwwF9/PLoA+sRj4g+LayRLDwOVcVEqBQkNJIdJL03Y=",
+    "build": "git:ef11416d7ffc556d2b6aa209d002f5adf441fd2e",
+    "htmlSha256": "0292a3e3278c8bae503ac773559f51806b11c106c1baaac24572f75d9b50ad74",
+    "scriptSha256": "1a3c3017dfcf2e803eb118f883e2dac912c3c0e55c544a8142434921d24bd376"
+  },
+  "public_fixture_result": "6/6 passed",
+  "screenshots_opened": [
+    "qualified-turns-playing-390.png",
+    "qualified-turns-manual-reply-320.png"
+  ],
+  "visual_findings": [],
+  "mocked_transports": [
+    "auth",
+    "backend",
+    "provider"
+  ],
+  "repo_or_public_assets_modified": false,
+  "conversational_quality_verified": false,
+  "acoustic_effectiveness_verified": false,
+  "cdn_retry_required": false
+}

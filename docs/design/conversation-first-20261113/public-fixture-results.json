@@ -1,0 +1,53 @@
+{
+  "fixture": true,
+  "actualWasm": true,
+  "publicUrl": "https://chungchung234.github.io/English/",
+  "expectedBuild": "git:ef11416d7ffc556d2b6aa209d002f5adf441fd2e",
+  "observedBuild": "git:ef11416d7ffc556d2b6aa209d002f5adf441fd2e",
+  "mockedTransports": [
+    "auth",
+    "backend",
+    "provider"
+  ],
+  "publicHtmlAndJsUnmodified": true,
+  "liveContextAllowlistChecked": true,
+  "openingContextVersion": "opening-context-v2",
+  "productionHashCspVerified": true,
+  "conversationalQualityVerified": false,
+  "acousticEffectivenessVerified": false,
+  "cases": [
+    {
+      "case": "real-wasm-qualified-turn-ownership",
+      "generated": 3,
+      "checkpoint": 2,
+      "ended": true
+    },
+    {
+      "case": "social-sharing-then-explicit-language-help",
+      "generated": 3,
+      "originalSpeechPreserved": true,
+      "ended": true
+    },
+    {
+      "case": "startup-noise-does-not-silence-call",
+      "generated": 1,
+      "ended": true
+    },
+    {
+      "case": "detector-unavailable-explicit-reply",
+      "generated": 2,
+      "ended": true
+    },
+    {
+      "case": "production-hashed-csp-native-web-audio-callback",
+      "generated": 2,
+      "ended": true,
+      "scriptHashVerified": true
+    },
+    {
+      "case": "legacy-capability-compatibility",
+      "generated": 1,
+      "ended": true
+    }
+  ]
+}

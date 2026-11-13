@@ -1,0 +1,148 @@
+{
+  "databaseId": 43350777954,
+  "status": "completed",
+  "conclusion": "success",
+  "headSha": "ef11416d7ffc556d2b6aa209d002f5adf441fd2e",
+  "url": "https://github.com/chungchung234/English/actions/runs/43350777954",
+  "jobs": [
+    {
+      "name": "build",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate types and server/database behavior",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Validate character rendering, memory controls and mobile browser",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Resolve public site connection",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Deploy managed database and voice function",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm run build -- --require-config",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/configure-pages@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/upload-pages-artifact@v3",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    },
+    {
+      "name": "deploy",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Deploy",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-node@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run npm ci",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Prepare synthetic speech",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify live access policy and available voice paths",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Save synthetic release screenshots",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-node@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ]
+    }
+  ]
+}

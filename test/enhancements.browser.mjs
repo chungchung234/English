@@ -201,7 +201,7 @@ try {
       createDataChannel() { return this.channel = { readyState: 'open', send() {} }; }
       async createOffer() { return { type: 'offer', sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n' }; }
       async setLocalDescription() {}
-      async setRemoteDescription() { this.hasRemoteDescription = true; }
+      async setRemoteDescription() { this.hasRemoteDescription = true; this.channel.onopen?.(); }
       close() { this.connectionState = 'closed'; }
     };
   });
@@ -389,11 +389,13 @@ try {
       createDataChannel() { return this.channel = { readyState: 'open', send() {} }; }
       async createOffer() { return { type: 'offer', sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n' }; }
       async setLocalDescription() {}
-      async setRemoteDescription() { this.hasRemoteDescription = true; }
+      async setRemoteDescription() { this.hasRemoteDescription = true; this.channel.onopen?.(); }
       close() { this.connectionState = 'closed'; }
     };
   });
   await page.locator('#start-call').click(); await page.waitForFunction(() => window.acceptancePeer?.hasRemoteDescription);
+  await page.locator('#cancel-connection').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#end-call').isVisible(), false, 'an open data channel alone cannot expose connected call controls');
   const followupSession = transport.voice.at(-1).sessionId;
   assert.equal((await query('select scenario from public.sessions where id=$1', [followupSession])).rows[0].scenario,
     'Natural English conversation about everyday life', 'a saved review goal must not become an automatic call topic');
@@ -404,6 +406,7 @@ try {
     window.acceptancePeer.connectionState = 'connected'; window.acceptancePeer.onconnectionstatechange();
     window.acceptancePeer.channel.onmessage({ data: JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'actual-followup-user-turn', transcript: expression }) });
   }, recallSource.expression);
+  await page.locator('#end-call').waitFor({ state: 'visible' });
   await waitUntil(async () => (await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' })).weekly_goals.find(row => row.analysis_id === weeklyId).call_session_id === followupSession, 'actual connection links the weekly goal to its prepared follow-up');
   await page.locator('#end-call').click();
   await waitUntil(async () => (await rpc('learning_enhancement_snapshot', { p_companion_id: 'alex' })).usage.some(row => row.session_id === followupSession), 'ended-call observation is stored against actual speech evidence');

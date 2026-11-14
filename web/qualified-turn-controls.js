@@ -93,12 +93,13 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
   }
   function acceptedItems(live = true) {
     return [...history.values()].sort((a, b) => a.order - b.order).filter(item => {
+      if (live && item.contextRetired) return false;
       if (item.role === 'user') {
         const source = inputs.get(item.id);
         return source && source.committed && source.final && source.nonempty && source.qualified && (!live || !source.deleted);
       }
       const response = responses.get(item.responseId);
-      return (!live || !item.deleted) && response?.generationDone && response.audioStarted && response.audioEnded && response.status === 'completed' && !response.cancelled;
+      return (!live || (!item.deleted && !response?.contextRetired)) && response?.generationDone && response.audioStarted && response.audioEnded && !response.audioCleared && response.status === 'completed' && !response.cancelled;
     });
   }
   const references = () => acceptedItems().map(item => ({ type: 'item_reference', id: item.id }));
@@ -143,7 +144,7 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
     const base = fullInstructions(purpose === 'startup');
     if (!base || !ready || !available || current || desiredHold || fault || disposed || inputBusy()) return false;
     const response = { nonce: crypto.randomUUID(), purpose, id: null, items: new Set(), users: userItems.map(item => item.id), generationDone: false,
-      audioEnded: false, audioStarted: false, cancelled: false, cancelRequested: false, clearRequested: false,
+      audioEnded: false, audioStarted: false, audioCleared: false, cancelled: false, cancelRequested: false, clearRequested: false,
       status: null, timer: null };
     current = response;
     if (purpose === 'startup') startupResolved = true;
@@ -218,6 +219,7 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
       // resurrect an older candidate while this approved reply is queued.
       approvalBoundary = Math.max(approvalBoundary, item.order);
       item.qualified = true; item.retryRequired = false;
+      const entry = history.get(item.id); if (entry) entry.contextRetired = false;
       startupResolved = true; clearTimeout(startupTimer); startupTimer = null;
       if (current) cancelCurrent();
       pump(); return true;
@@ -235,10 +237,29 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
       pendingHint = value; pump(); return true;
     },
     shutdownPolicy() { return policy ? { ...clone(policy), create_response: false, interrupt_response: false } : null; },
+    // A freshly acknowledged history-free context must not regain the old
+    // references. Preserve the evidence ledger and pending caller speech; only
+    // model references already consumed in an earlier response are retired.
+    // Mark response objects too so late output-item receipts cannot restore an
+    // old response after the context transition. This never edits transcripts.
+    retireContext() {
+      if (disposed) return false;
+      for (const item of history.values()) if (item.role === 'user' && inputs.get(item.id)?.consumed) item.contextRetired = true;
+      for (const response of responses.values()) response.contextRetired = true;
+      if (current) current.contextRetired = true;
+      return true;
+    },
     // Realtime deletion only removes live prompt references. Compaction may
     // summarize the same accepted, saved turns after their provider items were
     // deleted, without promoting the app's raw noise transcript into context.
     acceptedItemIds() { return acceptedItems(false).map(item => item.id); },
+    // A checkpoint may still cover approved items deleted from the provider's
+    // live buffer, but must never reintroduce privacy-retired conversation.
+    // The separate acceptedItemIds ledger remains available for source/playback
+    // receipts; it is not the authority for the next model context.
+    contextItemIds() {
+      return acceptedItems(false).filter(item => !item.contextRetired && !responses.get(item.responseId)?.contextRetired).map(item => item.id);
+    },
     ignoresTranscript(event) {
       if (event?.type !== 'response.output_audio_transcript.done') return false;
       const response = responses.get(event.response_id) || responses.get(history.get(event.item_id)?.responseId);
@@ -329,7 +350,12 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
       }
       if (event.type === 'output_audio_buffer.stopped' || event.type === 'output_audio_buffer.cleared') {
         const response = responses.get(event.response_id);
-        if (response) response.audioEnded = true;
+        if (response) {
+          response.audioEnded = true;
+          // A clear releases the response lifecycle but cannot establish that
+          // its whole transcript was played, even if a stopped event follows.
+          if (event.type === 'output_audio_buffer.cleared') response.audioCleared = true;
+        }
       }
       if (event.type === 'response.done') {
         const response = responses.get(event.response?.id);

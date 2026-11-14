@@ -1,0 +1,65 @@
+{
+  "captured_at_utc": "2026-11-14T08:36:22.289096+00:00",
+  "source_fixture": "test/qualified-turns.browser.mjs",
+  "viewport_text_checks": [
+    {
+      "width": 390,
+      "height": 844,
+      "text_scale": 1.25
+    },
+    {
+      "width": 320,
+      "height": 568,
+      "text_scale": 1.25
+    }
+  ],
+  "text_scaling_method": "Computed CSS font sizes multiplied by 1.25 for call text; not an emulated OS accessibility setting.",
+  "before": "Recovery copy already clarified; before compact avatar spacing correction. Restored 320 help was clipped.",
+  "after": "Recovery help hidden when status and retry action supply the same guidance. Compact live avatar 100px at max-height 600px and max-width 390px; ordinary fallback help retained.",
+  "visual_review": {
+    "opened_all_after_images": true,
+    "horizontal_overflow": false,
+    "retry_obstructed": false,
+    "visible_help_clipped": false,
+    "hangup_obstructed": false
+  },
+  "focused_units": {
+    "passed": 51,
+    "failed": 0,
+    "includes_clear_then_late_stopped_not_admitted": true
+  },
+  "browser": {
+    "passed_cases": 7,
+    "failed": 0,
+    "raw_ack_gate": true,
+    "revocation_direct_recovery": true,
+    "revocation_explicit_retry": true,
+    "raw_history_preserved": true,
+    "retired_model_references_excluded": true,
+    "production_hash_csp_sri_native_wasm": true,
+    "recovery_input_shortcuts_blocked": {
+      "mute_control_disabled": true,
+      "direct_mute_handler_calls_with_no_input_reenable": 2,
+      "rtc_disconnect_reconnect_with_no_input_reenable": true,
+      "rtc_reconnect_keeps_hint_blocked": true,
+      "rtc_reconnect_keeps_response_count": 2
+    }
+  },
+  "provider_auth_backend": "Fixtures only; no production writes or paid model calls.",
+  "conversational_quality_verified": false,
+  "real_device_acoustic_effectiveness_verified": false,
+  "images": {
+    "before": [
+      "before/context-recovery-failed-390.png",
+      "before/context-recovery-failed-320.png",
+      "before/context-recovery-restored-390.png",
+      "before/context-recovery-restored-320.png"
+    ],
+    "after": [
+      "after/context-recovery-failed-390.png",
+      "after/context-recovery-failed-320.png",
+      "after/context-recovery-restored-390.png",
+      "after/context-recovery-restored-320.png"
+    ]
+  }
+}

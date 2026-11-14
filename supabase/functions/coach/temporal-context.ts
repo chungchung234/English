@@ -32,8 +32,15 @@ export function memoryFact(value: unknown): RecordValue | null {
   if (!record(value) || !['name', 'occupation', 'location', 'goal', 'interest', 'preference'].includes(String(value.key)) || !text(value.value, 240)) return null;
   const forgotten = value.forgotten === true || value.value === '';
   const result: RecordValue = { key: value.key, value: forgotten ? '' : value.value, forgotten };
-  // A tombstone intentionally carries no old quote that could revive its value.
-  if (forgotten) return result;
+  // Retain only the forget instant so later projections can exclude older
+  // exchanges without blocking unrelated calls made after the forget request.
+  // A tombstone intentionally carries no old value, quote or evidence IDs.
+  if (forgotten) {
+    const spokenAt = sourceInstant(value.spoken_at), updatedAt = sourceInstant(value.updated_at);
+    if (spokenAt) result.spoken_at = spokenAt;
+    else if (updatedAt) result.updated_at = updatedAt;
+    return result;
+  }
   if (value.manual === true) {
     result.manual = true;
     const updatedAt = sourceInstant(value.updated_at); if (updatedAt) result.updated_at = updatedAt;

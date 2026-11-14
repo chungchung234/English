@@ -68,8 +68,14 @@ const historicalOpening = () => ({ ...emptyOpening(), context_kind: 'recent_conv
     session_id: '33333333-3333-4333-8333-333333333333', occurred_at: '2026-11-12T09:00:00Z',
     text: 'SYNTHETIC_STYLE_QUESTION: What did you enjoy yesterday?', role: 'style_only' }] });
 const instructions = context => `ROLE_AND_SAFETY:\nSynthetic safety policy.\nPERSONA:\nSynthetic companion.\nTRUSTED_TIME_CONTEXT_JSON:\n{}\nUNTRUSTED_CONTEXT_JSON:\n${JSON.stringify(context)}`;
+const sharedExchange = () => ({ version: 'conversation-exchange-v1', source_session_id: '11111111-1111-4111-8111-111111111111', companion_id: 'alex',
+  memory_revision: 0, session_created_at: '2026-11-12T10:00:00Z', session_ended_at: '2026-11-12T10:02:00Z', session_time_zone: 'UTC',
+  admission: 'client_reported_playback_completed', caller: { id: '22222222-2222-4222-8222-222222222222', speaker: 'user',
+    quote: 'SYNTHETIC_PRIVATE_HISTORICAL_QUOTE', timestamp: '2026-11-12T10:01:00Z', truncated: false },
+  companion: { id: '55555555-5555-4555-8555-555555555555', speaker: 'assistant', quote: 'SYNTHETIC_COMPANION_ONLY', timestamp: '2026-11-12T10:01:30Z', truncated: false } });
 
-async function fixture({ opening = emptyOpening(), ordinaryOpening = emptyContext(), ordinaryVoice = conversationContext(), returnedPolicy = policy, manual = true } = {}) {
+async function fixture({ opening = emptyOpening(), ordinaryOpening = emptyContext(), ordinaryVoice = conversationContext(), returnedPolicy = policy, manual = true,
+  memoryRevision, memoryMode = 'included' } = {}) {
   const voice = instructions(ordinaryVoice);
   const greeting = instructions(ordinaryOpening) + '\nUNTRUSTED_OPENING_CONTEXT_JSON:\n' + JSON.stringify(opening) +
     '\nCURRENT_RESPONSE_PURPOSE:\nSynthetic opening purpose. Historical background is not a current learner utterance or request.';
@@ -84,9 +90,12 @@ async function fixture({ opening = emptyOpening(), ordinaryOpening = emptyContex
     createDataChannel() { return new Channel(); }
     addEventListener() {}
   }
-  const sandbox = { RTCPeerConnection: Peer, localStorage: { setItem() {} }, fetch: async url => new Response(JSON.stringify(url.endsWith('/config') ? { capabilities: { manual_turns_v1: true } } : {
+  let approvedUpdate;
+  const sandbox = { RTCPeerConnection: Peer, localStorage: { setItem() {} }, fetch: async url => new Response(JSON.stringify(url.endsWith('/config') ? { capabilities: { manual_turns_v1: true } } :
+    url.endsWith('/checkpoint') || url.endsWith('/voice-context') ? approvedUpdate : {
     audio_policy: { turn_control: manual ? 'manual_turns_v1' : 'provider_vad', turn_detection: returnedPolicy },
-    ...(manual ? { voice_instructions: voice, opening_instructions: greeting } : {}), sdp: 'SYNTHETIC_PRIVATE_SDP',
+    ...(manual ? { voice_instructions: voice, opening_instructions: greeting } : {}),
+    ...(memoryRevision === undefined ? {} : { memory_revision: memoryRevision, memory_mode: memoryMode }), sdp: 'SYNTHETIC_PRIVATE_SDP',
   })) };
   runInNewContext(`(${installRealtimeSmokeObserver.toString()})(${JSON.stringify({ base, session: { access_token: 'SYNTHETIC_PRIVATE_TOKEN', expires_in: 3600 } })})`, sandbox);
   await sandbox.fetch(base + '/functions/v1/coach/config');
@@ -114,7 +123,13 @@ async function fixture({ opening = emptyOpening(), ordinaryOpening = emptyContex
     channel.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'synthetic-user-item', transcript });
   }
   function reply() { user(); const response = create('reply'), id = acknowledge(response); finish(response, id); }
-  return { observed: sandbox.__liveSmoke, channel, create, acknowledge, finish, user, reply };
+  async function approveUpdate(context, { endpoint = 'checkpoint', revision = 0, mode = 'included' } = {}) {
+    const updated = instructions(context);
+    approvedUpdate = { instructions: updated, memory_revision: revision, memory_mode: mode };
+    await sandbox.fetch(base + '/functions/v1/coach/' + endpoint);
+    return updated;
+  }
+  return { observed: sandbox.__liveSmoke, channel, create, acknowledge, finish, user, reply, approveUpdate };
 }
 
 test('live manual smoke requires matching response receipts, completed generation and drained audio for opening and curated reply', async () => {
@@ -176,6 +191,108 @@ test('live manual smoke accepts optional historical/style background and a chose
     assert.equal(f.observed.manual.historicalContextPresent, Boolean(opening.continuity || opening.recent_openings.length));
     assert.equal(f.observed.manual.preparedTopicPresent, Boolean(opening.prepared_topic));
     assert.doesNotMatch(JSON.stringify(f.observed), /SYNTHETIC_HISTORY_NOTE|SYNTHETIC_STYLE_QUESTION|SYNTHETIC_PRIVATE_HISTORICAL_QUOTE|SYNTHETIC_PREPARED_TOPIC|11111111-1111/);
+  }
+});
+
+test('live manual smoke accepts bounded receipt-backed two-speaker evidence with optional opening continuity', async () => {
+  for (const withOpening of [false, true]) {
+    const ordinaryVoice = conversationContext(), opening = withOpening ? historicalOpening() : emptyOpening();
+    ordinaryVoice.memory.shared_exchanges = [sharedExchange()];
+    if (withOpening) opening.shared_exchange = sharedExchange();
+    const f = await fixture({ ordinaryVoice, opening, memoryRevision: 0 }), response = f.create('startup');
+    f.finish(response, f.acknowledge(response)); f.reply();
+    assert.doesNotThrow(() => verifyManualRealtimeObservation(f.observed.manual));
+    assert.doesNotMatch(JSON.stringify(f.observed), /SYNTHETIC_COMPANION_ONLY|SYNTHETIC_PRIVATE_HISTORICAL_QUOTE|55555555-5555/);
+  }
+});
+
+test('live manual smoke rejects forged, relabeled, suppressed and structurally expanded shared evidence', async () => {
+  const mutations = [
+    pair => { pair.companion_id = 'mia'; },
+    pair => { pair.memory_revision = -1; },
+    pair => { pair.memory_revision = .5; },
+    pair => { pair.memory_revision = 1; },
+    pair => { pair.admission = 'human_heard'; },
+    pair => { pair.source_session_id = 'missing'; },
+    pair => { pair.session_created_at = '2026-11-12T10:03:00Z'; },
+    pair => { pair.session_ended_at = 'invalid'; },
+    pair => { pair.session_time_zone = 'Unknown/Zone'; },
+    pair => { pair.caller.speaker = 'assistant'; },
+    pair => { pair.companion.speaker = 'user'; },
+    pair => { pair.companion.id = pair.caller.id; },
+    pair => { pair.companion.timestamp = '2026-11-12T10:00:30Z'; },
+    pair => { pair.caller.timestamp = '2026-11-12T09:59:00Z'; },
+    pair => { pair.companion.quote = ' '; },
+    pair => { pair.companion.quote = 'x'.repeat(481); },
+    pair => { pair.companion.quote = '가'.repeat(161); },
+    pair => { pair.caller.truncated = 'false'; },
+    pair => { pair.practice = []; },
+    pair => { pair.companion.corrections = []; },
+    pair => { pair.caller.target = null; },
+  ];
+  for (const mutate of mutations) {
+    const ordinaryVoice = conversationContext(), pair = sharedExchange(); mutate(pair); ordinaryVoice.memory.shared_exchanges = [pair];
+    const f = await fixture({ ordinaryVoice, memoryRevision: 0 }); f.reply();
+    assert.equal(f.observed.manual.liveContextValid, false);
+    assert.throws(() => verifyManualRealtimeObservation(f.observed.manual), /conversation-only/);
+  }
+  for (const mode of ['missing-revision', 'suppressed', 'omitted', 'duplicate', 'not-array', 'too-many', 'too-many-sources', 'too-many-bytes']) {
+    const ordinaryVoice = conversationContext(); ordinaryVoice.memory.shared_exchanges = [sharedExchange()];
+    if (mode === 'suppressed') ordinaryVoice.memory.suppress_memory = true;
+    if (mode === 'duplicate') ordinaryVoice.memory.shared_exchanges.push(sharedExchange());
+    if (mode === 'not-array') ordinaryVoice.memory.shared_exchanges = null;
+    if (mode === 'too-many') ordinaryVoice.memory.shared_exchanges = Array.from({ length: 5 }, sharedExchange);
+    if (mode === 'too-many-sources' || mode === 'too-many-bytes') ordinaryVoice.memory.shared_exchanges = Array.from({ length: mode === 'too-many-sources' ? 3 : 4 }, (_, i) => {
+      const pair = sharedExchange(); pair.companion.id = `77777777-7777-4777-8777-77777777777${i}`;
+      if (mode === 'too-many-sources') pair.source_session_id = `88888888-8888-4888-8888-88888888888${i}`;
+      else { pair.caller.quote = 'x'.repeat(480); pair.companion.quote = 'y'.repeat(480); }
+      return pair;
+    });
+    const f = await fixture({ ordinaryVoice, memoryRevision: mode === 'missing-revision' ? undefined : 0, memoryMode: mode === 'omitted' ? 'omitted' : 'included' });
+    f.reply(); assert.throws(() => verifyManualRealtimeObservation(f.observed.manual), /conversation-only/, mode);
+  }
+});
+
+test('live manual smoke requires opening shared evidence to match the exact dated caller continuity', async () => {
+  for (const mutate of [
+    opening => { opening.shared_exchange.companion_id = 'mia'; },
+    opening => { opening.shared_exchange.memory_revision = 1; },
+    opening => { opening.shared_exchange.source_session_id = '66666666-6666-4666-8666-666666666666'; },
+    opening => { opening.shared_exchange.caller.id = '66666666-6666-4666-8666-666666666666'; },
+    opening => { opening.shared_exchange.caller.quote = 'SYNTHETIC_UNRELATED_QUOTE'; },
+    opening => { opening.shared_exchange.caller.timestamp = '2026-11-12T10:00:30Z'; },
+    opening => { opening.shared_exchange.companion.focus = []; },
+    opening => { opening.continuity.practice = []; },
+    opening => { opening.continuity = null; opening.context_kind = 'none'; },
+  ]) {
+    const opening = historicalOpening(); opening.shared_exchange = sharedExchange(); mutate(opening);
+    const f = await fixture({ opening, memoryRevision: 0 }); f.reply();
+    assert.throws(() => verifyManualRealtimeObservation(f.observed.manual), /typed/);
+  }
+  const ordinaryOpening = emptyContext(); ordinaryOpening.memory.shared_exchanges = [sharedExchange()];
+  const f = await fixture({ ordinaryOpening, memoryRevision: 0 }); f.reply();
+  assert.throws(() => verifyManualRealtimeObservation(f.observed.manual), /conversation-only/);
+});
+
+test('live manual smoke changes instruction authority only on a current backend-approved update ACK', async () => {
+  for (const endpoint of ['checkpoint', 'voice-context']) {
+    const f = await fixture();
+    const staleContext = emptyContext(); staleContext.checkpoint = { summary: 'SYNTHETIC_STALE_CHECKPOINT' };
+    const stale = instructions(staleContext);
+    f.channel.emit({ type: 'session.created', session: { instructions: stale } });
+    f.channel.emit({ type: 'session.updated', session: { instructions: stale } });
+    f.reply(); assert.doesNotThrow(() => verifyManualRealtimeObservation(f.observed.manual));
+    const approvedContext = emptyContext(); approvedContext.checkpoint = { summary: 'SYNTHETIC_APPROVED_CHECKPOINT' };
+    const approved = await f.approveUpdate(approvedContext, { endpoint, revision: endpoint === 'voice-context' ? null : 0, mode: endpoint === 'voice-context' ? 'omitted' : 'included' });
+    f.channel.emit({ type: 'session.updated', session: { instructions: stale } });
+    f.reply(); assert.doesNotThrow(() => verifyManualRealtimeObservation(f.observed.manual));
+    f.channel.emit({ type: 'session.updated', session: { instructions: approved } });
+    f.user(); const response = f.create('reply', { instructions: approved }); f.finish(response, f.acknowledge(response));
+    assert.doesNotThrow(() => verifyManualRealtimeObservation(f.observed.manual));
+    f.channel.emit({ type: 'session.updated', session: { instructions: stale } });
+    f.user(); const after = f.create('reply', { instructions: approved }); f.finish(after, f.acknowledge(after));
+    assert.doesNotThrow(() => verifyManualRealtimeObservation(f.observed.manual));
+    assert.doesNotMatch(JSON.stringify(f.observed), /SYNTHETIC_STALE_CHECKPOINT|SYNTHETIC_APPROVED_CHECKPOINT/);
   }
 });
 
@@ -258,11 +375,13 @@ test('live manual smoke preserves current sharing and explicit language-help req
 test('live manual smoke checks effective checkpoint updates without banning language in genuine conversation quotations', async () => {
   const f = await fixture(), opening = f.create('startup'); f.finish(opening, f.acknowledge(opening)); f.reply();
   const context = conversationContext(); context.checkpoint = { summary: 'The caller asked how to phrase an invitation; continue their current topic.' };
-  f.channel.emit({ type: 'session.updated', session: { instructions: instructions(context) } });
-  const afterCheckpoint = f.create('reply', { instructions: instructions(context) }); f.finish(afterCheckpoint, f.acknowledge(afterCheckpoint));
+  const approved = await f.approveUpdate(context);
+  f.channel.emit({ type: 'session.updated', session: { instructions: approved } });
+  const afterCheckpoint = f.create('reply', { instructions: approved }); f.finish(afterCheckpoint, f.acknowledge(afterCheckpoint));
   assert.doesNotThrow(() => verifyManualRealtimeObservation(f.observed.manual));
   context.checkpoint.practice = [];
-  f.channel.emit({ type: 'session.updated', session: { instructions: instructions(context) } });
+  const invalid = await f.approveUpdate(context);
+  f.channel.emit({ type: 'session.updated', session: { instructions: invalid } });
   assert.equal(f.observed.manual.liveContextValid, false);
   assert.throws(() => verifyManualRealtimeObservation(f.observed.manual), /conversation-only/);
 });

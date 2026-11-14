@@ -211,7 +211,7 @@ test('all pages are read despite a lower database page cap, then stored atomical
 });
 
 test('voice uses server multipart exchange and persists no SDP or secret', async () => {
-  const original = globalThis.fetch; let completed, expectedSpeed = 1;
+  const original = globalThis.fetch; let completed, expectedSpeed = 1, providerInstructions;
   globalThis.fetch = async (url, options) => {
     const path = String(url);
     if(path.includes('/reserve_model_spend'))return response(true);
@@ -227,6 +227,7 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.ok(options.body instanceof FormData);
       assert.equal(options.body.get('sdp'), sdp);
       const session = JSON.parse(options.body.get('session'));
+      providerInstructions = session.instructions;
       assert.equal(session.model, 'gpt-realtime-2.1-mini');
       assert.equal(session.max_output_tokens, 1024);
       assert.deepEqual(session.audio.input.turn_detection, { type: 'semantic_vad', eagerness: 'low', create_response: true, interrupt_response: true });
@@ -264,10 +265,13 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.deepEqual(data.memory_context, { status: 'empty', memory_count: 0, fact_count: 0, last_session_created_at: null, has_undated_memory: false });
       assert.deepEqual(data.audio_policy, { version: '2026-11-12-qualified-turns-v3', microphone_mode: 'unknown', turn_control:'provider_vad', requested_noise_reduction: 'far_field', expected_noise_reduction: 'far_field', fallback: null,
         turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: true, interrupt_response: true } });
-      assert.equal(Object.hasOwn(data, 'voice_instructions'), false); assert.equal(Object.hasOwn(data, 'opening_instructions'), false, 'legacy clients retain their existing response shape');
+      assert.equal(data.voice_instructions, providerInstructions, 'even a legacy turn mode gets the backend-approved normal instruction authority');
+      assert.equal(data.memory_revision, 0); assert.equal(data.memory_mode, 'included');
+      assert.equal(Object.hasOwn(data, 'opening_instructions'), false, 'legacy turn mode does not receive a manual-only opening');
     }
     const {memory_context,context_sources,context_fingerprint,context_bytes,...metadata}=completed.p_result;
-    assert.deepEqual(metadata, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',voice_max_output_tokens:1024,policy_version:'2026-11-10-v2',voice_policy_version:'2026-11-13-companion-phone-v4',
+    assert.deepEqual(metadata, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',voice_max_output_tokens:1024,policy_version:'2026-11-10-v2',voice_policy_version:'2026-11-14-companion-phone-v5',
+      character_viewpoints_version:'character-viewpoints-v1',memory_revision:0,memory_mode:'included',
       audio_policy_version:'2026-11-12-qualified-turns-v3',turn_control:'provider_vad',requested_microphone_mode:'unknown',requested_noise_reduction:'far_field',expected_noise_reduction:'far_field',audio_policy_fallback:null,usage_preparation:'ready' });
     assert(context_bytes>0);assert.equal(memory_context.status,'empty');assert.deepEqual(context_sources,{memory_session_ids:[],recent_session_id:null,conversation_session_ids:[]});assert.match(context_fingerprint,/^[a-f0-9]{64}$/);
   } finally { globalThis.fetch = original; }
@@ -400,7 +404,7 @@ test('manual turns disable provider generation and interruption from the initial
     assert.match(purpose, /Speak directly to the person in your character's everyday voice/);
     assert.doesNotMatch(purpose, /one short English greeting|at most one|callbacks for later|greeting only/i);
     const metadata = state.completed[0].p_result;
-    assert.equal(metadata.turn_control, 'manual_turns_v1'); assert.equal(metadata.voice_policy_version, '2026-11-13-companion-phone-v4');
+    assert.equal(metadata.turn_control, 'manual_turns_v1'); assert.equal(metadata.voice_policy_version, '2026-11-14-companion-phone-v5');
     assert.equal(metadata.opening_policy_version, 'opening-context-v2'); assert.equal(metadata.opening_context_kind, 'none'); assert.equal(metadata.opening_source_count, 0);
     assert.equal(Object.hasOwn(metadata, 'voice_instructions'), false); assert.equal(Object.hasOwn(metadata, 'opening_instructions'), false);
     assert.doesNotMatch(JSON.stringify(metadata), /CURRENT_RESPONSE_PURPOSE|ROLE_AND_SAFETY|test-openai|test-service|v=0/);

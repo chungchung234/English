@@ -285,16 +285,19 @@ try {
     createDataChannel() { return this.channel = { readyState: 'open', send() {} }; }
     async createOffer() { return { type: 'offer', sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n' }; }
     async setLocalDescription() {}
-    async setRemoteDescription() { this.channel.onopen?.(); }
+    async setRemoteDescription() { this.remoteDescriptionSet = true; this.channel.onopen?.(); }
     close() { this.connectionState = 'closed'; }
   }; });
   await page.locator('[data-view="contacts"]').click(); await page.locator('#start-call').click();
-  await page.locator('#end-call').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => window.acceptancePeer?.remoteDescriptionSet);
+  await page.locator('#cancel-connection').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#end-call').isVisible(), false, 'SDP response alone keeps the call in cancellable setup');
   assert.equal(transport.voice.length, 1);
   assert.equal((await eventRows('call_connected')).length, 0, 'SDP response alone does not count as connected voice');
   await page.waitForTimeout(100);
   assert.equal(await page.evaluate(async scope => { const { createLearningOutbox } = await import('/src/learning-outbox.js'); return (await createLearningOutbox().list(scope)).filter(row => row.kind === 'event' && row.body.p_name === 'call_connected').length; }, project + '|' + uid), 0, 'SDP response does not queue a connected event');
   await page.evaluate(() => { window.acceptancePeer.connectionState = 'connected'; window.acceptancePeer.onconnectionstatechange?.(); });
+  await page.locator('#end-call').waitFor({ state: 'visible' });
   await waitUntil(async () => page.evaluate(async scope => { const { createLearningOutbox } = await import('/src/learning-outbox.js'); return (await createLearningOutbox().list(scope)).some(row => row.kind === 'event' && row.body.p_name === 'call_connected'); }, project + '|' + uid), 'peer connected event is durably queued behind offline intent');
   assert(!JSON.stringify(transport.voice[0]).includes(offlineItem.expression), 'pending exclusion cannot enter next-call request');
   assert.equal(transport.voice[0].omitLearningContext, true, 'unknown pending exclusion scope omits all prior learning context');

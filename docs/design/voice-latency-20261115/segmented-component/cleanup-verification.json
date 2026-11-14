@@ -1,0 +1,40 @@
+{
+  "version": "existing-controller-cleanup-witness-v1",
+  "source_run_claim_sha256": "f4b998e39e73654f36a64dd43d3852b812eee8c44d04ba68e9f7b1b81f7f4e25",
+  "source_result_sha256": "66b0f63d738733fdaf2a03d9c380d52eab0c44c56ebf49f632df27c742341ecb",
+  "claim_manifest_and_controller_match": true,
+  "rendered_deployment_source_sha256": "47109ceda1526aa0049122ab61a25055aa2e7d824d4b843330a7b787c0f5f3ac",
+  "durable_exclusive_run_claim_count": 1,
+  "temporary_deployment_attempts": 1,
+  "durable_invocation_claims": [
+    {
+      "mode": "segmented",
+      "generation_upper_bound": 3
+    },
+    {
+      "mode": "whole",
+      "generation_upper_bound": 1
+    }
+  ],
+  "cleanup_delete_attempted": true,
+  "independent_metadata_absence_observed_by_controller": true,
+  "finished_journal_agrees_with_safe_result": true,
+  "browser_native_cleanup": [
+    {
+      "mode": "segmented",
+      "context_closed": true,
+      "connected_nodes": 0,
+      "all_ports_closed": true,
+      "owned_reference_tracks_ended": true
+    },
+    {
+      "mode": "whole",
+      "context_closed": true,
+      "connected_nodes": 0,
+      "all_ports_closed": true,
+      "owned_reference_tracks_ended": true
+    }
+  ],
+  "fresh_management_request_performed_for_this_evidence": false,
+  "new_network_requests": 0
+}

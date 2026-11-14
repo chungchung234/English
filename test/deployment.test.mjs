@@ -7,7 +7,7 @@ import {isolatedCoach} from '../scripts/isolated-coach-check.mjs';
 import {build} from 'esbuild';
 import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
-const coachModules=['authored-dialogue.ts','background.ts','character-viewpoints.ts','conversation-memory.ts','core.ts','dialogue-continuity.ts','enhancements.ts','index.ts','live-context.ts','opening-policy.ts','policy.ts','review-learning.ts','shared-exchanges.ts','temporal-context.ts','verified-speech.ts','weekly.ts'];
+const coachModules=['authored-dialogue.ts','authored-segments.ts','background.ts','character-viewpoints.ts','conversation-memory.ts','core.ts','dialogue-continuity.ts','enhancements.ts','index.ts','live-context.ts','opening-policy.ts','policy.ts','review-learning.ts','shared-exchanges.ts','temporal-context.ts','verified-speech.ts','weekly.ts'];
 function buildSql(change='',file='202611090001_init.sql',version='202611090001'){
  const result=spawnSync('python3',['-c',`import importlib.util\nfrom pathlib import Path\ns=importlib.util.spec_from_file_location('deploy','scripts/deploy.py')\nm=importlib.util.module_from_spec(s);s.loader.exec_module(m)\nprint(m.migration_sql(Path('supabase/migrations/'+${JSON.stringify(file)}).read_text()+${JSON.stringify(change)},${JSON.stringify(version)}))`],{encoding:'utf8'});
  assert.equal(result.status,0,result.stderr);return result.stdout;

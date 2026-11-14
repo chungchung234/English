@@ -1,6 +1,7 @@
 import { createLearningOutbox } from '../src/learning-outbox.js';
 import { validSpeed } from './speech-speed.js';
 import { readAuthoredResponse } from './authored-response.js';
+import { readAuthoredSegmentsResponse } from './authored-segments-response.js';
 
 export const AUTHORED_DIALOGUE_PROTOCOL = 'authored_dialogue_v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -96,11 +97,11 @@ export function createAuthoredPlaybackDelivery({ getScope, send, storage, maxReq
   };
 }
 
-export function createAuthoredDialogue({ scope, sessionId, companionId, callEpoch, edge, streamed = false, player, playbackDelivery,
+export function createAuthoredDialogue({ scope, sessionId, companionId, callEpoch, edge, streamed = false, segmented = false, player, playbackDelivery,
   isCurrent = () => true, savedInputs, onTranscript = () => {}, onLifecycle = () => {}, onState = () => {}, onFailure = () => {},
   initialSpeed = .85, onSpeed = () => {}, subtle = globalThis.crypto?.subtle } = {}) {
   if (typeof scope !== 'string' || !UUID.test(sessionId) || !['alex', 'mia', 'juno'].includes(companionId) || !integer(callEpoch) ||
-    typeof edge !== 'function' || typeof savedInputs !== 'function' || !player?.prepare || !validSpeed(initialSpeed)) throw new TypeError('Invalid authored dialogue options.');
+    typeof edge !== 'function' || typeof savedInputs !== 'function' || !(segmented ? player?.begin && player?.enqueue && player?.seal : player?.prepare) || !validSpeed(initialSpeed)) throw new TypeError('Invalid authored dialogue options.');
   let authority = null, current = null, disposed = false, epoch = 0, playbackEpoch = 0, desiredSpeed = initialSpeed, appliedSpeed = initialSpeed;
   const records = new Map();
   const live = () => { try { return !disposed && isCurrent(); } catch { return false; } };
@@ -146,7 +147,7 @@ export function createAuthoredDialogue({ scope, sessionId, companionId, callEpoc
           currentUserEventIds: source.currentUserEventIds, acceptedHistoryEventIds: source.acceptedHistoryEventIds,
           expectedMemoryRevision: record.authority.memoryRevision, omitLearningContext: record.authority.memoryMode === 'omitted', speechSpeed: record.speed,
           ...(request.purpose === 'hint' ? { hint: 'next_sentence' } : {}), ...(pendingPlaybackReports.length ? { pendingPlaybackReports } : {}) };
-        const acceptText = async result => {
+        const acceptText = async (result, plan) => {
           if (!active(record)) throw new DOMException('Dialogue output was stopped.', 'AbortError');
           const owner = result?.owner, raw = result?.assistantEvent;
           if (result?.protocol !== protocol || !ownerValid(owner) || owner.scope !== scope || owner.sessionId !== sessionId || owner.companionId !== companionId || owner.callEpoch !== callEpoch ||
@@ -158,9 +159,30 @@ export function createAuthoredDialogue({ scope, sessionId, companionId, callEpoc
           record.owner = Object.freeze({ ...owner }); record.generation = result.generation; record.textSha256 = result.textSha256;
           authority.generation = result.generation;
           onTranscript({ ...raw }, record.owner); emit(record, 'text_ready', { turnId: owner.turnId, itemId: raw.id });
+          if (segmented) {
+            if (!await player.begin(record.owner, record.textSha256, result.text, plan, record.controller.signal) || !active(record)) throw Error('Verified dialogue segment plan was rejected.');
+            for (const decision of record.candidates.values()) player.pauseCandidate(record.owner, decision.candidateId, decision.decisionEpoch);
+          }
         };
         let audio;
-        if (streamed) {
+        if (segmented) {
+          const result = await edge('dialogue-response-segments', body, { signal: record.controller.signal, timeoutMs: 110000,
+            readResponse: (response, signal) => readAuthoredSegmentsResponse(response, {
+              onText: acceptText,
+              onSegment: async segment => {
+                if (!active(record)) throw new DOMException('Dialogue output was stopped.', 'AbortError');
+                if (segment?.protocol !== protocol || typeof segment.pcmBase64 !== 'string' || segment.pcmBase64.length > 5760000 || !same(segment.manifest?.owner, record.owner) || segment.manifest.synthesisSpeed !== record.speed) throw Error('Dialogue segment owner was not confirmed.');
+                const binary = atob(segment.pcmBase64), bytes = new Uint8Array(binary.length);
+                for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                if (!await player.enqueue(record.owner, segment.manifest, bytes.buffer, record.controller.signal) || !active(record)) throw Error('Verified dialogue segment was rejected.');
+                appliedSpeed = record.speed; onSpeed(speedState()); player.play(record.owner); publish();
+              }, signal: signal || record.controller.signal,
+            }) });
+          if (!active(record)) return;
+          if (result.final?.protocol !== protocol || !same(result.final.manifest?.owner, record.owner) || result.final.manifest.synthesisSpeed !== record.speed || !await player.seal(record.owner, result.final.manifest) || !active(record)) throw Error('Verified dialogue completion was rejected.');
+          publish();
+          return;
+        } else if (streamed) {
           const result = await edge('dialogue-response', body, { signal: record.controller.signal, timeoutMs: 110000,
             readResponse: (response, signal) => readAuthoredResponse(response, { onText: acceptText, signal: signal || record.controller.signal }) });
           audio = result.audio;

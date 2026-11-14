@@ -6,7 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {readFile,readdir} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
-import {handleAuthoredDialogue,authoredDialogueStream} from '../supabase/functions/coach/authored-dialogue.ts';
+import {handleAuthoredDialogue,authoredDialogueStream,authoredDialogueSegmentsStream} from '../supabase/functions/coach/authored-dialogue.ts';
 import {renderVoiceInstructions,renderOpeningInstructions} from '../supabase/functions/coach/index.ts';
 import {companionProfile} from '../supabase/functions/coach/core.ts';
 import {buildOpeningContext} from '../supabase/functions/coach/opening-policy.ts';
@@ -86,6 +86,28 @@ test('actual authored handler and canonical SQL enforce the complete two-stage l
   let output='';while(true){const chunk=await reader.read();if(chunk.done)break;output+=new TextDecoder().decode(chunk.value);}
   const frames=output.trimEnd().split('\n').map(JSON.parse);assert.deepEqual(frames.map(frame=>frame.type),['error']);assert.equal(generated,0);assert.equal(f.readers.length,0);assert(disposed>=1);
   assert.equal(f.calls.filter(call=>call.name==='authored_dialogue_publish').length,0);assert(!output.includes('Source changed while setup'));
+ });
+ await t.test('verified transient pieces share one pending synthesis spend until final whole-parent publication',async()=>{
+  let synthesisGuards=0;const f=await fixture(db,{afterRpc:async(name,args)=>{
+   if(name==='authored_dialogue_dispatch'&&args.p_stage==='dialogue_synthesis'){synthesisGuards++;assert.equal((await db.query('select outcome from public.model_spend where job_id=$1',[args.p_job_id])).rows[0].outcome,'pending');}
+  }}),oldGet=f.deps.get,author=f.deps.author;f.deps.get=name=>name==='AUTHORED_DIALOGUE_SEGMENTS_ENABLED'?'true':oldGet(name);
+  f.deps.author=async body=>{const result=await author(body);result.payload.output.at(-1).content[0].text='The crooked edge has its own charm. I would keep that part.';return result;};
+  const response=new Response(authoredDialogueSegmentsStream(user,{protocol,...f.body(f.context)},f.deps));const frames=(await response.text()).trimEnd().split('\n').map(JSON.parse);
+  assert.deepEqual(frames.map(frame=>frame.type),['text','segment','segment','final','done']);assert.equal(synthesisGuards,4);assert.equal(f.authors.length,1);assert.equal(f.readers.length,2);
+  const jobs=(await db.query("select id from public.analysis_jobs where session_id=$1 and kind='dialogue_synthesis'",[f.session.id])).rows;assert.equal(jobs.length,1);
+  const spend=(await db.query('select usage,estimated_usd,reserved_usd,outcome from public.model_spend where job_id=$1',[jobs[0].id])).rows[0];assert.equal(spend.outcome,'generated_audio');assert.equal(spend.usage.output_tokens,200);assert(Number(spend.reserved_usd)<.15);assert(Number(spend.estimated_usd)>0);
+  const turn=(await db.query('select status,playback_receipt_id,audio_bytes from public.authored_dialogue_turns where id=$1',[frames[0].result.owner.turnId])).rows[0];assert.equal(turn.status,'published');assert.equal(turn.audio_bytes,8);assert.equal(turn.playback_receipt_id,null,'streaming pieces do not attest whole playback or admit partial memory');
+ });
+ await t.test('source edit between transient pieces blocks the next generation and leaves the parent unpublished',async()=>{
+  const f=await fixture(db),oldGet=f.deps.get,author=f.deps.author,synthesize=f.deps.synthesize;f.deps.get=name=>name==='AUTHORED_DIALOGUE_SEGMENTS_ENABLED'?'true':oldGet(name);
+  f.deps.author=async body=>{const result=await author(body);result.payload.output.at(-1).content[0].text='The first thought is complete. The next thought follows it.';return result;};
+  let releaseReady,index=0;const nextReady=new Promise(resolve=>{releaseReady=resolve;});f.deps.prepareSynthesis=()=>{const own=index++;return{ready:own?nextReady:Promise.resolve(),generate:synthesize,dispose:async()=>{}};};
+  const caller=await f.addUser('The current raw speech is still authoritative.'),reader=authoredDialogueSegmentsStream(user,{protocol,...f.body(f.context,{purpose:'reply',currentUserEventIds:[caller.id]})},f.deps).getReader();
+  const first=JSON.parse(new TextDecoder().decode((await reader.read()).value));assert.equal(first.type,'text');assert.equal(JSON.parse(new TextDecoder().decode((await reader.read()).value)).type,'segment');
+  await db.query('update public.transcript_events set text=$1 where id=$2',['The current source changed between pieces.',caller.id]);releaseReady();let rest='';while(true){const chunk=await reader.read();if(chunk.done)break;rest+=new TextDecoder().decode(chunk.value);}
+  assert.deepEqual(rest.trimEnd().split('\n').map(JSON.parse).map(frame=>frame.type),['error']);assert.equal(f.readers.length,1);assert.equal(f.calls.filter(call=>call.name==='authored_dialogue_publish').length,0);
+  const turn=(await db.query('select status,playback_receipt_id from public.authored_dialogue_turns where id=$1',[first.result.owner.turnId])).rows[0];assert.equal(turn.status,'synthesizing');assert.equal(turn.playback_receipt_id,null);
+  await assert.rejects(f.invoke('dialogue-playback',{owner:first.result.owner,generation:first.result.generation,receiptId:first.result.owner.assistantEventId,qualifiedUserEventIds:[caller.id]}));
  });
  await t.test('startup, batch playback, raw reply, cancellation and already-omitted reset preserve authority',async()=>{
   const f=await fixture(db),start=await f.invoke('dialogue-turn',f.body(f.context));

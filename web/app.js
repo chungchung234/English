@@ -19,6 +19,7 @@ import { createVoiceInstructions } from './voice-instructions.js';
 import { createConversationPlaybackOutbox, createConversationPlaybackCollector, createConversationPlaybackDelivery } from './conversation-playback.js';
 import { AUTHORED_DIALOGUE_PROTOCOL, createAuthoredDialogue, createAuthoredPlaybackDelivery } from './authored-dialogue.js';
 import { createVerifiedPcmPlayback } from './verified-pcm-playback.js';
+import { createSegmentedPcmPlayback } from './segmented-pcm-playback.js';
 import { createCallDiagnostics } from '../src/call-diagnostics.mjs';
 import { createCallAudioObserver } from './call-audio.js';
 import { createConversationClock, deviceTimeZone, formatInstant, recordTimeLabel, sessionTimeLabel, sessionTimeZone } from './conversation-time.js';
@@ -359,7 +360,7 @@ function connectAuthoredDialogue(current,attempt) {
   const active=()=>call===current&&!current.ending&&scope===current.scope&&auth?.user?.id===attempt.userId&&companionId===current.companionId;
   current.pcm=attempt.pcm;
   current.authored=createAuthoredDialogue({scope:current.scope,sessionId:current.id,companionId:current.companionId,callEpoch:attempt.callEpoch,
-    edge,streamed:attempt.authoredStream,player:current.pcm,playbackDelivery:authoredPlaybackDelivery,isCurrent:active,initialSpeed:current.initialSpeed,
+    edge,streamed:attempt.authoredStream,segmented:attempt.authoredSegments,player:current.pcm,playbackDelivery:authoredPlaybackDelivery,isCurrent:active,initialSpeed:current.initialSpeed,
     savedInputs:async request=>{
       // The floor may request synchronously inside the ASR event callback. Let
       // that callback enqueue its raw capture before waiting for its server ACK.
@@ -401,7 +402,7 @@ function connectAuthoredDialogue(current,attempt) {
       current.budgetExhausted ||= budget;current.contextRecoveryNeeded=!current.budgetExhausted;current.authored.invalidate(budget?'budget_exhausted':'authority_revoked');current.floor.retireContext();
       current.stream.getAudioTracks().forEach(track=>track.enabled=false);
       recordCallIssue(current,{kind:'context_error',code:issue.code||'AUTHORED_DIALOGUE_FAILED',request_type:'unknown'});
-      const failureNotice=notice(current.budgetExhausted?AUTHORED_BUDGET_NOTICE:'답변을 준비하지 못했어요. 대화를 다시 연결하거나 통화를 마쳐 주세요.',{persistent:current.budgetExhausted});
+      const failureNotice=notice(current.budgetExhausted?AUTHORED_BUDGET_NOTICE:attempt.authoredSegments?'답변을 끝까지 들려드리지 못했어요. 대화를 다시 연결하거나 통화를 마쳐 주세요.':'답변을 준비하지 못했어요. 대화를 다시 연결하거나 통화를 마쳐 주세요.',{persistent:current.budgetExhausted});
       current.authoredFailureNotice=current.budgetExhausted?null:failureNotice;updateCallControls();
       if(['MEMORY_CHANGED','MEMORY_SOURCE_CHANGED','HISTORY_CHANGED'].includes(issue.code))void recoverVoiceContext(current);
     }
@@ -760,7 +761,7 @@ async function api(path, options={}) { const result=await request(path,{...optio
 async function rpc(name, body) { return api('/rest/v1/rpc/'+name,{method:'POST',body}); }
 async function edge(name, body, options={}) {
   for(let attempt=0;;attempt++)try{return await api('/functions/v1/coach/'+name,{method:body===undefined?'GET':'POST',body,...options});}
-  catch(error){if(name==='dialogue-response'||error.code!=='ANALYSIS_CONTINUE'||attempt>=3)throw error;}
+  catch(error){if(['dialogue-response','dialogue-response-segments'].includes(name)||error.code!=='ANALYSIS_CONTINUE'||attempt>=3)throw error;}
 }
 const conversationMemory=createConversationMemoryDelivery({identity:()=>auth&&scope?scope:null,busy:()=>Boolean(call||callStarting||callEnding),prepare:body=>edge('memory-prepare',body)});
 async function allRows(table, query='') {
@@ -992,9 +993,10 @@ async function startCall() {
   try {
     if(authoredRequested){
       attempt.authoredStream=voiceCapabilities.authored_dialogue_stream_v1===true;
+      attempt.authoredSegments=voiceCapabilities.authored_dialogue_segments_v1===true;
       const asset=globalThis.LOOP_PCM_WORKLET_ASSET;
       attempt.callEpoch=Date.now();attempt.userId=callUserId;
-      attempt.pcm=createVerifiedPcmPlayback({workletUrl:asset?.url,workletSha256:asset?.sha256,
+      attempt.pcm=(attempt.authoredSegments?createSegmentedPcmPlayback:createVerifiedPcmPlayback)({workletUrl:asset?.url,workletSha256:asset?.sha256,
         isCurrent:owner=>Boolean(call===current&&!current?.ending&&scope===callScope&&auth?.user?.id===callUserId&&current?.authored?.owns(owner)),
         canUnlockContext:()=>!attempt.cancelled&&!attempt.controller.signal.aborted&&scope===callScope&&auth?.user?.id===callUserId&&companionId===selectedCompanion&&(connectionAttempt===attempt||call===current&&!current?.ending),
         onEvent:event=>{if(current&&event.kind==='rejected')recordCallIssue(current,{kind:'media_error',code:event.code||'PCM_REJECTED',request_type:'unknown'});current?.authored?.playerEvent(event);}});
@@ -1538,7 +1540,7 @@ async function ready(){
   if(epoch!==readyEpoch)return;
   auth.user=user;
   voiceCapabilities={manual_turns_v1:data?.capabilities?.manual_turns_v1===true,authored_dialogue_v1:data?.capabilities?.authored_dialogue_v1===true,
-    authored_dialogue_stream_v1:data?.capabilities?.authored_dialogue_stream_v1===true};
+    authored_dialogue_stream_v1:data?.capabilities?.authored_dialogue_stream_v1===true,authored_dialogue_segments_v1:data?.capabilities?.authored_dialogue_segments_v1===true};
   scope=config.url+'|'+user.id;firstUse.bind();
   renderAuthControls();$('auth-reset').hidden=true;
   const lastCallCompanion=localStorage.getItem(lastCallCompanionStorageKey()),savedCompanion=localStorage.getItem(companionStorageKey());

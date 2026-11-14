@@ -65,6 +65,39 @@ function streamedReply(reply, audioPromise = audioFor(reply), onCancel = () => {
     cancel() { cancelled = true; onCancel(); },
   }), { headers: { 'Content-Type': 'application/x-ndjson' } });
 }
+async function segmentedReply(reply, tail = Promise.resolve(), onCancel = () => {}, errorCode = null) {
+  const audio = await audioFor(reply), textBytes = new TextEncoder().encode(reply.text).byteLength;
+  audio.manifest.transcriptVerification.policyVersion = 'lexical-fidelity-v1';
+  const plan = { version: 'verified-speech-segments-v1', count: 1, textByteLength: textBytes, textSha256: reply.textSha256,
+    parts: [{ index: 0, startByte: 0, endByte: textBytes, textSha256: reply.textSha256 }] };
+  const manifest = { ...audio.manifest, version: 'verified-pcm-segment-v1', index: 0, count: 1, startByte: 0, endByte: textBytes, parentTextSha256: reply.textSha256 };
+  let cancelled = false;
+  const encode = value => new TextEncoder().encode(JSON.stringify(value) + '\n');
+  return new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(encode({ type: 'text', result: reply, plan }));
+      controller.enqueue(encode({ type: 'segment', result: { protocol, manifest, pcmBase64: audio.pcmBase64 } }));
+      void tail.then(() => {
+        if (cancelled) return;
+        if (errorCode) controller.enqueue(encode({ type: 'error', error: { code: errorCode, message: 'Synthetic stopped tail.' } }));
+        else {
+          controller.enqueue(encode({ type: 'final', result: { protocol, manifest: audio.manifest } }));
+          controller.enqueue(encode({ type: 'done', timings: { totalMs: 2, authorMs: 1, synthesisMs: 1 } }));
+        }
+        controller.close();
+      }).catch(error => { if (!cancelled) controller.error(error); });
+    },
+    cancel() { cancelled = true; onCancel(); },
+  }), { headers: { 'Content-Type': 'application/x-ndjson' } });
+}
+function segmentedPlayerFixture() {
+  const player = playerFixture();
+  for (const method of ['begin', 'enqueue', 'seal']) {
+    player.calls[method] = [];
+    player[method] = async (...args) => { player.calls[method].push(args); return true; };
+  }
+  return player;
+}
 function fixture(t, options = {}) {
   const player = options.player || playerFixture(), requests = [], replies = [], transcripts = [], lifecycle = [], states = [], failures = [], queued = [], speed = [];
   let current = true, textCounter = 0;
@@ -89,7 +122,7 @@ function fixture(t, options = {}) {
     if (route === 'dialogue-cancel') return cancelAck(body);
     throw Error('Unknown local fixture route');
   }
-  const dialogue = createAuthoredDialogue({ scope, sessionId, companionId, callEpoch, player, playbackDelivery: delivery, edge, streamed: options.streamed === true,
+  const dialogue = createAuthoredDialogue({ scope, sessionId, companionId, callEpoch, player, playbackDelivery: delivery, edge, streamed: options.streamed === true, segmented: options.segmented === true,
     savedInputs: options.savedInputs || (async () => clone(inputIds)), isCurrent: () => current, subtle: options.subtle || webcrypto.subtle,
     onTranscript: (row, owner) => transcripts.push({ row: clone(row), owner: clone(owner) }), onLifecycle: event => lifecycle.push(clone(event)),
     onState: state => states.push(clone(state)), onFailure: error => failures.push(clone(error)), onSpeed: value => speed.push(clone(value)) });
@@ -101,6 +134,90 @@ function fixture(t, options = {}) {
     event: (kind, owner = replies.at(-1)?.owner, extra = {}) => dialogue.playerEvent({ kind, owner: clone(owner), ...extra }) };
 }
 const strong = { evidence: 'client_reported_playback_completed' };
+
+test('segmented transport waits for the exact saved source then plays a verified part while final completion is held', async t => {
+  const saved = deferred(), tail = deferred(), player = segmentedPlayerFixture();
+  const f = fixture(t, { segmented: true, player, savedInputs: () => saved.promise, edge: async (route, body, _settings, base) => {
+    if (route === 'dialogue-response-segments') return segmentedReply(await base('dialogue-turn', body), tail.promise);
+    return base(route, body);
+  } });
+  await f.dialogue.initialize(); f.dialogue.create(turnRequest(1)); await settle();
+  assert.equal(f.count('dialogue-response-segments'), 0);
+  saved.resolve(clone(inputIds)); await until(() => player.calls.play.length === 1);
+  assert.equal(player.calls.begin.length, 1); assert.equal(player.calls.enqueue.length, 1); assert.equal(player.calls.prepare.length, 0);
+  assert.equal(player.calls.begin[0][1], f.replies[0].textSha256); assert.equal(player.calls.begin[0][2], f.replies[0].text);
+  assert.equal(player.calls.seal.length, 0); assert.equal(f.queued.length, 0); assert.equal(f.dialogue.state.pending, true);
+  assert.equal(f.count('dialogue-turn'), 0); assert.equal(f.count('dialogue-synthesis'), 0); assert.equal(f.count('dialogue-response'), 0);
+  tail.resolve(); await until(() => player.calls.seal.length === 1);
+  assert.equal(f.queued.length, 0, 'the transport completion alone is not heard evidence');
+  f.event('played_through', f.replies[0].owner, strong); await until(() => f.queued.length === 1);
+  assert.deepEqual(f.queued[0].qualifiedUserEventIds, inputIds.qualifiedUserEventIds); assert.equal(f.dialogue.state.pending, false);
+});
+
+test('cancelling a played segmented prefix closes its reader without late seal or fallback', async t => {
+  const tail = deferred(), player = segmentedPlayerFixture(); let readerCancels = 0;
+  const f = fixture(t, { segmented: true, player, edge: async (route, body, _settings, base) => {
+    if (route === 'dialogue-response-segments') return segmentedReply(await base('dialogue-turn', body), tail.promise, () => readerCancels++);
+    return base(route, body);
+  } });
+  await f.dialogue.initialize(); f.dialogue.create(turnRequest(1)); await until(() => player.calls.play.length === 1);
+  assert.equal(await f.dialogue.cancel({ turnNonce: f.replies[0].owner.turnNonce, reason: 'accepted_turn' }), true);
+  await until(() => readerCancels === 1); tail.resolve(); await settle();
+  assert.equal(player.calls.cancel.length, 1); assert.equal(player.calls.seal.length, 0); assert.equal(player.calls.play.length, 1);
+  f.event('played_through', f.replies[0].owner, strong); await settle();
+  assert.equal(f.queued.length, 0); assert.equal(f.transcripts.length, 1); assert.deepEqual(f.failures, []);
+  assert.equal(f.count('dialogue-turn'), 0); assert.equal(f.count('dialogue-synthesis'), 0); assert.equal(f.count('dialogue-response'), 0);
+});
+
+test('a segmented budget error after a prefix stops playback and preserves only the saved canonical transcript', async t => {
+  const tail = deferred(), player = segmentedPlayerFixture();
+  const f = fixture(t, { segmented: true, player, edge: async (route, body, _settings, base) => {
+    if (route === 'dialogue-response-segments') return segmentedReply(await base('dialogue-turn', body), tail.promise, undefined, 'COST_BUDGET_EXCEEDED');
+    return base(route, body);
+  } });
+  await f.dialogue.initialize(); f.dialogue.create(turnRequest(1)); await until(() => player.calls.play.length === 1);
+  tail.resolve(); await until(() => f.failures.length === 1);
+  assert.deepEqual(f.failures, [{ code: 'COST_BUDGET_EXCEEDED', recoveryNeeded: true }]);
+  assert.equal(player.calls.cancel.length, 1); assert.equal(player.calls.seal.length, 0); assert.equal(f.transcripts.length, 1);
+  f.event('played_through', f.replies[0].owner, strong); await settle(); assert.equal(f.queued.length, 0);
+  assert.equal(f.count('dialogue-response-segments'), 1); assert.equal(f.count('dialogue-response'), 0); assert.equal(f.count('dialogue-turn'), 0); assert.equal(f.count('dialogue-synthesis'), 0);
+});
+
+test('a final seal may synchronously complete already strongly played segments exactly once', async t => {
+  const tail = deferred(), player = segmentedPlayerFixture();
+  player.seal = async (...args) => {
+    player.calls.seal.push(args);
+    player.eventHook({ kind: 'played_through', owner: clone(args[0]), ...strong });
+    return true;
+  };
+  const f = fixture(t, { segmented: true, player, edge: async (route, body, _settings, base) => route === 'dialogue-response-segments' ? segmentedReply(await base('dialogue-turn', body), tail.promise) : base(route, body) });
+  await f.dialogue.initialize(); f.dialogue.create(turnRequest(1)); await until(() => player.calls.play.length === 1);
+  tail.resolve(); await until(() => f.queued.length === 1); await settle();
+  assert.equal(f.dialogue.state.pending, false); assert.deepEqual(f.failures, []); assert.equal(player.calls.seal.length, 1);
+  f.event('played_through', f.replies[0].owner, strong); await settle(); assert.equal(f.queued.length, 1);
+});
+
+test('a candidate arriving during segment plan admission stays held before the first part is played', async t => {
+  const begin = deferred(), tail = deferred(), player = segmentedPlayerFixture();
+  player.begin = async (...args) => { player.calls.begin.push(args); return begin.promise; };
+  const f = fixture(t, { segmented: true, player, edge: async (route, body, _settings, base) => route === 'dialogue-response-segments' ? segmentedReply(await base('dialogue-turn', body), tail.promise) : base(route, body) });
+  await f.dialogue.initialize(); f.dialogue.create(turnRequest(1)); await until(() => player.calls.begin.length === 1);
+  const decision = { turnNonce: f.replies[0].owner.turnNonce, candidateId: 'noise-during-plan', decisionEpoch: 1 };
+  assert.equal(f.dialogue.pauseCandidate(decision), true); assert.equal(player.calls.play.length, 0);
+  begin.resolve(true); await until(() => player.calls.play.length === 1);
+  assert(player.calls.pause.some(value => value.candidateId === decision.candidateId && value.decisionEpoch === 1));
+  assert.equal(f.dialogue.resolveCandidate({ ...decision, kind: 'rejected_noise' }), true);
+  assert.equal(player.calls.resolve.at(-1).kind, 'rejected_noise'); tail.resolve(); await until(() => player.calls.seal.length === 1);
+});
+
+test('scope invalidation during segment admission prevents late playback and full heard evidence', async t => {
+  const enqueue = deferred(), tail = deferred(), player = segmentedPlayerFixture();
+  player.enqueue = async (...args) => { player.calls.enqueue.push(args); return enqueue.promise; };
+  const f = fixture(t, { segmented: true, player, edge: async (route, body, _settings, base) => route === 'dialogue-response-segments' ? segmentedReply(await base('dialogue-turn', body), tail.promise) : base(route, body) });
+  await f.dialogue.initialize(); f.dialogue.create(turnRequest(1)); await until(() => player.calls.enqueue.length === 1);
+  f.dialogue.invalidate('scope_changed'); f.setCurrent(false); enqueue.resolve(true); tail.resolve(); await settle();
+  assert.equal(player.calls.play.length, 0); assert.equal(player.calls.seal.length, 0); assert.equal(f.queued.length, 0); assert.deepEqual(f.failures, []);
+});
 
 test('saved caller ACK gates content requests; exact canonical text is retained before synthesis and generation readiness is not completion', async t => {
   const saved = deferred(), synthesis = deferred();

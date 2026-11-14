@@ -546,7 +546,7 @@ try {
   } finally { releaseFinish?.(); transport.finishGate = null; await delayContext.close(); }
 
   await context.close();
-  const buildEnv = { ...process.env, PUBLIC_SUPABASE_URL: project, PUBLIC_SUPABASE_KEY: 'sb_publishable_local_fixture' };
+  const buildEnv = { ...process.env, BUILD_SITE_URL:base+'/built/', PUBLIC_SUPABASE_URL: project, PUBLIC_SUPABASE_KEY: 'sb_publishable_local_fixture' };
   try {
     execFileSync(process.execPath, ['scripts/build-web.mjs', '--require-config'], { env: buildEnv, stdio: 'pipe' });
     const html = await readFile('dist/index.html', 'utf8');
@@ -561,7 +561,7 @@ try {
     await built.close();
     console.log('PASS: production bundle runs post-call feedback under hashed CSP without JavaScript errors.');
   } finally {
-    execFileSync(process.execPath, ['scripts/build-web.mjs'], { env: { ...process.env, PUBLIC_SUPABASE_URL: '', PUBLIC_SUPABASE_KEY: '' }, stdio: 'pipe' });
+    execFileSync(process.execPath, ['scripts/build-web.mjs'], { env: { ...process.env, BUILD_SITE_URL:base+'/built/', PUBLIC_SUPABASE_URL: '', PUBLIC_SUPABASE_KEY: '' }, stdio: 'pipe' });
   }
   assert.deepEqual(transport.errors, [], 'no browser JavaScript errors');
 } finally {

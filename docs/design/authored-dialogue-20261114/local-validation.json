@@ -1,0 +1,24 @@
+{
+  "source_commit": "b6d856cfbc539d6c9798fe5cbff3a896643a4af8",
+  "runtime_tree_sha256": "9080f39f63615fd7ec6a913cc737199fe83f953eb28c6f29eec851cd5cfc336a",
+  "unit_database_passed": 633,
+  "unit_database_failed": 0,
+  "browser_scripts_passed": 21,
+  "authored_native_cases_passed": 12,
+  "real_orchestration_to_pglite_cases_passed": 5,
+  "syntax_types_passed": true,
+  "memory_eval_passed": true,
+  "synthetic_learning_eval_passed": true,
+  "presence_passed": true,
+  "logs_sha256": {
+    "unit_database": "555954061363860dfb0aca1382d2a3670715019fd72803320dd4411e65a0b028",
+    "syntax_types": "aa42c28c97aba4fb4ef7796655c8a48b9a703d4d75865f4bf31de6aaaa66749b",
+    "memory_eval": "9155d8308e009d1a6c494005d6ff72b3a273bbd3e2b1ab84ac6c0a94f2feb8e6",
+    "learning_eval": "554df1ae3654f780677542df32ad48ea0b14b6642e256318cd5e4bbf35dbec34",
+    "presence": "86d30126698593a86cf69d1f261deae6eb1bdc0dc1dbc32c91911e43b2ec5db6",
+    "browser": "c17395efba64bae661d0386b0ce8f71143a6f9d7c9a9ca5493f91fbf67c6eb22"
+  },
+  "actual_provider_generation_scope": "Separate bounded combined probe: writer2+reader2; see combined evidence. Other functional provider/auth/DB/RTC inputs are synthetic.",
+  "live_microphone_or_physical_acoustics_verified": false,
+  "production_release_verified_by_this_record": false
+}

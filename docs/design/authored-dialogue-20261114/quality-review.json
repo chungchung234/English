@@ -1,0 +1,141 @@
+{
+  "version": "independent-synthetic-dialogue-quality-review-v1",
+  "review_date_utc": "2026-11-14",
+  "baseline_source": "a4f712e808145742239855edf1add136d6824edf",
+  "scope": "synthetic transcript content only; not an activation or production-call result",
+  "reviewer": "independent agent /root/dialogue_quality_review",
+  "review_design": {
+    "conditions": {
+      "v5": "Realtime mini audio-generated transcript with deployed-v5 instructions",
+      "B": "Responses content writer with the same instruction and synthetic context fixtures"
+    },
+    "calls_per_condition": 3,
+    "responses_per_condition": 12,
+    "turns_read": 24,
+    "rubric_dimensions": [
+      "authored distinction",
+      "current caller detail",
+      "relevant own perspective",
+      "attribution and time",
+      "companion cadence",
+      "repetition"
+    ],
+    "judgments": 144,
+    "exact_output_evidence_substrings_validated": 144,
+    "blind": false,
+    "stochastic_replications": 0,
+    "adaptive_caller": false,
+    "length_or_question_count_as_quality_criterion": false,
+    "composite_quality_score": null,
+    "model_route_output_format_and_reasoning_replay_change_together": true,
+    "inference_requests_by_reviewer": 0
+  },
+  "fixture_comparison": {
+    "direct_original_field_comparison": true,
+    "per_companion_gates": {
+      "mia": {
+        "users": true,
+        "opening_instructions": true,
+        "normal_instructions": true,
+        "synthetic_input": true,
+        "authored_prior_companion_quote": true,
+        "voice": true,
+        "speech_speed": true
+      },
+      "alex": {
+        "users": true,
+        "opening_instructions": true,
+        "normal_instructions": true,
+        "synthetic_input": true,
+        "authored_prior_companion_quote": true,
+        "voice": true,
+        "speech_speed": true
+      },
+      "juno": {
+        "users": true,
+        "opening_instructions": true,
+        "normal_instructions": true,
+        "synthetic_input": true,
+        "authored_prior_companion_quote": true,
+        "voice": true,
+        "speech_speed": true
+      }
+    },
+    "all_gates_passed": true,
+    "shared_runtime_tree_sha256": "fcaca1f5c07971f37e5d1d2f5348d41f4ac90932dce3dc95822b83fbd5d665a5",
+    "shared_cases_sha256": "7a33edfd6b57b8ee80ac73bca959462238a8ed107e9667908684738eccc1b52e"
+  },
+  "observations": {
+    "turns_read": 24,
+    "rubric_judgments": 144,
+    "exact_evidence_substrings_validated": 144,
+    "menu_or_service_openings": {
+      "v5": 3,
+      "B": 0
+    },
+    "first_meeting_reset_with_prior_history": {
+      "v5": 1,
+      "B": 0
+    },
+    "reported_current_utterance_invented_at_startup": {
+      "v5": 0,
+      "B": 0
+    },
+    "unambiguous_fabricated_physical_offline_or_shared_human_experiences": {
+      "v5": 0,
+      "B": 0
+    },
+    "unsupported_between_call_mental_activity_implications": {
+      "v5": 0,
+      "B": 2
+    },
+    "observed_speaker_ownership_reversals": {
+      "v5": 0,
+      "B": 0
+    },
+    "unsolicited_English_teaching_turns": {
+      "v5": 0,
+      "B": 0
+    },
+    "useful_requested_English_help": {
+      "v5": 3,
+      "B": 3
+    },
+    "same_exact_opening_first_sentence_across_all_characters": {
+      "v5": false,
+      "B": true
+    }
+  },
+  "findings": [
+    "B removed service/menu openings in this small sample and gave more concrete reasons when the caller challenged its initial view.",
+    "v5 already supplied coherent tastes and useful requested English help; B is not the first condition to answer those requests appropriately.",
+    "B retains cross-character repetition: an identical first sentence, the same paper-object recap followed by a tag/sale question, and an identical first phrasing suggestion in two characters.",
+    "B has two ambiguous unsupported implications of thinking between calls. The source-backed exhibition itself is valid; these are separately classified from fabricated physical offline activity.",
+    "No observed serious speaker-ownership reversal, fabricated physical shared visit, or invented current caller utterance at startup. This is narrower than a clean bill of health for all grounding.",
+    "A callback is optional. A generic valid greeting is not a correctness failure, though repeated multi-call variety remains unproven.",
+    "Some B metaphors and aphorisms may sound written rather than spontaneous; transcript review cannot determine delivery quality."
+  ],
+  "verdict": "Promising candidate for integration and broader evaluation; natural friendship feeling remains unproven.",
+  "limitations": [
+    "One unblinded agent reviewer; no human preference study.",
+    "Three fixed four-output trajectories per condition, one story, no stochastic replication.",
+    "No causal attribution to content/synthesis separation alone because model and request route change together.",
+    "No actual approved user data, production retrieval/admission, microphone, WebRTC, physical acoustics, speaker echo, listener hearing, full voice latency, or after-call learning outcome evaluated.",
+    "Reported audio transcript fidelity is distinct from independent waveform transcription and actual listener hearing.",
+    "No claim that conversation repetitiveness, naturalness, or noise interruption is solved."
+  ],
+  "provenance": {
+    "private_review_sha256": "bc3be471ca6041d5ad48b75d3f60950156f4e4122b20a92370168112ecabbaf6",
+    "private_summary_sha256": "ae1191f786f0260859aeaa627b1384a52646c86c82e213bc36ac35ed99efd7ae",
+    "source_output_file_sha256": {
+      "companion-v5-serial12-eval-20261114/private-mia-results.json": "e864f7ac707d84b131b8fcad31681c214f5769d713db145c1efe22f29382648e",
+      "companion-v5-serial12-eval-20261114/private-alex-results.json": "29236d129e71d53edae23df3a3208478db5eeb28b455f75c5fdc5955a9d1e844",
+      "companion-v5-serial12-eval-20261114/private-juno-results.json": "a414ca94d2845ff74d6d5b28cd4ee34ac26d9d98dd035f9510d8ce81b0631b45",
+      "companion-responses12-eval-20261114/private-mia-results.json": "03652c636e2db8d82e57ecaa2a671fd15e66cf03b186432d8c9eb954233683a3",
+      "companion-responses12-eval-20261114/private-alex-results.json": "2a94754da4d8b48ac3d4459ffda36c7ee7fb35c64412fca574f6c8f9f875ed99",
+      "companion-responses12-eval-20261114/private-juno-results.json": "b920d1e72ea349cc29abbc81435919699f7752bf8f0e9f16ac1931860ab3b817"
+    },
+    "private_full_review_not_exported": true,
+    "full_dialogue_or_reasoning_in_this_artifact": false
+  }
+}

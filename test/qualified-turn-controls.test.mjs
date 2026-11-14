@@ -447,3 +447,65 @@ test('a new normal turn supersedes an older failed-turn manual retry suggestion'
   f.utter('u2'); f.ack('r2'); f.done('r2');
   assert.equal(f.control.state.needsManualReply, false); assert.equal(f.control.forceReply(), false);
 });
+
+function authoredFixture(t, options = {}) {
+  const requests = [], cancels = [], pauses = [], decisions = [], resumes = [];
+  const transport = {kind:'authored_dialogue_v1',create:value=>requests.push(value),cancel:value=>cancels.push(value),pauseCandidate:value=>pauses.push(value),resolveCandidate:value=>decisions.push(value),resume:value=>resumes.push(value)};
+  const f=fixture(t,{outputTransport:transport,...options});
+  const lifecycle=(kind,extra={},request=requests.at(-1))=>f.control.authoredOutput({kind,turnNonce:request.turnNonce,...extra});
+  const ready=(id='authored1')=>{lifecycle('text_ready',{turnId:id,itemId:id+'-item'});lifecycle('started');};
+  return {...f,requests,cancels,pauses,decisions,resumes,lifecycle,ready};
+}
+test('authored transport owns output without forging provider response requests or receipts', t=>{
+  const f=authoredFixture(t);f.control.start();assert.equal(f.requests.length,1);assert.equal(f.creates().length,0);
+  f.ready();assert.deepEqual(f.control.acceptedItemIds(),[]);
+  f.lifecycle('played_through');assert.deepEqual(f.control.acceptedItemIds(),['authored1-item']);assert.equal(f.control.blocksResponse,false);
+});
+test('authored qualified candidate pauses and empty ASR resumes the same reply without cancellation', t=>{
+  const f=authoredFixture(t);f.control.start();f.ready();
+  f.utter('noise',{transcript:''});assert.equal(f.pauses.length,1);assert.equal(f.decisions[0].kind,'rejected_noise');
+  assert.equal(f.cancels.length,0);assert.equal(f.requests.length,1);assert.equal(f.control.state.outputPaused,false);
+  f.lifecycle('played_through');assert.equal(f.requests.length,1);
+});
+test('authored failed ASR needs explicit resume while genuine caller speech cancels before the next turn', t=>{
+  const f=authoredFixture(t);f.control.start();f.ready();
+  f.utter('uncertain',{final:false});f.emit({type:'conversation.item.input_audio_transcription.failed',item_id:'uncertain'});
+  assert.equal(f.control.state.needsResume,true);assert.equal(f.control.resumeOutput(),true);assert.equal(f.resumes.length,1);
+  f.lifecycle('resumed',{decisions:f.resumes[0].decisions});assert.equal(f.control.state.needsResume,false);
+  f.utter('actual');assert.equal(f.cancels.length,1);assert.equal(f.cancels[0].reason,'accepted_turn');assert.equal(f.requests.length,1);
+  f.lifecycle('terminal');assert.equal(f.requests.length,2);assert.deepEqual(f.requests[1].userItemIds,['actual']);
+  assert(!f.control.acceptedItemIds().includes('authored1-item'));
+});
+test('authored estimated drain releases lifecycle without accepted speech and a late genuine marker can qualify the prior turn', t=>{
+  const f=authoredFixture(t);f.control.start();f.ready();const first=f.requests[0];
+  f.lifecycle('estimated_drain');assert.deepEqual(f.control.acceptedItemIds(),[]);assert.equal(f.control.blocksResponse,false);
+  f.utter('next');assert.equal(f.requests.length,2);f.lifecycle('played_through',{},first);
+  assert(f.control.acceptedItemIds().includes('authored1-item'));assert.equal(f.control.blocksResponse,true,'late evidence must not release the current output');
+});
+test('authored retired or cancelled output cannot gain accepted speech through delayed completion',t=>{
+  const f=authoredFixture(t);f.control.start();f.ready();const first=f.requests[0];f.lifecycle('estimated_drain');f.control.retireContext();
+  assert.equal(f.lifecycle('played_through',{},first),false);assert.deepEqual(f.control.acceptedItemIds(),[]);
+});
+test('unexpected provider output in authored mode is scoped cancelled and cannot enter its history',t=>{
+  const f=authoredFixture(t);f.control.start();f.ready();
+  f.emit({type:'response.created',response:{id:'foreign'}});assert.equal(f.control.state.phase,'error');
+  assert(f.sent.some(event=>event.type==='response.cancel'&&event.response_id==='foreign'));assert.equal(f.cancels.length,1);
+  assert.deepEqual(f.control.acceptedItemIds(),[]);
+});
+test('a contradictory duplicate terminal ASR cannot turn an already rejected noise candidate into a new reply',t=>{
+ const f=authoredFixture(t);f.control.start();f.ready();f.utter('settled-noise',{transcript:''});
+ f.emit({type:'conversation.item.input_audio_transcription.completed',item_id:'settled-noise',transcript:'A late contradictory fixture transcript.'});
+ assert.equal(f.cancels.length,0);assert.equal(f.requests.length,1);assert.equal(f.control.state.needsManualReply,false);
+ assert(!f.control.acceptedItemIds().includes('settled-noise'));
+});
+test('authored provider pruning preserves qualified saved context and manual approval candidates',t=>{
+ const f=authoredFixture(t);f.control.start();f.ready();f.lifecycle('played_through');
+ f.utter('saved-user');assert(f.control.prunableProviderItemIds().includes('saved-user'));
+ f.emit({type:'conversation.item.deleted',item_id:'saved-user'});
+ assert(!f.control.prunableProviderItemIds().includes('saved-user'));assert(f.control.acceptedItemIds().includes('saved-user'));
+ assert(f.control.contextItemIds().includes('saved-user'),'provider buffer deletion is not source/privacy retirement');
+ f.utter('manual-user',{qualified:false});f.emit({type:'conversation.item.deleted',item_id:'manual-user'});
+ f.lifecycle('text_ready',{turnId:'second',itemId:'second-item'});f.lifecycle('started');f.lifecycle('played_through');
+ assert.equal(f.control.forceReply(),true);assert.deepEqual(f.requests.at(-1).userItemIds,['manual-user']);
+ f.emit({type:'input_audio_buffer.speech_started',item_id:'unfinished'});f.voice();assert(!f.control.prunableProviderItemIds().includes('unfinished'));
+});

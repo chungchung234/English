@@ -1,3 +1,4 @@
+import { authoredDialogueCapability, handleAuthoredDialogue, type DialogueDependencies } from './authored-dialogue.ts';
 import { weeklyLearningPlan } from './weekly.ts';
 import {authorizeBackground,drainPostCall,type PostCallTask} from './background.ts';
 import { HANDOFF_VERSION, HANDOFF_INSTRUCTIONS, handoffSchema, validateHandoff, handoffFailure } from './conversation-memory.ts';
@@ -525,9 +526,9 @@ export function renderConversationCheckpointRequest(events: TranscriptEvent[], c
       { role: 'user', content: [{ type: 'input_text', text: boundedJson({ context: analysisContext(events, context), transcript_events: events }) }] }],
     text: { verbosity: policy.verbosity, format: { type: 'json_schema', name: 'conversation_checkpoint', strict: true, schema: conversationCheckpointSchema } } };
 }
-function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session' | 'weekly', context: unknown, run: Run, role: 'checkpoint'): Promise<{ content: ConversationCheckpoint; model: string }>;
+function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session' | 'weekly', context: unknown, run: Run, role: 'checkpoint', preDispatch?: () => Promise<void>): Promise<{ content: ConversationCheckpoint; model: string }>;
 function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session' | 'weekly', context: unknown, run: Run, role?: 'review'): Promise<{ content: Record<string, unknown>; model: string }>;
-async function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session' | 'weekly', context: unknown, run: Run, role: 'review' | 'checkpoint' = 'review') {
+async function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session' | 'weekly', context: unknown, run: Run, role: 'review' | 'checkpoint' = 'review', preDispatch?: () => Promise<void>) {
   const policy = reviewPolicy(role === 'checkpoint' ? 'checkpoint' : kind,envValue), model = policy.model;
   const instructions = role === 'checkpoint' ? renderConversationCheckpointInstructions() : `${ANALYSIS_ROLE} ${SAFETY}\nProduce specific helpful feedback based only on the supplied user speech. Write the summary, explanations, strengths, reasons, patterns, and next scenario guidance in Korean for the Korean interface. Keep original quotations verbatim in their original language, including multilingual speech; never translate source speech into an invented English quotation. Write improved expressions and practice expressions in English. ${role === 'review' ? 'Include a concise Korean meaning for each improved/practice expression, and a short Korean usage reason for each practice expression. Describe the evidenced intended meaning; do not invent facts or mislabel Korean input as a grammar mistake. Expression kinds have no minimum counts or per-kind quotas; omit duplicates already covered by corrections. For each entry select one primary learning focus: lexical, grammar, pattern, pragmatics, interaction, or discourse. Classify lexical forms only when appropriate; colloquial language is not automatically slang and phrasal verbs are not automatically informal. Include short usage guidance and an optional illustrative two-turn example and neutral alternative only when useful; use empty strings for unnecessary content. Examples are authored illustrations, never quotations or evidence. Do not claim popularity, current trends, regional prevalence, learner level, or mastery. Use register unspecified if unsupported. learning.source_quote must be an exact substring of a cited USER event; source_is_question is true only for an explicit learner request for this expression, never for an inferred need. For strengths, expression is an exact, concise quotation from the cited USER speech only when a specific well-used expression is worth revisiting; otherwise use an empty expression and meaning. Never improve a strength quotation. A nonempty strength expression must have source_is_question false and an empty source_quote or the exact same expression. Preserve the original intended meaning and avoid decorative sophistication. Empty arrays are preferred to weak items.' : ''} Each strength, correction, practice expression, and pattern must cite one or more exact event IDs from user speech. Original text in every correction must be an exact contiguous substring of one cited user event. Classify each correction as category error only for a supported mistake in evidenced English learner speech; category alternative is a natural or stylistic alternative to valid English and must never be presented as an error. Korean speech itself is not an English grammar error. A Korean-to-English phrasing suggestion is optional only when requested by the learner or clearly supported by the supplied context; otherwise omit it. Put a newly requested expression in practice with its exact question as learning.source_quote when review learning fields are present. Reserve corrections for comparing an actual original phrase with a supported correction or alternative; Korean itself is never an English error. Prioritize a small number of useful corrections by communication impact, repetition in this sample, and relevance to the conversation context. Do not infer the learner's level or fill a correction quota. Empty arrays are appropriate when evidence is insufficient. Summary should describe this sample, not unsupported changes over time. For purpose rolling_context_checkpoint, the summary is a conversation handoff of at most 900 characters; it may describe the assistant’s last question or unresolved topic, while factual assertions about the learner still require user speech. When previous_checkpoint is supplied, make the summary a concise rolling conversation handoff: preserve still-relevant earlier facts and unresolved topic from it, then incorporate new speech. Treat the previous checkpoint as fallible data. ${kind === 'weekly' ? 'This is a seven-day sample: describe patterns with citations. Only describe change if comparing dated evidence from distinct sessions, and explicitly acknowledge the limited sample.' : ''} Suggest one optional everyday conversation idea in next_scenario; this is a review suggestion, never a required roleplay or selected topic. Extract memory_facts only for explicitly stated real user facts: name, occupation, location, learning goal, interest, or conversation preference. Roleplay character facts are not user facts. Do not extract sensitive information. Keep at most one latest fact per key, with an exact user quote and evidence IDs. Use an empty value only for an explicit request to forget that fact. Return an empty array if uncertain.`;
   const body = role === 'checkpoint' ? renderConversationCheckpointRequest(events, context, policy) : { model, store: false, max_output_tokens: policy.maxOutput, reasoning: { effort: policy.effort }, service_tier: 'default',
@@ -538,6 +539,10 @@ async function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session
   const approved = await rpc(env, 'reserve_model_spend', { p_job_id: run.job_id, p_lease_token: run.lease_token, p_model: model,
     p_policy: { version: POLICY_VERSION, ...policy }, p_reserved_usd: spendReservation(bytes(JSON.stringify(body)), model, policy.maxOutput) });
   if (approved !== true) throw budgetError('COST_BUDGET_EXCEEDED');
+  // B checkpoints attest their exact accepted source snapshot after cost
+  // reservation, immediately before the external request. Existing review
+  // and voice/checkpoint callers have no new hook or policy change.
+  if (preDispatch) await preDispatch();
   let response;
   try { response = await request('https://api.openai.com/v1/responses', {
     method: 'POST', headers: { Authorization: `Bearer ${env.openai}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -830,6 +835,50 @@ async function checkpoint(env: Env, userId: string, body: Record<string, unknown
   return voiceConfiguration(companionProfile(session.companion_id), omitted ? '' : session.scenario, current, session, compact);
 }
 
+// B is explicit and isolated: the v5 renderers and ordinary voice route above
+// are the sole prompt source; the new transport owns no replacement persona.
+function authoredDependencies(env: Env): DialogueDependencies {
+  return { get: envValue, supabase: env.supabase, key: env.openai,
+    rpc: async (name, body) => {
+      if (!name.startsWith('authored_dialogue_')) return rpc(env, name, body);
+      const response = await request(`${env.supabase}/rest/v1/rpc/${name}`, { method: 'POST', headers: { apikey: env.serviceKey, Authorization: `Bearer ${env.serviceKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        const mappings: Record<string, string> = {
+          DIALOGUE_MEMORY_CHANGED: 'MEMORY_CHANGED', DIALOGUE_FACTS_CHANGED: 'MEMORY_CHANGED', DIALOGUE_SUPPRESSED_SOURCE: 'MEMORY_CHANGED', DIALOGUE_CHECKPOINT_CHANGED: 'MEMORY_CHANGED', DIALOGUE_AUTHORITY_CHANGED: 'MEMORY_CHANGED', DIALOGUE_STALE_AUTHORITY: 'MEMORY_CHANGED',
+          DIALOGUE_SOURCE_CHANGED: 'MEMORY_SOURCE_CHANGED', DIALOGUE_SOURCE_CLOCK_CHANGED: 'MEMORY_SOURCE_CHANGED', DIALOGUE_HANDOFF_CHANGED: 'MEMORY_SOURCE_CHANGED', DIALOGUE_SHARED_SOURCE_CHANGED: 'MEMORY_SOURCE_CHANGED', DIALOGUE_OPENING_CHANGED: 'MEMORY_SOURCE_CHANGED',
+          DIALOGUE_RETIRED_HISTORY: 'HISTORY_CHANGED', DIALOGUE_UNQUALIFIED_HISTORY: 'HISTORY_CHANGED', DIALOGUE_UNPLAYED_HISTORY: 'HISTORY_CHANGED', DIALOGUE_STALE_GENERATION: 'HISTORY_CHANGED', DIALOGUE_CHECKPOINT_WITHDRAWN: 'HISTORY_CHANGED', DIALOGUE_INVALID_SOURCE_IDS: 'HISTORY_CHANGED',
+          DIALOGUE_SCENARIO_CHANGED: 'MEMORY_SOURCE_CHANGED', DIALOGUE_PREPARED_TOPIC_CHANGED: 'MEMORY_SOURCE_CHANGED', DIALOGUE_PLAYBACK_CHANGED: 'MEMORY_SOURCE_CHANGED',
+          DIALOGUE_HISTORY_CHANGED: 'HISTORY_CHANGED', DIALOGUE_INPUT_CHANGED: 'HISTORY_CHANGED', DIALOGUE_RETIRED_SOURCE: 'HISTORY_CHANGED', DIALOGUE_SESSION_ENDED: 'SESSION_ENDED', DIALOGUE_SCOPE_DENIED: 'ACCOUNT_NOT_ALLOWED',
+          DIALOGUE_CANCELLED: 'DIALOGUE_CANCELLED', DIALOGUE_NONCE_CANCELLED: 'DIALOGUE_CANCELLED', DIALOGUE_GENERATION_CHANGED: 'HISTORY_CHANGED', DIALOGUE_NONCE_CHANGED: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_INVALID_REQUEST: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_INVALID_CURRENT_SPEECH: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_CURRENT_SOURCE_AS_HISTORY: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_INVALID_CONTEXT: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_INVALID_OPENING: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_INVALID_CONVERSATION: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_INVALID_QUOTE: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_INVALID_SHARED_SOURCE: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_INVALID_SHARED_PREFIX: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_INVALID_REPORTS: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_INVALID_CANCELLATION: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_CANCEL_OWNER_CHANGED: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_PLAYBACK_OWNER_CHANGED: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_PLAYBACK_USER_CHANGED: 'INVALID_DIALOGUE_REQUEST', DIALOGUE_PLAYBACK_UNPUBLISHED: 'HISTORY_CHANGED', DIALOGUE_INVALID_LEASE: 'DIALOGUE_IN_PROGRESS', DIALOGUE_SYNTHESIS_INVALID: 'DIALOGUE_IN_PROGRESS', DIALOGUE_PUBLICATION_INVALID: 'MEMORY_SOURCE_CHANGED', DIALOGUE_TEXT_INVALID: 'DIALOGUE_OUTPUT_INVALID',
+        };
+        const code = typeof result?.message === 'string' ? mappings[result.message] : undefined;
+        throw new AppError(code ? code === 'ACCOUNT_NOT_ALLOWED' ? 403 : code === 'INVALID_DIALOGUE_REQUEST' ? 400 : 409 : 503, code ?? 'DATABASE_UNAVAILABLE', 'The conversation state could not be verified. Please retry.');
+      }
+      return result;
+    },
+    session: (userId, sessionId) => ownedSession(env, userId, sessionId),
+    events: (userId, sessionId) => transcript(env, userId, [sessionId], false),
+    prepare: async (userId, session, omitted, purpose, checkpoint) => {
+      const memory = omitted ? omittedMemories(session.companion_id) : await memories(env, userId, session.companion_id, session, undefined, true, true);
+      const companion = companionProfile(session.companion_id), clock = callClock(session), scenario = omitted ? '' : session.scenario;
+      const note = checkpoint ? { version: CONVERSATION_CHECKPOINT_VERSION, summary: checkpoint.summary } : undefined;
+      const context = liveVoiceContext(companion.id, scenario, memory, clock, note, session.id).context;
+      const opening = purpose === 'startup' ? await prepareOpening(env, userId, companion, session, memory, scenario, clock) : null;
+      return { instructions: opening ? opening.instructions : renderVoiceInstructions(companion, { ...session, scenario }, memory, undefined, clock, note), context, opening: opening?.context ?? null,
+        verify: async () => { if (!omitted) await verifyMemory(env, userId, session.companion_id, memory); if (opening) await opening.verify(); } };
+    },
+    summarize: async (userId, session, fresh, prior, run, preDispatch) => {
+      // The summary contains conversation continuity only. Provider reasoning
+      // state is never passed through this ordinary checkpoint schema.
+      const generated = await modelAnalysis(env, fresh, 'session', { scenario: '', purpose: 'ongoing_conversation_continuity', previous_checkpoint: prior ? { summary: prior } : null }, run as Run, 'checkpoint', preDispatch);
+      return generated.content.summary;
+    },
+    legacyCheckpoints: async (userId, sessionId, prefix) => await rest(env, `analysis_jobs?${query({ select: 'request_key,result', user_id: `eq.${userId}`, session_id: `eq.${sessionId}`, kind: 'eq.checkpoint', state: 'eq.completed', request_key: `like.${prefix}*`, order: 'updated_at.asc', limit: '100' })}`) as { request_key: string; result: Record<string, unknown> }[],
+    bootstrapVoice: (userId, body) => voice(env, userId, body),
+  };
+}
+
 export async function handler(req: Request): Promise<Response> {
   let cors: Record<string, string> = { Vary: 'Origin' };
   try {
@@ -839,7 +888,7 @@ export async function handler(req: Request): Promise<Response> {
     if (origin) cors = { ...cors, 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Max-Age': '600' };
     if (req.method === 'OPTIONS') { if (!origin) throw new AppError(403, 'ORIGIN_NOT_ALLOWED', 'An allowed origin is required.'); return new Response(null, { status: 204, headers: cors }); }
     const endpoint = new URL(req.url).pathname.replace(/\/$/, '').split('/').pop();
-    if (!['config', 'voice', 'voice-context', 'review', 'weekly', 'memory', 'memory-prepare', 'background-work', 'checkpoint', 'memory-index', 'memory-manage', 'reconsider', 'usage-observe'].includes(endpoint || '')) throw new AppError(404, 'NOT_FOUND', 'This endpoint was not found.');
+    if (!['dialogue-context', 'dialogue-turn', 'dialogue-synthesis', 'dialogue-cancel', 'dialogue-playback', 'dialogue-voice', 'config', 'voice', 'voice-context', 'review', 'weekly', 'memory', 'memory-prepare', 'background-work', 'checkpoint', 'memory-index', 'memory-manage', 'reconsider', 'usage-observe'].includes(endpoint || '')) throw new AppError(404, 'NOT_FOUND', 'This endpoint was not found.');
     if (req.method !== 'POST' && !(endpoint === 'config' && req.method === 'GET')) throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Use POST for this endpoint.');
     const env = environment();
     if(endpoint==='background-work'){
@@ -852,10 +901,11 @@ export async function handler(req: Request): Promise<Response> {
       return json(await drainPostCall({rpc:(name,body)=>rpc(env,name,body),memory:task=>prepareConversationMemory(env,task.user_id,{sessionId:task.session_id,companionId:task.companion_id}),review:task=>review(env,task.user_id,{sessionId:task.session_id},'session',task)}),200,cors);
     }
     const userId = await authenticate(req, env);
-    if (endpoint === 'config') return json({ models: { voice: env.voice, coach: env.coach, checkpoint: env.checkpoint, analysis: env.analysis, embedding: env.embedding, transcription: 'gpt-realtime-whisper' }, policy: {version: POLICY_VERSION,session:reviewPolicy('session',envValue),weekly:reviewPolicy('weekly',envValue),checkpoint:reviewPolicy('checkpoint',envValue),dailyTextReservationUsd:1}, capabilities: {manual_turns_v1:true}, companions: COMPANIONS }, 200, cors);
+    if (endpoint === 'config') return json({ models: { voice: env.voice, coach: env.coach, checkpoint: env.checkpoint, analysis: env.analysis, embedding: env.embedding, transcription: 'gpt-realtime-whisper' }, policy: {version: POLICY_VERSION,session:reviewPolicy('session',envValue),weekly:reviewPolicy('weekly',envValue),checkpoint:reviewPolicy('checkpoint',envValue),dailyTextReservationUsd:1}, capabilities: {manual_turns_v1:true,authored_dialogue_v1:authoredDialogueCapability(envValue)}, companions: COMPANIONS }, 200, cors);
     const body = await readBody(req);
     let result: unknown;
-    if (endpoint === 'voice-context') result = await voiceContext(env, userId, body);
+    if (endpoint?.startsWith('dialogue-')) result = await handleAuthoredDialogue(endpoint, userId, body, authoredDependencies(env), req.signal);
+    else if (endpoint === 'voice-context') result = await voiceContext(env, userId, body);
     else if (endpoint === 'memory-prepare') result = await prepareConversationMemory(env,userId,body);
     else if (endpoint === 'reconsider') result = await reconsider(env, userId, body);
     else if (endpoint === 'usage-observe') result = await observeUsage(env, userId, body);

@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "manifest_sha256": "6272ece2601fdab3e903181695b2edaf2226bf04380bbae7385549afc348002f",
+  "actual_provider_requests": 0,
+  "files_checked": 2,
+  "typed_prebundle_entries_checked": true,
+  "same_entries_are_esbuild_deployment_inputs": true,
+  "no_config": true,
+  "node_modules_dir": "none",
+  "fresh_task_cache": true,
+  "compiler_output_sha256": "73d8fd0daa2e99ea1b09db944049e61ac3816b9981d5cadaa4db990eda8ec26f",
+  "compiler_exit_code": 0
+}

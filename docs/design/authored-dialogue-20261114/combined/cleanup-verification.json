@@ -1,0 +1,8 @@
+{
+  "management_read_only": true,
+  "http_status": 200,
+  "temporary_function_count": 2,
+  "temporary_functions_absent": true,
+  "runner_cleanup_flags": true,
+  "actual_provider_requests_this_verification": 0
+}

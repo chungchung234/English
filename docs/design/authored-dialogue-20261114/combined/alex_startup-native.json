@@ -1,0 +1,118 @@
+{
+  "id": "alex_startup",
+  "original_private_snapshot_sha256": "8a96e595f3773eadf2e01673e3a284faaabefbaa8823c8ea88dd1dc508f17b2f",
+  "trace": {
+    "id": "alex_startup",
+    "failed": false,
+    "failure_code": "none",
+    "dispatch_at": 499.80000001192093,
+    "network_received_at": 5684,
+    "pcm_prepared_at": 5733.099999964237,
+    "first_nonzero_reference_at": 5754.899999976158,
+    "first_nonzero_input_index": 57,
+    "first_nonzero_playback_time": 5.093877551020408,
+    "pre_admission_zero_callbacks": 872,
+    "nonzero_before_admission": false,
+    "reference_callbacks": 1465,
+    "peak": 0.5861303806304932,
+    "first_nonzero_elapsed_ms": 5255.099999964237,
+    "within_activation_budget": true,
+    "native_completed": true,
+    "dispatch_to_network_received_ms": 5184.199999988079,
+    "finished_at": 9190.099999964237
+  },
+  "done": true,
+  "events": [
+    {
+      "kind": "ready",
+      "at": 5733.099999964237,
+      "owner_sha256": "86667581367b6e000ec437300d23da567984a2243a9bf1e33d5ce596d004f485",
+      "event": {
+        "kind": "ready",
+        "cursor": {
+          "sourceFrame": 0,
+          "phaseNumerator": 0,
+          "phaseDenominator": 44100,
+          "renderedContextFrames": 0
+        },
+        "owner_sha256": "86667581367b6e000ec437300d23da567984a2243a9bf1e33d5ce596d004f485"
+      }
+    },
+    {
+      "kind": "started",
+      "at": 5734.699999988079,
+      "owner_sha256": "86667581367b6e000ec437300d23da567984a2243a9bf1e33d5ce596d004f485",
+      "event": {
+        "kind": "started",
+        "cursor": {
+          "sourceFrame": 69,
+          "phaseNumerator": 29100,
+          "phaseDenominator": 44100,
+          "renderedContextFrames": 128
+        },
+        "owner_sha256": "86667581367b6e000ec437300d23da567984a2243a9bf1e33d5ce596d004f485"
+      }
+    },
+    {
+      "kind": "render_drained",
+      "at": 9114.599999964237,
+      "owner_sha256": "86667581367b6e000ec437300d23da567984a2243a9bf1e33d5ce596d004f485",
+      "event": {
+        "kind": "render_drained",
+        "sourceFrames": 81130,
+        "finalContextFrameExclusive": 372309,
+        "cursor": {
+          "sourceFrame": 81130,
+          "phaseNumerator": 15000,
+          "phaseDenominator": 44100,
+          "renderedContextFrames": 149077
+        },
+        "owner_sha256": "86667581367b6e000ec437300d23da567984a2243a9bf1e33d5ce596d004f485"
+      }
+    },
+    {
+      "kind": "played_through",
+      "at": 9179.099999964237,
+      "owner_sha256": "86667581367b6e000ec437300d23da567984a2243a9bf1e33d5ce596d004f485",
+      "event": {
+        "kind": "played_through",
+        "sourceFrames": 81130,
+        "finalContextFrameExclusive": 372309,
+        "outputTimestampContextTime": 8.470132,
+        "evidence": "client_reported_playback_completed",
+        "owner_sha256": "86667581367b6e000ec437300d23da567984a2243a9bf1e33d5ce596d004f485"
+      }
+    }
+  ],
+  "state": {
+    "status": "played_through",
+    "cursor": {
+      "sourceFrame": 81130,
+      "phaseNumerator": 15000,
+      "phaseDenominator": 44100,
+      "renderedContextFrames": 149077
+    },
+    "terminal": false,
+    "paused": false,
+    "completed": true,
+    "contextState": "running",
+    "completionKind": "played_through",
+    "playedThrough": true,
+    "sampleRate": 44100,
+    "finalContextFrameExclusive": 372309,
+    "continuityUncertain": false,
+    "owner_sha256": "86667581367b6e000ec437300d23da567984a2243a9bf1e33d5ce596d004f485"
+  },
+  "output": {
+    "sampleRate": 44100,
+    "state": "running",
+    "baseLatency": 0.01,
+    "outputLatency": 0.032,
+    "timestamp": {
+      "contextTime": 8.490038,
+      "performanceTime": 9193.899999976158
+    }
+  },
+  "worklet_sha256": "41f9726d8d2bd7a8fe992aa17888f45a3ba7633092d30b2a2d687b3f6f7856ea",
+  "raw_owner_identifiers_or_urls_included": false
+}

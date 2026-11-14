@@ -87,12 +87,12 @@ npm test
 npm run test:browser
 npm run test:presence
 npm run eval:memory
-npm run build
+BUILD_SITE_URL=http://127.0.0.1:4173/built/ npm run build
 ```
 
 브라우저 테스트는 Chromium을 사용합니다. `/usr/bin/chromium`이 아닌 경우 `CHROMIUM_PATH`를 지정하세요. 브라우저 테스트의 음성·외부 API 응답은 모의 값이며 실제 음성 연결을 검증하지 않습니다. DB 테스트는 PGlite PostgreSQL 엔진에서 실제 SQL·RLS·복원·분석 경계를 검사합니다.
 
-`npm run dev`는 내부 개발 검증용 정적 파일 서버입니다. 운영 때 이 서버를 실행할 필요는 없습니다. 각 클라우드 작업은 이미 격리되어 있으므로 기존 체크아웃을 사용하고 별도 Git worktree를 만들지 않습니다.
+`npm run dev`는 내부 개발 검증용 정적 파일 서버입니다. 개발 서버는 현재 Worklet의 해시 자산 경로를 자동으로 제공하므로 `BUILD_SITE_URL` 설정이 필요 없습니다. 운영 때 이 서버를 실행할 필요는 없습니다. 각 클라우드 작업은 이미 격리되어 있으므로 기존 체크아웃을 사용하고 별도 Git worktree를 만들지 않습니다.
 
 ## 새 Supabase 프로젝트 연결
 
@@ -130,13 +130,13 @@ python3 scripts/deploy.py --apply
 3. 소스를 `main`에 반영하면 `.github/workflows/pages.yml`이 공개 연결 정보를 포함한 정적 페이지를 빌드·게시합니다. 소스는 `main`에 반영됐습니다. Pages 자동 활성화도 시도하며 저장소 권한이 부족하면 위 설정을 직접 지정해야 합니다. 첫 실제 CI 실행은 공개 연결 정보 누락으로 빌드 단계에서 중단됐으며, 이후 CI는 Repository secret/variable 양쪽을 지원합니다.
 4. Actions 배포 결과에 표시된 실제 URL에서 이메일 로그인과 마이크 허용을 검증합니다. HTTPS가 필요합니다.
 
-직접 빌드하려면 같은 `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_KEY` 환경 변수를 설정한 뒤 실행합니다.
+직접 빌드하려면 같은 `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_KEY` 환경 변수와 실제 게시할 사이트의 기준 주소 `BUILD_SITE_URL`을 설정한 뒤 실행합니다. 주소에는 프로젝트 하위 경로를 포함합니다. GitHub Pages CI는 `GITHUB_REPOSITORY`에서 이 주소를 자동으로 정하며, 별도 도메인에 게시할 때는 `BUILD_SITE_URL`로 지정합니다.
 
 ```sh
-npm run build -- --require-config
+BUILD_SITE_URL=https://example.com/English/ npm run build -- --require-config
 ```
 
-빌드는 앱과 공식 인증 SDK를 `dist/assets/app.<해시>.js`에 묶고 SRI와 CSP 해시로 검증합니다. CSS는 HTML에 포함하고 캐릭터 이미지는 별도 해시 파일로 분리하므로 배포할 때 `dist/` 전체를 게시합니다. 방문자는 API 설정 화면 없이 로그인부터 시작합니다. Supabase 관리 토큰이 있으면 공개 키는 관리 API에서 자동 조회하며 브라우저에 관리 토큰을 포함하지 않습니다. 연결 정보 없이 로컬 빌드를 하면 ‘서비스 준비 중’ 화면이며, CI의 `--require-config`는 설정 누락 시 게시를 중단합니다.
+빌드는 앱과 공식 인증 SDK를 `dist/assets/app.<해시>.js`에 묶고 SRI와 CSP 해시로 검증합니다. PCM Worklet은 별도 `dist/assets/verified-pcm-worklet.<해시>.js`로 생성하며, 앱에 고정한 주소·전체 해시와 CSP의 해당 자산 URL 허용을 사용합니다. `addModule` 자체는 SRI를 지원하지 않습니다. CSS는 HTML에 포함하고 캐릭터 이미지는 별도 해시 파일로 분리하므로 배포할 때 `dist/` 전체를 게시합니다. 방문자는 API 설정 화면 없이 로그인부터 시작합니다. Supabase 관리 토큰이 있으면 공개 키는 관리 API에서 자동 조회하며 브라우저에 관리 토큰을 포함하지 않습니다. 연결 정보 없이 로컬 빌드를 하면 ‘서비스 준비 중’ 화면이며, CI의 `--require-config`는 설정 누락 시 게시를 중단합니다.
 
 세 키는 용도가 다릅니다: Supabase publishable 키는 공개 앱 연결용, `OPENAI_API_KEY`는 서버의 AI 호출용, `SUPABASE_ACCESS_TOKEN`은 운영자의 배포용입니다. 뒤의 두 키를 웹 빌드에 포함하지 않습니다.
 

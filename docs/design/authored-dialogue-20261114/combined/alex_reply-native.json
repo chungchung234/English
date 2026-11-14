@@ -1,0 +1,118 @@
+{
+  "id": "alex_reply",
+  "original_private_snapshot_sha256": "c1ab2a9371ae2a3953e1253ed02dfb0f0ec6921ab189104d6d2017bc4a732605",
+  "trace": {
+    "id": "alex_reply",
+    "failed": false,
+    "failure_code": "none",
+    "dispatch_at": 446,
+    "network_received_at": 5919.699999988079,
+    "pcm_prepared_at": 6084.100000023842,
+    "first_nonzero_reference_at": 6108.800000011921,
+    "first_nonzero_input_index": 57,
+    "first_nonzero_playback_time": 5.5147392290249435,
+    "pre_admission_zero_callbacks": 944,
+    "nonzero_before_admission": false,
+    "reference_callbacks": 3464,
+    "peak": 0.45196160674095154,
+    "first_nonzero_elapsed_ms": 5662.800000011921,
+    "within_activation_budget": true,
+    "native_completed": true,
+    "dispatch_to_network_received_ms": 5473.699999988079,
+    "finished_at": 21059.899999976158
+  },
+  "done": true,
+  "events": [
+    {
+      "kind": "ready",
+      "at": 6084.100000023842,
+      "owner_sha256": "0e38f1b2ff9f00ac60138d9eab245d0da823a74800cda5ba8c84c2850c875515",
+      "event": {
+        "kind": "ready",
+        "cursor": {
+          "sourceFrame": 0,
+          "phaseNumerator": 0,
+          "phaseDenominator": 44100,
+          "renderedContextFrames": 0
+        },
+        "owner_sha256": "0e38f1b2ff9f00ac60138d9eab245d0da823a74800cda5ba8c84c2850c875515"
+      }
+    },
+    {
+      "kind": "started",
+      "at": 6088.100000023842,
+      "owner_sha256": "0e38f1b2ff9f00ac60138d9eab245d0da823a74800cda5ba8c84c2850c875515",
+      "event": {
+        "kind": "started",
+        "cursor": {
+          "sourceFrame": 69,
+          "phaseNumerator": 29100,
+          "phaseDenominator": 44100,
+          "renderedContextFrames": 128
+        },
+        "owner_sha256": "0e38f1b2ff9f00ac60138d9eab245d0da823a74800cda5ba8c84c2850c875515"
+      }
+    },
+    {
+      "kind": "render_drained",
+      "at": 20991.69999998808,
+      "owner_sha256": "0e38f1b2ff9f00ac60138d9eab245d0da823a74800cda5ba8c84c2850c875515",
+      "event": {
+        "kind": "render_drained",
+        "sourceFrames": 350721,
+        "finalContextFrameExclusive": 886242,
+        "cursor": {
+          "sourceFrame": 350721,
+          "phaseNumerator": 3900,
+          "phaseDenominator": 44100,
+          "renderedContextFrames": 644450
+        },
+        "owner_sha256": "0e38f1b2ff9f00ac60138d9eab245d0da823a74800cda5ba8c84c2850c875515"
+      }
+    },
+    {
+      "kind": "played_through",
+      "at": 21053.80000001192,
+      "owner_sha256": "0e38f1b2ff9f00ac60138d9eab245d0da823a74800cda5ba8c84c2850c875515",
+      "event": {
+        "kind": "played_through",
+        "sourceFrames": 350721,
+        "finalContextFrameExclusive": 886242,
+        "outputTimestampContextTime": 20.120115,
+        "evidence": "client_reported_playback_completed",
+        "owner_sha256": "0e38f1b2ff9f00ac60138d9eab245d0da823a74800cda5ba8c84c2850c875515"
+      }
+    }
+  ],
+  "state": {
+    "status": "played_through",
+    "cursor": {
+      "sourceFrame": 350721,
+      "phaseNumerator": 3900,
+      "phaseDenominator": 44100,
+      "renderedContextFrames": 644450
+    },
+    "terminal": false,
+    "paused": false,
+    "completed": true,
+    "contextState": "running",
+    "completionKind": "played_through",
+    "playedThrough": true,
+    "sampleRate": 44100,
+    "finalContextFrameExclusive": 886242,
+    "continuityUncertain": false,
+    "owner_sha256": "0e38f1b2ff9f00ac60138d9eab245d0da823a74800cda5ba8c84c2850c875515"
+  },
+  "output": {
+    "sampleRate": 44100,
+    "state": "running",
+    "baseLatency": 0.01,
+    "outputLatency": 0.032,
+    "timestamp": {
+      "contextTime": 20.160035,
+      "performanceTime": 21087.5
+    }
+  },
+  "worklet_sha256": "41f9726d8d2bd7a8fe992aa17888f45a3ba7633092d30b2a2d687b3f6f7856ea",
+  "raw_owner_identifiers_or_urls_included": false
+}

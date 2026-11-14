@@ -1,0 +1,118 @@
+{
+  "version": "combined-synthetic-helper-native-evidence-v1",
+  "date_utc": "2026-11-14",
+  "manifest_sha256": "6272ece2601fdab3e903181695b2edaf2226bf04380bbae7385549afc348002f",
+  "backend_runtime_source_tree_sha256": "9080f39f63615fd7ec6a913cc737199fe83f953eb28c6f29eec851cd5cfc336a",
+  "backend_frozen_modules": 16,
+  "helper_bundle_product_input_modules": 9,
+  "product_verified_speech_sha256": "8f433d387785022eb042a0d8f63394c528d47f517d8cd11659c4a90288e7345f",
+  "default_npm_ws_transport": {
+    "specifier": "npm:ws@8.18.3",
+    "metafile_external_dynamic_imports_per_helper_bundle": 1,
+    "default_product_adapter_used_without_injected_open": true,
+    "actual_server_reader_completed": 2,
+    "scope": "temporary Supabase function executing exact frozen product helper; not merely a compile/string-search proof"
+  },
+  "cases_are_independent_fixed_turns": true,
+  "characters": [
+    "alex"
+  ],
+  "continuous_new_conversation": false,
+  "fixture_context_kind": "recent_conversation",
+  "fixture_recent_openings_count": 3,
+  "writer_history_mode": "current product plaintext accepted history; no encrypted include/replay",
+  "differs_from_earlier_B12_opaque_replay_condition": true,
+  "response_accounting": {
+    "writer_dispatch_attempts": 2,
+    "reader_helper_invocations": 2,
+    "known_completed_writer_responses": 2,
+    "known_completed_reader_responses": 2,
+    "known_completed_total": 4,
+    "unknown_actual_generation_upper_bound": 0,
+    "provider_cap": 4,
+    "apply_runs": 1,
+    "inference_retries": 0
+  },
+  "direct_timing": {
+    "label": "frontend dispatch to first nonzero native post-gain reference observation",
+    "clock": "same browser performance timeline; no sum of independent probes",
+    "predeclared_engineering_budget_ms": 6000,
+    "budget_is_population_user_slo": false,
+    "includes": "one local fixture relay and temporary writer-reader helper request, whole-buffer validation, product native Worklet load/prepare and post-gain reference observation",
+    "excludes": "actual auth/DB RPC/ASR and the original application two-route/controller flow",
+    "observer": "256-frame ScriptProcessor observer on product post-gain MediaStreamDestination in same AudioContext, own output muted",
+    "physical_speaker_or_hearing_timestamp": false
+  },
+  "results": [
+    {
+      "id": "alex_startup",
+      "first_nonzero_reference_ms": 5255.1,
+      "within_predeclared_budget": true,
+      "event_transcript_matches": true,
+      "final_transcript_matches": true,
+      "pcm_sha256": "284fefccbdeb35e400ad0dbab2c25ae5f55b8ca8d81926ce49531945d29f2dc9",
+      "pcm_bytes": 162260,
+      "pcm_duration_ms": 3380.417,
+      "played_through_count": 1,
+      "pcm_private_0600": true
+    },
+    {
+      "id": "alex_reply",
+      "first_nonzero_reference_ms": 5662.8,
+      "within_predeclared_budget": true,
+      "event_transcript_matches": true,
+      "final_transcript_matches": true,
+      "pcm_sha256": "365f5fff2884919ee817cb028f7ac633fdf36bf7df7424a055ac68135d8426c2",
+      "pcm_bytes": 701442,
+      "pcm_duration_ms": 14613.375,
+      "played_through_count": 1,
+      "pcm_private_0600": true
+    }
+  ],
+  "audio_format": {
+    "pcm_rate_hz": 24000,
+    "channels": 1,
+    "encoding": "signed16le",
+    "native_context_rate_hz_each": 44100
+  },
+  "native_browser_page_errors": 0,
+  "native_csp_violations": 0,
+  "original_product_player_and_worklet_bytes": true,
+  "production_build_scripts_unchanged": true,
+  "diagnostic_browser_entry_replaces_original_application_entry": true,
+  "cleanup": {
+    "temporary_functions": 2,
+    "runner_delete_and_absence": true,
+    "independent_read_only_list_http_status": 200,
+    "independent_list_absence": true
+  },
+  "verification_artifact_hashes": {
+    "verification.json": "ba57016f92078b852bb64f70e267f45593806d7f56138c0d735fd495fcf3f391",
+    "safe-result.json": "6dbaa65932fedb05bf2ba676f16c6834c9523dfb7708a921c715f14c9f5304a3",
+    "cleanup-verification.json": "2f3b0a4e245b79fec356e3a7d3833413e2388ed28f22c4385e4a3af719aea90f",
+    "independent-review.json": "f0bc1b731f4184f91769c289c4f6e07ce48e32433bd23b7fdc6a9095ea24eb16",
+    "offline-verification.json": "c5a192c11f7002b2106e2e664d190002c881691d39843defc38e4870b749fa7f",
+    "controller-offline-verification.json": "20d8d30c318db8c62e97c6ce2859ad11daa97aa299dca67ae33ca163652c13bb",
+    "deno-check.json": "9c31c2f0a30868d60f0d271553684f5a3d57e3fa456fffacba8949bb73f4edae",
+    "dependency-graph.json": "aa71cbff2eda7ed8fe9a52a92d17ca2183d5f0aeec0bf3ff1317d90066f81e95",
+    "browser-build-verification.json": "0fb08ad0a14ce01d626f3b708df8656dadf8b4739b7484f08417ab505f9ceb82"
+  },
+  "privacy": {
+    "fixed_synthetic_context_only": true,
+    "actual_accounts_or_db_written": false,
+    "production_flags_changed_by_probe": false,
+    "credentials_or_reasoning_exported": false,
+    "raw_text_transcripts_or_audio_in_this_document": false
+  },
+  "not_verified": [
+    "live microphone or acoustic echo/noise",
+    "ASR or actual WebRTC conversation",
+    "physical listening or independent waveform word accuracy",
+    "same-character repeated-call opening diversity",
+    "friendliness or user preference",
+    "full production call latency or population latency distribution"
+  ],
+  "earlier_readaloud_failure_preserved": true,
+  "earlier_ambiguous_36_attempt_separate_unknown_bound": 36,
+  "no_further_actual_inference_authorized": true
+}

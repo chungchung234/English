@@ -365,7 +365,7 @@ try{
  await context.close();
  const fresh=await browser.newPage();await fresh.goto(base);await fresh.waitForFunction(()=>document.querySelector('#service-state').textContent.includes('서비스를 이용할 수 없어요'));assert.equal(await fresh.locator('#public-key').count(),0);assert.equal(await fresh.locator('#config-form').count(),0);
  console.log('PASS: visitors see a ready-to-use email login, no backend setup or API key fields; unconfigured deployment shows preparation status.');
- const buildEnv={...process.env,PUBLIC_SUPABASE_URL:'https://test-project.supabase.co',PUBLIC_SUPABASE_KEY:'sb_publishable_test'};
+ const buildEnv={...process.env,BUILD_SITE_URL:base+'/built/',PUBLIC_SUPABASE_URL:'https://test-project.supabase.co',PUBLIC_SUPABASE_KEY:'sb_publishable_test'};
  try{
   execFileSync(process.execPath,['scripts/build-web.mjs','--require-config'],{env:buildEnv});
   const html=await readFile('dist/index.html','utf8');assert(!html.includes('src="app.js"'));assert(html.includes("script-src 'sha256-"));
@@ -376,6 +376,6 @@ try{
   await hosted.evaluate(({uid})=>localStorage.setItem('loop.auth:https://test-project.supabase.co',JSON.stringify({access_token:'test-jwt',refresh_token:'test-refresh',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:uid}})),{uid});
   await hosted.reload();await hosted.locator('#workspace').waitFor({state:'visible'});assert.equal(await hosted.locator('#public-key').count(),0);await assertVisibleImagesLoaded(hosted);await hosted.screenshot({path:'test-results/mobile-built.png',fullPage:true});assert.deepEqual(hostedErrors,[]);
   console.log('PASS: production HTML runs under hashed CSP; visitors can start without configuring a backend.');
- }finally{execFileSync(process.execPath,['scripts/build-web.mjs'],{env:{...process.env,PUBLIC_SUPABASE_URL:'',PUBLIC_SUPABASE_KEY:''}});}
+ }finally{execFileSync(process.execPath,['scripts/build-web.mjs'],{env:{...process.env,BUILD_SITE_URL:base+'/built/',PUBLIC_SUPABASE_URL:'',PUBLIC_SUPABASE_KEY:''}});}
 
 }finally{await browser.close();server.kill('SIGTERM');}

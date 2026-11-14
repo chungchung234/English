@@ -1,0 +1,18 @@
+{
+  "version": "tiny-fixed-output-observation-v1",
+  "method": "root read both actual synthetic writer outputs and traces; conditions not blinded",
+  "observed_writer_outputs": 2,
+  "observed_startup_outputs": 1,
+  "characters": 1,
+  "new_continuous_dialogue": false,
+  "menu_style_startups_observed": 0,
+  "generic_existing_greeting_persists": true,
+  "paper_moon_and_price_question_pattern_persists": true,
+  "false_current_caller_speech_observed": 0,
+  "offline_experience_claims_observed": 0,
+  "interpretation_ko": "통합 경로는 통과했지만 시작은 기존의 일반 안부에 머물렀고, 후속은 기존 종이 달·가격표와 가격 질문 구조를 반복했다. 이 작은 고정 사례로 친근함이나 반복 통화 시작 다양성이 해결됐다고 판단하지 않는다.",
+  "same_character_repeat_call_opening_diversity_verified": false,
+  "naturalness_or_user_preference_verified": false,
+  "population_quality_score": null,
+  "full_quotes_or_user_data_included": false
+}

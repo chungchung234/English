@@ -1,0 +1,55 @@
+{
+  "passed": true,
+  "manifest_sha256": "6272ece2601fdab3e903181695b2edaf2226bf04380bbae7385549afc348002f",
+  "actual_provider_requests": 0,
+  "modes": [
+    {
+      "mode": "success",
+      "passed": true,
+      "deploy_mock_requests": 2,
+      "invoke_mock_requests": 2,
+      "delete_mock_requests": 2,
+      "list_mock_requests": 3,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "first_generation_failure",
+      "passed": true,
+      "deploy_mock_requests": 1,
+      "invoke_mock_requests": 1,
+      "delete_mock_requests": 1,
+      "list_mock_requests": 2,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "function_http_failure",
+      "passed": true,
+      "deploy_mock_requests": 1,
+      "invoke_mock_requests": 1,
+      "delete_mock_requests": 1,
+      "list_mock_requests": 2,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "deploy_failure",
+      "passed": true,
+      "deploy_mock_requests": 1,
+      "invoke_mock_requests": 0,
+      "delete_mock_requests": 1,
+      "list_mock_requests": 2,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "cleanup_failure",
+      "passed": true,
+      "deploy_mock_requests": 1,
+      "invoke_mock_requests": 1,
+      "delete_mock_requests": 4,
+      "list_mock_requests": 1,
+      "actual_provider_requests": 0
+    }
+  ],
+  "isolated_fake_project_only": true,
+  "all_network_intercepted": true,
+  "source_and_manifest_changed": false
+}

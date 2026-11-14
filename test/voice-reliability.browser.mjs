@@ -128,7 +128,10 @@ try {
   await page.goto(base);
   await page.evaluate(({ project, uid }) => localStorage.setItem('loop.auth:' + project, JSON.stringify({ access_token: 'fixture-jwt', refresh_token: 'fixture-refresh', expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: uid } })), { project, uid });
   await page.reload(); await page.locator('#workspace').waitFor({ state: 'visible' }); await page.clock.install();
-  await start(); await addItems('context-');
+  await start();
+  assert.equal(await page.locator('#hint-call').isDisabled(), true,
+    'a legacy connection may continue but a provider default is not an approved hint instruction base');
+  await addItems('context-');
   await page.clock.fastForward(10 * 60 * 1000 + 1);
   await emit({ type: 'response.done', response: { status: 'completed', usage: { input_tokens: 200 } } }); await page.clock.runFor(1000);
   assert.equal(checkpoints, 0, 'ten minutes alone must never interrupt a low-token conversation for compaction');
@@ -171,6 +174,19 @@ try {
   assert(await page.evaluate(started => Date.now() - started < 60000, recoveryStarted), 'recovery must finish before the normal sixty-second cooldown');
   assert.equal(await page.locator('#notice').textContent(), '', 'acknowledged context recovery should keep the call unobstructed');
 
+  const approvedInstructions = (await updates()).at(-1).session.instructions;
+  await emit({ type: 'session.updated', session: { instructions: firstUpdate.session.instructions } });
+  await emit({ type: 'session.created', session: { instructions: 'Provider default with an obsolete role.' } });
+  await emit({ type: 'session.updated', session: { audio: { output: { speed: 1 } } } });
+  assert.equal(await page.locator('#hint-call').isEnabled(), true);
+  await page.locator('#hint-call').click();
+  const hint = await page.evaluate(() => window.testMessages.filter(event => event.type === 'response.create').at(-1));
+  assert.equal(hint.response.instructions, approvedInstructions + '\nFor this response only: Suggest one short English sentence I could say next in this conversation, then let me speak.',
+    'a user-requested hint must retain the latest backend-approved context after stale/default/speed echoes');
+  assert.equal(await page.locator('#notice').textContent(), '', 'instruction mismatch diagnostics must not show a connection warning');
+  await emit({ type: 'response.done', response: { status: 'completed', usage: { input_tokens: 100 } } });
+  await emit({ type: 'output_audio_buffer.stopped' });
+
   await emit({ type: 'error', error: { event_id: 'unknown-command-fixture', code: 'invalid_request_error', message: 'Fixture nonfatal provider command error.' } });
   await utterance('after-rejection'); await eventually(() => Promise.resolve(saved.size === 1), 'normal transcription should still reach the server');
   assert.equal(await microphoneLive(), true); assert.equal(await page.locator('#notice').textContent(), '');
@@ -208,7 +224,7 @@ try {
   await page.setViewportSize({ width: 320, height: 568 }); await page.screenshot({ path: 'test-results/voice-reliability-partial-320.png', fullPage: true });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   assert.deepEqual(errors, []); assert.deepEqual(routeErrors, []);
-  await writeFile('test-results/voice-reliability-result.json', JSON.stringify({ fixture: true, checkpoints, contextLimitCooldownBypassed: true,
+  await writeFile('test-results/voice-reliability-result.json', JSON.stringify({ fixture: true, checkpoints, contextLimitCooldownBypassed: true, instructionEchoIsolation: true, legacyUnapprovedHintBlocked: true,
     sessions: sessions.map(s => ({ id: s.id, status: s.status })), diagnosticCount: diagnostics.length,
     deletionRequests: retriedDeletes.map(event => ({ item: event.item_id, eventId: event.event_id })) }, null, 2));
   console.log('PASS: ten-minute low-token calls stay uninterrupted; compaction waits for matching settings/deletion receipts, retries only unconfirmed items, bypasses the cooldown for a real context limit, recovers from timeout, records command errors without false warnings/partial completion, and preserves real disconnection/ASR failure guidance. Provider and diagnostic transports are fixtures.');

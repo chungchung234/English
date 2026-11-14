@@ -132,7 +132,8 @@ async function setup({ manual = true, startupNoise = false, detectorFailure = fa
       emit(event) { this.dc.onmessage?.({ data: JSON.stringify(event) }); }
       createDataChannel() { return this.dc = { readyState: 'open', send: raw => {
         const event = JSON.parse(raw); window.testMessages.push(event);
-        if (event.type === 'session.update' && event.session?.instructions) queueMicrotask(() => this.emit({ type: 'session.updated', session: { instructions: event.session.instructions } }));
+        if (event.type === 'session.update' && event.session?.audio?.input?.turn_detection) queueMicrotask(() => this.emit({ type: 'session.updated', session: { audio: { input: { turn_detection: event.session.audio.input.turn_detection } } } }));
+        else if (event.type === 'session.update' && event.session?.instructions) queueMicrotask(() => this.emit({ type: 'session.updated', session: { instructions: event.session.instructions } }));
         if (event.type === 'conversation.item.delete') queueMicrotask(() => this.emit({ type: 'conversation.item.deleted', item_id: event.item_id }));
         if (event.type === 'input_audio_buffer.commit') queueMicrotask(() => {
           this.emit({ type: 'input_audio_buffer.committed', item_id: 'final-fixture' });

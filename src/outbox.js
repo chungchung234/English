@@ -33,7 +33,11 @@ export function createOutbox(dbName = 'loop-outbox-v1') {
 // Delete only after server acknowledgement; retries keep the same event UUID/key.
 export async function flushOutbox(outbox, scope, send) {
   const pending = await outbox.list(scope);
-  const sessions = Map.groupBy(pending, item => item.sessionId);
+  const sessions = new Map();
+  for (const item of pending) {
+    if (!sessions.has(item.sessionId)) sessions.set(item.sessionId, []);
+    sessions.get(item.sessionId).push(item);
+  }
   for (const [sessionId, records] of sessions) {
     for (let offset = 0; offset < records.length; offset += 50) {
       const batch = records.slice(offset, offset + 50);

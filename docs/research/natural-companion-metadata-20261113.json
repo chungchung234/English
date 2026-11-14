@@ -1,0 +1,25 @@
+{
+  "query_mode": "read_only",
+  "unit": "completed_voice_preparation_job_not_verified_call",
+  "contains_transcripts": false,
+  "contains_account_ids": false,
+  "public_release": "ef11416d7ffc556d2b6aa209d002f5adf441fd2e",
+  "aggregate": {
+    "window_hours": 24,
+    "observed_at_utc": "2026-11-13T13:43:27.184668+00:00",
+    "current_policy_jobs": 2,
+    "current_policy_client_build": {
+      "other_nonempty": 2
+    },
+    "current_policy_turn_control": {
+      "provider_vad": 2
+    },
+    "current_policy_opening_reason": {
+      "absent_or_other": 2
+    },
+    "current_policy_opening_context": {
+      "absent_or_other": 2
+    },
+    "completed_voice_preparation_jobs": 2
+  }
+}

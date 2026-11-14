@@ -1,0 +1,137 @@
+{
+  "readonly": true,
+  "aggregate_only": true,
+  "data": {
+    "voice_jobs": [
+      {
+        "count": 1,
+        "state": "completed",
+        "error_code": "none",
+        "turn_control": "absent_or_other",
+        "client_build_group": "other"
+      },
+      {
+        "count": 3,
+        "state": "completed",
+        "error_code": "none",
+        "turn_control": "manual_turns_v1",
+        "client_build_group": "current_public_release"
+      },
+      {
+        "count": 2,
+        "state": "completed",
+        "error_code": "none",
+        "turn_control": "provider_vad",
+        "client_build_group": "other"
+      }
+    ],
+    "audio_policy": [
+      {
+        "code": "EXPECTED_AUDIO_POLICY",
+        "count": 3,
+        "vad_type": "unreported",
+        "effective_noise": "unreported",
+        "interrupt_response": "unreported"
+      },
+      {
+        "code": "PROVIDER_AUDIO_SETTINGS",
+        "count": 3,
+        "vad_type": "semantic_vad",
+        "effective_noise": "far_field",
+        "interrupt_response": "off"
+      },
+      {
+        "code": "PROVIDER_AUDIO_SETTINGS",
+        "count": 3,
+        "vad_type": "server_vad",
+        "effective_noise": "far_field",
+        "interrupt_response": "on"
+      }
+    ],
+    "window_hours": 48,
+    "observed_at_utc": "2026-11-14T07:38:40.688269+00:00",
+    "call_diagnostics": [
+      {
+        "code": "PROVIDER_AUDIO_SETTINGS",
+        "kind": "audio_configuration",
+        "count": 6,
+        "phase": "connected",
+        "connection_state": "connected",
+        "last_elapsed_seconds": 0,
+        "first_elapsed_seconds": 0
+      },
+      {
+        "code": "RTC_CONNECTED",
+        "kind": "connection_state",
+        "count": 5,
+        "phase": "connecting",
+        "connection_state": "connected",
+        "last_elapsed_seconds": 0,
+        "first_elapsed_seconds": 0
+      },
+      {
+        "code": "RTC_CONNECTING",
+        "kind": "connection_state",
+        "count": 5,
+        "phase": "connecting",
+        "connection_state": "connecting",
+        "last_elapsed_seconds": 0,
+        "first_elapsed_seconds": 0
+      },
+      {
+        "code": "EXPECTED_AUDIO_POLICY",
+        "kind": "audio_configuration",
+        "count": 3,
+        "phase": "connecting",
+        "connection_state": "new",
+        "last_elapsed_seconds": 0,
+        "first_elapsed_seconds": 0
+      },
+      {
+        "code": "LOCAL_VOICE_READY",
+        "kind": "audio_configuration",
+        "count": 3,
+        "phase": "connecting",
+        "connection_state": "new",
+        "last_elapsed_seconds": 0,
+        "first_elapsed_seconds": 0
+      },
+      {
+        "code": "TURN_CONTROL_UNCONFIRMED",
+        "kind": "context_error",
+        "count": 3,
+        "phase": "connected",
+        "connection_state": "connected",
+        "last_elapsed_seconds": 0,
+        "first_elapsed_seconds": 0
+      },
+      {
+        "code": "response_cancel_not_active",
+        "kind": "provider_error",
+        "count": 3,
+        "phase": "ending",
+        "connection_state": "connected",
+        "last_elapsed_seconds": 65,
+        "first_elapsed_seconds": 5
+      },
+      {
+        "code": "CAPTURE_AUDIO_SETTINGS",
+        "kind": "audio_configuration",
+        "count": 3,
+        "phase": "connecting",
+        "connection_state": "new",
+        "last_elapsed_seconds": 0,
+        "first_elapsed_seconds": 0
+      }
+    ],
+    "manual_policy_sequences": [
+      {
+        "count": 3,
+        "policy_sequence": [
+          "server_vad:on",
+          "semantic_vad:off"
+        ]
+      }
+    ]
+  }
+}

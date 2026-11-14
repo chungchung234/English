@@ -1,0 +1,119 @@
+{
+  "fixture": true,
+  "manualCapability": true,
+  "realMicrophoneTracks": true,
+  "actualProvider": false,
+  "actualWebRtc": false,
+  "modelQualityVerified": false,
+  "cases": [
+    {
+      "case": "session-hang",
+      "timeout": true,
+      "microphoneReleased": true,
+      "serverSessionClosed": true,
+      "lateCompletionIgnored": true,
+      "retryConnected": true
+    },
+    {
+      "case": "offer-hang",
+      "timeout": true,
+      "microphoneReleased": true,
+      "serverSessionClosed": true,
+      "lateCompletionIgnored": true,
+      "retryConnected": true
+    },
+    {
+      "case": "local-hang",
+      "timeout": true,
+      "microphoneReleased": true,
+      "serverSessionClosed": true,
+      "lateCompletionIgnored": true,
+      "retryConnected": true
+    },
+    {
+      "case": "voice-hang",
+      "timeout": true,
+      "microphoneReleased": true,
+      "serverSessionClosed": true,
+      "lateCompletionIgnored": true,
+      "retryConnected": true
+    },
+    {
+      "case": "remote-hang",
+      "timeout": true,
+      "microphoneReleased": true,
+      "serverSessionClosed": true,
+      "lateCompletionIgnored": true,
+      "retryConnected": true
+    },
+    {
+      "case": "ice-hang",
+      "timeout": true,
+      "microphoneReleased": true,
+      "serverSessionClosed": true,
+      "lateCompletionIgnored": true,
+      "retryConnected": true
+    },
+    {
+      "case": "data-hang",
+      "timeout": true,
+      "microphoneReleased": true,
+      "serverSessionClosed": true,
+      "lateCompletionIgnored": true,
+      "retryConnected": true
+    },
+    {
+      "case": "rtc-hang",
+      "timeout": true,
+      "microphoneReleased": true,
+      "serverSessionClosed": true,
+      "lateCompletionIgnored": true,
+      "retryConnected": true
+    },
+    {
+      "case": "initial-policy-absent",
+      "initialPolicyAfterDataOpen": true,
+      "explicitPolicyRequested": true,
+      "clockAndGreetingWaitForAck": true,
+      "matchingAckConnected": true
+    },
+    {
+      "case": "initial-policy-wrong",
+      "initialPolicyAfterDataOpen": true,
+      "explicitPolicyRequested": true,
+      "clockAndGreetingWaitForAck": true,
+      "matchingAckConnected": true
+    },
+    {
+      "case": "policy-ack-wrong",
+      "policyTimeout": true,
+      "microphoneReleased": true,
+      "serverSessionClosed": true,
+      "noPrematureGreetingOrClock": true,
+      "retryConnected": true
+    },
+    {
+      "case": "policy-ack-absent",
+      "policyTimeout": true,
+      "microphoneReleased": true,
+      "serverSessionClosed": true,
+      "noPrematureGreetingOrClock": true,
+      "retryConnected": true
+    },
+    {
+      "case": "cancel-late-remote",
+      "cancelled": true,
+      "lateCompletionIgnored": true
+    },
+    {
+      "case": "missing-abort-helpers-and-pending-vad",
+      "connected": true
+    },
+    {
+      "case": "autoplay-denied-then-tap",
+      "retriedSameStream": true,
+      "newVoiceRequest": false,
+      "recoveryNoticeCleared": true
+    }
+  ]
+}

@@ -77,6 +77,22 @@
 
 ## 검증 경계
 
+### 배포된 기반의 확인
+
+2026-11-14 릴리스 `a4f712e808145742239855edf1add136d6824edf`와
+[CI 43578727734](https://github.com/chungchung234/English/actions/runs/43578727734)의
+배포 성공을 대조했다. 읽기 전용 운영 검사에서 DB 계약 34개·배포 coach 계약
+15개가 통과했다. 공개 HTML/JS를 바꾸지 않고 받은 원본으로 11개 브라우저
+기능 사례를 확인했다. 인증·backend·provider·RTC는 고정 fixture이며 실제
+승인 계정의 마이크 통화나 품질 검사로 보고하지 않는다.
+
+원본 파일·hash·공개 빌드·결과는
+[공개 검사 기록](design/web-call-recovery-20261114/public/pr23/verification.json),
+[운영 읽기 전용 검사](design/web-call-recovery-20261114/public/pr23/production-verification.json)에
+둔다. 390×844와 320×568에서 글자 크기를 1.25배로 한 캡처를 실제로 열었다.
+주요 복구·종료 조작은 보였지만 320px 수동 응답 상태에서 하단 도움말 일부와
+그 아래 대화문 행의 접근성은 추가 개선 대상이다. 이 한계도 완료 기록에 남긴다.
+
 SQL/RLS·원문 digest·지연 receipt·revision·화자 분리 검사와 브라우저 저장 ACK/
 재생 완료/정정 후 복구 검사는 기능 계약을 확인한다. 실제 모델의 지침 반영,
 합성 다중 턴 대화 내용, 실기기 음향·체감 친근함은 서로 다른 검증이다.

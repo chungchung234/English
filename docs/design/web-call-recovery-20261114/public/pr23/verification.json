@@ -1,0 +1,26 @@
+{
+  "verified": true,
+  "release_sha": "a4f712e808145742239855edf1add136d6824edf",
+  "ci_deploy_success": true,
+  "cases_passed": 11,
+  "html_sha256": "d76ccc47d6cb615c3f01faa0a86dabe99f135f940b66b3d61287013bc6588d83",
+  "main_js_sha256": "10a6dd863690e6669085710298414ba221c980eac89ee81adef29258aab3ed87",
+  "public_assets_fulfilled": false,
+  "public_html_js_modified": false,
+  "raw_ack_receipt_verified": true,
+  "memory_recovery_direct_and_503_retry_verified": true,
+  "mute_and_rtc_bypass_blocked": true,
+  "screenshots_opened": [
+    "context-recovery-failed-390.png",
+    "context-recovery-failed-320.png",
+    "context-recovery-restored-390.png",
+    "context-recovery-restored-320.png",
+    "qualified-turns-playing-390.png",
+    "qualified-turns-manual-reply-320.png"
+  ],
+  "recovery_actions_fit_390_and_320_at_125percent_text": true,
+  "minor_visual_observation": "The existing manual-fallback 320px capture shows part of the collapsed call-help label clipped; primary reply/help/hangup controls remain visible.",
+  "real_provider_or_webrtc_tested": false,
+  "real_db_writes": false,
+  "conversation_or_acoustic_quality_verified": false
+}

@@ -1,0 +1,104 @@
+{
+  "fixture": true,
+  "actualWasm": true,
+  "publicUrl": "https://chungchung234.github.io/English/",
+  "expectedBuild": "git:a4f712e808145742239855edf1add136d6824edf",
+  "observedBuild": "git:a4f712e808145742239855edf1add136d6824edf",
+  "mockedTransports": [
+    "auth",
+    "backend",
+    "provider",
+    "webrtc"
+  ],
+  "actualProvider": false,
+  "actualWebRtc": false,
+  "initialManualPolicyAckRequired": true,
+  "byteVerificationScope": "public HTML and main JS",
+  "publicAssetsFulfilled": false,
+  "publicHtmlAndJsUnmodified": true,
+  "liveContextAllowlistChecked": true,
+  "openingContextVersion": "opening-context-v2",
+  "productionHashCspVerified": true,
+  "playbackReceiptAfterRawAckVerified": true,
+  "privacyRetiredContextRecoveryVerified": true,
+  "contextRecovery503RetryVerified": true,
+  "muteAndRtcRecoveryBypassBlocked": true,
+  "scenarioCount": 11,
+  "conversationalQualityVerified": false,
+  "acousticEffectivenessVerified": false,
+  "cases": [
+    {
+      "case": "initial-default-policy-race",
+      "actualRequestedPolicyAcknowledged": true,
+      "clockAndGreetingWaitForAck": true,
+      "policyTrace": [
+        "server_vad:on",
+        "semantic_vad:off"
+      ],
+      "generated": 1,
+      "ended": true
+    },
+    {
+      "case": "missing-optional-browser-helpers",
+      "connected": true,
+      "generated": 1,
+      "ended": true
+    },
+    {
+      "case": "autoplay-user-gesture-recovery",
+      "retriedSameStream": true,
+      "noNewVoiceRequest": true,
+      "noticeCleared": true,
+      "generated": 1,
+      "ended": true
+    },
+    {
+      "case": "real-wasm-qualified-turn-ownership",
+      "generated": 3,
+      "checkpoint": 2,
+      "playbackReceiptAfterRawAck": true,
+      "ended": true
+    },
+    {
+      "case": "revoked-context-memory-free-recovery",
+      "generated": 3,
+      "rawHistoryPreserved": true,
+      "retiredContextExcluded": true,
+      "ended": true
+    },
+    {
+      "case": "revoked-context-explicit-retry",
+      "generated": 3,
+      "rawHistoryPreserved": true,
+      "retiredContextExcluded": true,
+      "ended": true
+    },
+    {
+      "case": "social-sharing-then-explicit-language-help",
+      "generated": 3,
+      "originalSpeechPreserved": true,
+      "ended": true
+    },
+    {
+      "case": "startup-noise-does-not-silence-call",
+      "generated": 1,
+      "ended": true
+    },
+    {
+      "case": "detector-unavailable-explicit-reply",
+      "generated": 2,
+      "ended": true
+    },
+    {
+      "case": "production-hashed-csp-native-web-audio-callback",
+      "generated": 2,
+      "ended": true,
+      "scriptHashVerified": true
+    },
+    {
+      "case": "legacy-capability-compatibility",
+      "generated": 1,
+      "ended": true
+    }
+  ]
+}

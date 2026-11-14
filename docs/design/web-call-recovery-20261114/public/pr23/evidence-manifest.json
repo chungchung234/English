@@ -1,0 +1,87 @@
+{
+  "release_sha": "a4f712e808145742239855edf1add136d6824edf",
+  "original_bytes_copied": true,
+  "files": [
+    {
+      "name": "context-recovery-failed-320.png",
+      "bytes": 100684,
+      "sha256": "6dbab65ab6a4ddc3a4dba5880816835cbeaa8d2572189f2bcc8be260b22f1e3c"
+    },
+    {
+      "name": "context-recovery-failed-390.png",
+      "bytes": 158078,
+      "sha256": "e5b56b102a415be6194b0b794baa62a7d9b0f688f043c476290b885f6ccd562f"
+    },
+    {
+      "name": "context-recovery-layout.json",
+      "bytes": 4831,
+      "sha256": "85d8ff51b9bd05a9b5e5121515e8d278757591f8fa7efcf6b3ffd927f1e15cf9"
+    },
+    {
+      "name": "context-recovery-restored-320.png",
+      "bytes": 105080,
+      "sha256": "84d54fff6ed6e80cbab729cf8f4856b1bf89052c44c08f24828f619ba51998b7"
+    },
+    {
+      "name": "context-recovery-restored-390.png",
+      "bytes": 166092,
+      "sha256": "3f72cd20fbcda1d0575a9f9a4051c0d83a9741afac6f1cbb0e90e7de8bc05977"
+    },
+    {
+      "name": "public-app.js",
+      "bytes": 429924,
+      "sha256": "10a6dd863690e6669085710298414ba221c980eac89ee81adef29258aab3ed87"
+    },
+    {
+      "name": "public-artifact.json",
+      "bytes": 422,
+      "sha256": "879afcf1f59d6dbff6ff994a1c6c2306baa619fd2ff969098e79e02208f3441f"
+    },
+    {
+      "name": "public-index.html",
+      "bytes": 148931,
+      "sha256": "d76ccc47d6cb615c3f01faa0a86dabe99f135f940b66b3d61287013bc6588d83"
+    },
+    {
+      "name": "public-policy-waiting-390.png",
+      "bytes": 144278,
+      "sha256": "3eb9f96d5c3af15791f0d6925d79f16375cd175b5a33add22fdd277031e43f5a"
+    },
+    {
+      "name": "qualified-turns-listening.png",
+      "bytes": 149066,
+      "sha256": "2471e2750314be1705642fdaa91b0c15e00b7ba2e6ed302299fb3c5dcb1a4a88"
+    },
+    {
+      "name": "qualified-turns-manual-reply-320.png",
+      "bytes": 102392,
+      "sha256": "74058afbd4fb4d665f51e261f68ed63eb2e12539885f883dc7b77ee00e41e3f8"
+    },
+    {
+      "name": "qualified-turns-playing-390.png",
+      "bytes": 153233,
+      "sha256": "e6bb9ae275c71950180de515203e0b169c6c9931509f816de3b2b512c3e0deab"
+    },
+    {
+      "name": "qualified-turns-result.json",
+      "bytes": 2731,
+      "sha256": "c4dd060f38d67143e572a061d7607a8a04369c0b34a924d1fcbf15bb591202ca"
+    },
+    {
+      "name": "ci-final-success.json",
+      "bytes": 3820,
+      "sha256": "9808bff060af3e2ce16e3534d5f1e267464aea429f302477d42a70e8c30a213e"
+    },
+    {
+      "name": "verification.json",
+      "bytes": 1152,
+      "sha256": "73eeb0a29c9a1e4c9b2242514b2473997bff83320b55176febdf9fb28493ce6a"
+    },
+    {
+      "name": "execution-safe.log",
+      "bytes": 532,
+      "sha256": "3888e1a014ecb73256e51c48aff37257e46dfb1303188d676bf18376b6f3c5ad"
+    }
+  ],
+  "provider_backend_auth_webrtc_are_fixtures": true
+}

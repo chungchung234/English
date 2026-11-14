@@ -64,7 +64,7 @@ async function budgetLayout(page){
  }
  await page.evaluate(()=>{for(const{node,inline}of window.fixture.budgetFonts)node.style.fontSize=inline;});await page.setViewportSize(originalViewport);
 }
-async function setup({holdPolicy=false,holdRaw=false,badManifest=false,short=false,weak=false,failPrune=0,budgetCode=null}={}){
+async function setup({holdPolicy=false,holdRaw=false,badManifest=false,short=false,weak=false,failPrune=0,budgetCode=null,recoveryFailures=0}={}){
  const context=await browser.newContext({permissions:['microphone'],viewport:{width:390,height:844},reducedMotion:'reduce'});
  await context.addInitScript(({speech,speechRate,holdPolicy,instructions,weak,failPrune})=>{
   window.fixture={nodes:[],pcmEvents:[],detectors:[],messages:[],holdPolicy,instructions,weak,failPrune,nodeErrors:[],moduleErrors:[],audioContexts:[]};
@@ -86,13 +86,14 @@ async function setup({holdPolicy=false,holdRaw=false,badManifest=false,short=fal
  const page=await context.newPage();page.setDefaultTimeout(15000);
  const sessions=[],saved=new Map(),turns=[],syntheses=[],cancels=[],reports=[],contexts=[],errors=[],routeErrors=[],diagnostics=[],consoleErrors=[];let generation=0,authorityGeneration=1,memoryRevision=0,releaseRaw;
  const rawAck=new Promise(resolve=>{releaseRaw=resolve;});if(!holdRaw)releaseRaw();
+ const recovery={failures:recoveryFailures,holdNext:false,release:null};
  page.on('pageerror',error=>errors.push(error.message));page.on('console',message=>{if(message.type()==='error')consoleErrors.push(message.text());});
  await page.route(project+'/**',async route=>{const request=route.request(),url=new URL(request.url()),body=request.postData()?request.postDataJSON():{};let data=[];
   try{
    if(url.pathname==='/auth/v1/user')data={id:uid};else if(url.pathname==='/auth/v1/settings')data={external:{google:false,kakao:false}};
    else if(url.pathname.endsWith('/coach/config'))data={capabilities:{manual_turns_v1:true,authored_dialogue_v1:true}};
    else if(url.pathname.endsWith('/coach/memory'))data={memories:[]};else if(url.pathname.endsWith('/coach/memory-prepare'))data={status:'unavailable'};
-   else if(url.pathname.endsWith('/coach/dialogue-context')){contexts.push(body);if(body.omitLearningContext){authorityGeneration++;memoryRevision=null;}data={protocol,callEpoch:body.callEpoch,authorityGeneration,generation,memoryRevision,memoryMode:body.omitLearningContext?'omitted':'included',companionId:sessions[0].companion_id};}
+   else if(url.pathname.endsWith('/coach/dialogue-context')){contexts.push(body);if(body.reset&&recovery.failures>0){recovery.failures--;return route.fulfill({status:503,json:{error:{code:'UPSTREAM_UNAVAILABLE',message:'Synthetic authority refresh failure.'}}});}if(body.reset&&recovery.holdNext){recovery.holdNext=false;await new Promise(resolve=>{recovery.release=resolve;});}if(body.omitLearningContext){authorityGeneration++;memoryRevision=null;}data={protocol,callEpoch:body.callEpoch,authorityGeneration,generation,memoryRevision,memoryMode:body.omitLearningContext?'omitted':'included',companionId:sessions[0].companion_id};}
    else if(url.pathname.endsWith('/coach/dialogue-voice')){assert.equal(body.protocol,protocol);data={sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n',voice_instructions:instructions,opening_instructions:instructions,memory_revision:null,voice_policy_version:'asr-fixture',audio_policy:{turn_control:'manual_turns_v1',turn_detection:policy,expected_noise_reduction:'far_field',microphone_mode:'unknown'}};}
    else if(url.pathname.endsWith('/coach/dialogue-turn')){assert.equal(body.expectedGeneration,generation);for(const id of [...body.currentUserEventIds,...body.acceptedHistoryEventIds])assert(saved.has(id));turns.push(structuredClone(body));if(budgetCode&&turns.length>=2)return route.fulfill({status:429,json:{error:{code:budgetCode,message:'Synthetic budget exhausted.'}}});generation++;const id=randomUUID(),text='Synthetic authored reply with its own perspective.';const owner={scope:project+'|'+uid,sessionId:body.sessionId,companionId:sessions[0].companion_id,callEpoch:body.callEpoch,turnNonce:body.turnNonce,turnId:randomUUID(),assistantEventId:id,authorityGeneration:body.authorityGeneration,expectedMemoryRevision:body.expectedMemoryRevision,playbackEpoch:body.playbackEpoch};const assistantEvent={id,session_id:body.sessionId,event_key:'authored:'+body.turnNonce,speaker:'assistant',text,occurred_at:new Date().toISOString(),storage:'server'};saved.set(id,assistantEvent);data={protocol,owner,generation,text,textSha256:digest(text),assistantEvent};}
    else if(url.pathname.endsWith('/coach/dialogue-synthesis')){syntheses.push(structuredClone(body));const pcm=short?shortPcm:outputPcm;data={manifest:{version:'verified-pcm-candidate-v1',owner:body.owner,textSha256:digest('Synthetic authored reply with its own perspective.'),pcmSha256:badManifest?'0'.repeat(64):digest(pcm),format:'pcm_s16le',sampleRate:24000,channels:1,sourceFrames:pcm.length/2,byteLength:pcm.length,synthesisId:randomUUID(),transcriptVerification:{status:'matched',policyVersion:'lexical-fidelity-v1',approvedTextSha256:digest('Synthetic authored reply with its own perspective.')},synthesisSpeed:.85},pcmBase64:pcm.toString('base64')};}
@@ -113,7 +114,7 @@ async function setup({holdPolicy=false,holdRaw=false,badManifest=false,short=fal
  await page.goto(base+'/authored-built/',{waitUntil:'domcontentloaded'});await page.evaluate(({project,uid})=>localStorage.setItem('loop.auth:'+project,JSON.stringify({access_token:'fixture-jwt',refresh_token:'fixture-refresh',expires_at:Math.floor(Date.now()/1000)+3600,user:{id:uid}})),{project,uid});await page.reload({waitUntil:'domcontentloaded'});await page.locator('#workspace').waitFor({state:'visible'});await page.locator('#start-call').click();
  const emit=event=>page.evaluate(event=>window.fixture.peer.emit(event),event),local=()=>page.evaluate(()=>window.feedLocalAudio());
  const input=async(id,transcript,failed=false)=>{await emit({type:'input_audio_buffer.speech_stopped',item_id:id});await emit({type:'input_audio_buffer.committed',item_id:id});await emit(failed?{type:'conversation.item.input_audio_transcription.failed',item_id:id,error:{code:'fixture_failure'}}:{type:'conversation.item.input_audio_transcription.completed',item_id:id,transcript});};
- return {context,page,sessions,saved,turns,syntheses,cancels,reports,contexts,errors,routeErrors,diagnostics,consoleErrors,releaseRaw,emit,local,input};
+ return {context,page,sessions,saved,turns,syntheses,cancels,reports,contexts,errors,routeErrors,diagnostics,consoleErrors,releaseRaw,emit,local,input,recovery};
 }
 try{
  // Bind first so the exact Worklet CSP/build URL uses the OS-assigned port.
@@ -154,11 +155,33 @@ assert(script);assert.equal(createHash('sha256').update(await readFile(path.join
  await Promise.all([f.page.waitForEvent('domcontentloaded'),f.page.evaluate(project=>{sessionStorage.setItem('authored-auth-close-count','0');window.fixture.trackAuthClose=true;localStorage.removeItem('loop.auth:'+project);const channel=new BroadcastChannel('loop.auth:'+project);channel.postMessage({event:'SIGNED_OUT',session:null});setTimeout(()=>channel.close(),1000);},project)]);
  assert(Number(await f.page.evaluate(()=>sessionStorage.getItem('authored-auth-close-count')))>=1,'account transition closes native playback before reload');
  results.push({case:'real SDK cross-tab signout closes owned audio before reload',passed:true});await f.context.close();
- const bad=await setup({badManifest:true});await eventually(async()=>await bad.page.locator('#manual-reply').textContent()==='대화 다시 연결','manifest mismatch recovery');assert.equal(await bad.page.evaluate(()=>window.fixture.pcmEvents.filter(event=>event.kind==='started').length),0);assert.equal(bad.reports.length,0);await bad.page.locator('#manual-reply').click();await eventually(()=>bad.contexts.length===2,'explicit authority refresh');assert.equal(bad.contexts[1].omitLearningContext,true);assert.equal(bad.contexts[1].reset,true);assert.equal(Object.hasOwn(bad.contexts[0],'reset'),false);assert.equal(bad.turns.length,1,'refresh cannot automatically re-generate greeting');
+ const bad=await setup({badManifest:true,recoveryFailures:1});await eventually(async()=>await bad.page.locator('#manual-reply').textContent()==='대화 다시 연결','manifest mismatch recovery');assert.equal(await bad.page.evaluate(()=>window.fixture.pcmEvents.filter(event=>event.kind==='started').length),0);assert.equal(bad.reports.length,0);
+ const failureCopy='답변을 준비하지 못했어요. 대화를 다시 연결하거나 통화를 마쳐 주세요.';
+ assert.equal(await bad.page.locator('#notice .notice-message').textContent(),failureCopy);
+ await bad.page.locator('#manual-reply').click();await eventually(async()=>bad.contexts.length===2&&!await bad.page.locator('#manual-reply').isDisabled(),'failed authority refresh settles');
+ assert.equal(await bad.page.locator('#notice .notice-message').textContent(),failureCopy,'failed recovery keeps its warning');
+ await bad.page.evaluate(()=>window.fixture.peer.onconnectionstatechange());
+ assert.equal(await bad.page.locator('#notice .notice-message').textContent(),failureCopy,'redundant connected event is not a successful authority recovery');assert.equal(await bad.page.evaluate(()=>window.fixture.peer.tracks.every(track=>!track.enabled)),true);
+ await bad.page.locator('#manual-reply').click();await eventually(()=>bad.contexts.length===3&&bad.page.evaluate(()=>window.fixture.peer.tracks.every(track=>track.enabled)),'fresh authority restores microphone');
+ assert.equal(await bad.page.locator('#notice').isVisible(),false,'the recovered failure warning clears immediately at fresh authority, not six seconds later');assert.equal(bad.contexts[2].omitLearningContext,true);assert.equal(bad.contexts[2].reset,true);assert.equal(Object.hasOwn(bad.contexts[0],'reset'),false);assert.equal(bad.turns.length,1,'refresh cannot automatically re-generate greeting');
+ // A new failure gets its own notice. While its recovery is awaiting an ACK,
+ // queued ASR can raise a newer, unrelated missing-record warning.
+ await bad.emit({type:'input_audio_buffer.speech_started',item_id:'new-failed-reply'});await bad.local();await bad.input('new-failed-reply','A synthetic caller thought before another invalid clip.');
+ await eventually(async()=>await bad.page.locator('#manual-reply').textContent()==='대화 다시 연결'&&await bad.page.locator('#notice .notice-message').textContent()===failureCopy,'second owned failure warning');
+ bad.recovery.holdNext=true;await bad.page.locator('#manual-reply').click();await eventually(()=>typeof bad.recovery.release==='function','recovery ACK held');
+ await bad.emit({type:'conversation.item.input_audio_transcription.failed',item_id:'late-missing-asr',error:{code:'fixture_failure'}});
+ const newerCopy='일부 발화의 전사에 실패했습니다. 해당 발화는 기록되지 않았습니다.';assert.equal(await bad.page.locator('#notice .notice-message').textContent(),newerCopy);
+ bad.recovery.release();await eventually(()=>bad.page.evaluate(()=>window.fixture.peer.tracks.every(track=>track.enabled)),'recovery with newer warning succeeds');assert.equal(await bad.page.locator('#notice .notice-message').textContent(),newerCopy,'successful recovery cannot erase a newer ASR warning');
+ await bad.page.evaluate(()=>window.fixture.peer.onconnectionstatechange());assert.equal(await bad.page.locator('#notice .notice-message').textContent(),newerCopy,'redundant connected event preserves a newer ASR warning');
+ assert.equal(bad.turns.length,2,'recovery never replays or retries either failed reply');
+ await bad.page.evaluate(()=>{const peer=window.fixture.peer;peer.connectionState='disconnected';peer.onconnectionstatechange();});
+ await bad.emit({type:'conversation.item.input_audio_transcription.failed',item_id:'late-reconnect-asr',error:{code:'fixture_failure'}});
+ await bad.page.evaluate(()=>{const peer=window.fixture.peer;peer.connectionState='connected';peer.onconnectionstatechange();});
+ assert.equal(await bad.page.locator('#notice .notice-message').textContent(),newerCopy,'connected cannot erase a newer warning that replaced its own transport notice');
  await bad.page.evaluate(()=>{const peer=window.fixture.peer;peer.connectionState='disconnected';peer.onconnectionstatechange();peer.connectionState='connected';peer.onconnectionstatechange();});
- assert.equal(await bad.page.evaluate(()=>window.fixture.peer.tracks.every(track=>!track.enabled)),true,'RTC reconnect cannot bypass retired writer authority');
+ assert.equal(await bad.page.evaluate(()=>window.fixture.peer.tracks.every(track=>!track.enabled)),true,'RTC reconnect cannot bypass retired writer authority');assert.equal(await bad.page.locator('#notice').isVisible(),false,'connected clears only its own transport reconnect notice');
  assert.equal(await bad.page.locator('#mute-call').isDisabled(),true,'mute cannot bypass writer recovery');
- assert.equal(bad.turns.length,1);assert.deepEqual(bad.errors,[]);assert.deepEqual(bad.routeErrors,[]);await bad.context.close();results.push({case:'bad PCM rejected before playback and authority refresh',passed:true});
+ assert.equal(bad.turns.length,2);assert.deepEqual(bad.errors,[]);assert.deepEqual(bad.routeErrors,[]);await bad.context.close();results.push({case:'bad PCM recovery clears only its own notice after fresh authority',passed:true});
  const strong=await setup({short:true});await eventually(()=>strong.reports.length===1,'real output-position playback report',20000);assert.equal(strong.reports[0].qualifiedUserEventIds.length,0);assert.equal(strong.turns.length,1);assert.deepEqual(strong.errors,[]);assert.deepEqual(strong.routeErrors,[]);await strong.context.close();results.push({case:'native output timestamp permits strong report',passed:true});
  const privacy=await setup({short:true});
  await eventually(()=>privacy.reports.length===1,'privacy startup playback');

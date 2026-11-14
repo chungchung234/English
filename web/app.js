@@ -353,7 +353,7 @@ function floorOptions(current){return {
   send:event=>{const wasResponding=current.responding;if(event.type==='response.create')current.responding=true;try{sendRealtime(current,event);}catch(error){current.responding=wasResponding;throw error;}queueMicrotask(()=>{if(call===current&&!current.ending)updateCallControls();});},
   blockOutput:blocked=>{if(call===current&&!current.ending)$('remote-audio').muted=Boolean(current.authored)||blocked;},
   changed:state=>{observeConversationPlayback(current);if(call!==current||current.ending)return;if(current.turnControl!=='manual_turns_v1'&&current.floorHeld&&!state.held){presence.setState(current.aiSpeaking?'speaking':current.responding?'thinking':'listening');$('call-status').textContent=current.aiSpeaking?companionName()+'가 말하고 있어요':current.responding?'답변을 준비하고 있어요':'듣고 있어요 · 편하게 말씀하세요';}current.floorHeld=state.held;renderFloor(current);},
-  failed:message=>{if(call===current&&!current.ending){if(current.budgetExhausted)return;if(current.authored){current.contextRecoveryNeeded=true;current.authored.invalidate('authority_revoked');current.stream.getAudioTracks().forEach(track=>track.enabled=false);}recordCallIssue(current,{kind:'context_error',code:'TURN_CONTROL_UNCONFIRMED',request_type:current.turnControl==='manual_turns_v1'?'unknown':'session.update'});notice(message);}}
+  failed:message=>{if(call===current&&!current.ending){if(current.budgetExhausted)return;if(current.authored){current.contextRecoveryNeeded=true;current.authored.invalidate('authority_revoked');current.stream.getAudioTracks().forEach(track=>track.enabled=false);}recordCallIssue(current,{kind:'context_error',code:'TURN_CONTROL_UNCONFIRMED',request_type:current.turnControl==='manual_turns_v1'?'unknown':'session.update'});const failureNotice=notice(message);if(current.authored)current.authoredFailureNotice=failureNotice;}}
 };}
 function connectAuthoredDialogue(current,attempt) {
   const active=()=>call===current&&!current.ending&&scope===current.scope&&auth?.user?.id===attempt.userId&&companionId===current.companionId;
@@ -394,7 +394,8 @@ function connectAuthoredDialogue(current,attempt) {
       current.budgetExhausted ||= budget;current.contextRecoveryNeeded=!current.budgetExhausted;current.authored.invalidate(budget?'budget_exhausted':'authority_revoked');current.floor.retireContext();
       current.stream.getAudioTracks().forEach(track=>track.enabled=false);
       recordCallIssue(current,{kind:'context_error',code:issue.code||'AUTHORED_DIALOGUE_FAILED',request_type:'unknown'});
-      notice(current.budgetExhausted?AUTHORED_BUDGET_NOTICE:'답변을 준비하지 못했어요. 대화를 다시 연결하거나 통화를 마쳐 주세요.',{persistent:current.budgetExhausted});updateCallControls();
+      const failureNotice=notice(current.budgetExhausted?AUTHORED_BUDGET_NOTICE:'답변을 준비하지 못했어요. 대화를 다시 연결하거나 통화를 마쳐 주세요.',{persistent:current.budgetExhausted});
+      current.authoredFailureNotice=current.budgetExhausted?null:failureNotice;updateCallControls();
       if(['MEMORY_CHANGED','MEMORY_SOURCE_CHANGED','HISTORY_CHANGED'].includes(issue.code))void recoverVoiceContext(current);
     }
   });
@@ -523,6 +524,7 @@ function recoverAuthoredContext(current) {
   if(current.budgetExhausted)return Promise.resolve(false);
   if(current.contextRecoveryFlight)return current.contextRecoveryFlight;
   if(call!==current||current.ending)return Promise.resolve(false);
+  const failureNotice=current.authoredFailureNotice;
   current.contextRecoveryNeeded=true;current.omitLearningContext=true;current.floor.retireContext();
   current.authored.invalidate('authority_revoked');current.stream.getAudioTracks().forEach(track=>track.enabled=false);
   current.compacting=true;updateCallControls();
@@ -531,7 +533,12 @@ function recoverAuthoredContext(current) {
     try {
       if(!await current.authored.recover({signal:cancellation.signal})||call!==current||current.ending||scope!==current.scope)return false;
       current.contextRecoveryNeeded=false;current.contextBlocked=false;current.needsCompact=false;
-      current.floor.authoredAuthorityAccepted();return true;
+      current.floor.authoredAuthorityAccepted();
+      // A newer save/ASR/privacy notice may have replaced this call's failure
+      // while authority was refreshing. Clear only the exact original node.
+      if(failureNotice&&$('notice').querySelector('.notice-message')===failureNotice)clearNotice();
+      if(current.authoredFailureNotice===failureNotice)current.authoredFailureNotice=null;
+      return true;
     } catch(error) {
       if(call===current&&!current.ending){current.authored.invalidate('authority_revoked');recordCallIssue(current,{kind:'context_error',code:error.code||'VOICE_CONTEXT_REFRESH_FAILED',request_type:'unknown'});}
       return false;
@@ -579,7 +586,18 @@ function activateCall(current) {
   $('cancel-connection').hidden=true;firstUse.connected();
   if(!current.compacting){current.stream.getAudioTracks().forEach((track,i)=>track.enabled=!current.budgetExhausted&&!current.contextRecoveryNeeded&&!current.inputBlocked&&!current.muted&&(!current.compactionInput||current.compactionInput[i]));current.compactionInput=null;}
   startCallClock(current);if(current.ending)return;
-  attachCallAudio(current);if(!current.budgetExhausted)notice(current.inputBlocked?'기록을 저장하지 못해 마이크를 껐어요. 통화를 마친 뒤 기록을 확인해 주세요.':'');presence.setState(current.inputBlocked?'error':current.aiSpeaking?'speaking':current.responding?'thinking':'listening');$('call-status').textContent=current.inputBlocked?'저장 오류 · 통화를 마쳐 주세요':companionName()+'와 통화 중 · 편하게 말씀하세요';
+  attachCallAudio(current);
+  if(!current.budgetExhausted){
+    const reconnectNotice=current.authoredReconnectNotice;
+    if(current.authored){
+      if(reconnectNotice&&$('notice').querySelector('.notice-message')===reconnectNotice){
+        if(current.inputBlocked)notice('기록을 저장하지 못해 마이크를 껐어요. 통화를 마친 뒤 기록을 확인해 주세요.',{persistent:true});
+        else clearNotice();
+      }
+      current.authoredReconnectNotice=null;
+    }else notice(current.inputBlocked?'기록을 저장하지 못해 마이크를 껐어요. 통화를 마친 뒤 기록을 확인해 주세요.':'');
+  }
+  presence.setState(current.inputBlocked?'error':current.aiSpeaking?'speaking':current.responding?'thinking':'listening');$('call-status').textContent=current.inputBlocked?'저장 오류 · 통화를 마쳐 주세요':companionName()+'와 통화 중 · 편하게 말씀하세요';
   if(current.turnControl==='manual_turns_v1')current.floor.start();
   else if(!current.greeted&&!current.inputBlocked&&!current.speaking&&!current.responding&&!current.awaitingCommit&&!current.transcribing.size&&!current.floor.blocksResponse){current.greeted=true;current.responding=true;sendRealtime(current,{type:'response.create'});}
   updateCallControls();
@@ -713,6 +731,7 @@ function notice(message,{persistent=message instanceof Error,keepOnNavigation=fa
   const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='notice-dismiss';dismiss.setAttribute('aria-label','알림 닫기');dismiss.append(document.querySelector('[data-close="account-dialog"] img').cloneNode());
   dismiss.onclick=()=>clearNotice({restoreFocus:true});region.append(copy,dismiss);region.hidden=false;region.dataset.keepOnNavigation=String(keepOnNavigation);
   if(!persistent)noticeTimer=setTimeout(()=>clearNotice(),6000);
+  return copy;
 }
 const protect = fn => async (...args) => { clearNotice();try { await fn(...args); } catch(e) { notice(e); } };
 function setStatus(text) { if(document.body.dataset.callPhase!=='ending')$('save-status').textContent = text; }
@@ -1086,7 +1105,7 @@ async function startCall() {
         void current.connectedTelemetry.observe(pc.connectionState);
         activateCall(current);
       }
-      if(pc.connectionState==='disconnected') {if(current.authored){current.authored.invalidate('connection_changed');current.presencePcmReference=null;current.contextRecoveryNeeded=true;current.floor.retireContext();}current.ready=false;current.stream.getAudioTracks().forEach(track=>track.enabled=false);if(!current.budgetExhausted)notice('연결을 다시 확인하고 있어요. 통화 시간과 기록은 이어집니다.');$('call-status').textContent='연결을 다시 확인하고 있어요';presence.detachAudio();presence.setState('connecting');setCallPhase('connecting');}
+      if(pc.connectionState==='disconnected') {if(current.authored){current.authored.invalidate('connection_changed');current.presencePcmReference=null;current.contextRecoveryNeeded=true;current.floor.retireContext();}current.ready=false;current.stream.getAudioTracks().forEach(track=>track.enabled=false);if(!current.budgetExhausted){const reconnectNotice=notice('연결을 다시 확인하고 있어요. 통화 시간과 기록은 이어집니다.');if(current.authored)current.authoredReconnectNotice=reconnectNotice;}$('call-status').textContent='연결을 다시 확인하고 있어요';presence.detachAudio();presence.setState('connecting');setCallPhase('connecting');}
       if(pc.connectionState==='failed') {if(current.startedAt===null){attempt.controller.abort(Object.assign(Error('RTC connection failed.'),{code:'RTC_CONNECTION_FAILED'}));return;}notice('음성 연결을 복구하지 못해 수신된 대화를 저장합니다.');presence.setState('error');endCall().catch(e=>notice(e));}
       updateCallControls();
     };

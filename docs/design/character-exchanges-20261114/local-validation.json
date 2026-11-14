@@ -1,0 +1,19 @@
+{
+  "recorded_at_utc": "2026-11-14T08:48:39.191985+00:00",
+  "foundation_source_commit": "901cd5c",
+  "scope": "Local functional validation; not deployed or actual acoustic/user-study evidence",
+  "unit_server_database": {
+    "tests": 518,
+    "pass": 518,
+    "fail": 0,
+    "skipped": 0
+  },
+  "type_syntax_check_passed": true,
+  "memory_evaluation_passed": true,
+  "learning_evaluation_passed": true,
+  "qualified_native_wasm_browser_cases": 7,
+  "focused_floor_and_receipt_units": 51,
+  "sql_sha256": "85abaea117d3635f087da071df2dd732b833d164cb8cc55e2a50bce431491ee6",
+  "visual_inspection": "390x844 and 320x568 at 125% computed text, failure/retry and restored fallback; images and measurements retained",
+  "source_change_after_full_suite": "Only test-only main fixture updates and documentation, then a separate proposed voice renderer candidate; no production claim."
+}

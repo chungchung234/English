@@ -1,0 +1,19 @@
+{
+  "verified": true,
+  "release_sha": "9caa42bcfde1eec20dd6b5fe4b8f11efebbfa974",
+  "ci_deploy_success": true,
+  "cases_passed": 9,
+  "html_sha256": "75d568d48ad47ba97a0dc140bd57c6b9c528030077a23fe374291a69ca79d6d4",
+  "main_js_sha256": "07de4bbd0a6a7b16d9e91557b38cffe6a8a62566d0d6c8179ab2395f80774e7c",
+  "public_assets_fulfilled": false,
+  "public_html_js_modified": false,
+  "html_main_js_bytes_verified": true,
+  "screenshots_opened": [
+    "public-policy-waiting-390.png",
+    "qualified-turns-playing-390.png",
+    "qualified-turns-manual-reply-320.png"
+  ],
+  "visual_result": "controls_and_body_visible_without_clipping_at_recorded_viewports",
+  "real_webrtc_or_provider_tested": false,
+  "conversational_or_acoustic_quality_verified": false
+}

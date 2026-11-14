@@ -1,0 +1,65 @@
+{
+  "release_sha": "9caa42bcfde1eec20dd6b5fe4b8f11efebbfa974",
+  "source": "original public assets and synthetic browser fixtures",
+  "files": [
+    {
+      "name": "public-app.js",
+      "bytes": 421504,
+      "sha256": "07de4bbd0a6a7b16d9e91557b38cffe6a8a62566d0d6c8179ab2395f80774e7c"
+    },
+    {
+      "name": "public-artifact.json",
+      "bytes": 422,
+      "sha256": "b9db12215133b4637b42f376fdb34f3d2de4f18f84ab0fa15e232a17b0a5f25e"
+    },
+    {
+      "name": "public-index.html",
+      "bytes": 148808,
+      "sha256": "75d568d48ad47ba97a0dc140bd57c6b9c528030077a23fe374291a69ca79d6d4"
+    },
+    {
+      "name": "public-policy-waiting-390.png",
+      "bytes": 144278,
+      "sha256": "3eb9f96d5c3af15791f0d6925d79f16375cd175b5a33add22fdd277031e43f5a"
+    },
+    {
+      "name": "qualified-turns-listening.png",
+      "bytes": 149498,
+      "sha256": "eb2447b748dc254a1051304235355d194a4fad7f4d59935db1f759525ffd368a"
+    },
+    {
+      "name": "qualified-turns-manual-reply-320.png",
+      "bytes": 104865,
+      "sha256": "6639ba90b83f28fe318056d89cfa5aada3ad9c99ce51d0b1be9017bd7baf16fd"
+    },
+    {
+      "name": "qualified-turns-playing-390.png",
+      "bytes": 153233,
+      "sha256": "e6bb9ae275c71950180de515203e0b169c6c9931509f816de3b2b512c3e0deab"
+    },
+    {
+      "name": "qualified-turns-result.json",
+      "bytes": 2127,
+      "sha256": "1a33b163026e82ba06081fbb899b3df6e8b2ca548a7f8cd5f67ba182f176b915"
+    },
+    {
+      "name": "ci-final-success.json",
+      "bytes": 3820,
+      "sha256": "a9bf124fc633c4b73500f709585e4369e34d238eb00dd7d0f4ddabe8b739e705"
+    },
+    {
+      "name": "verification.json",
+      "bytes": 754,
+      "sha256": "c02ce4557569113e550fdac58c9593d615326f1ede7312d8485296db7f79d3f3"
+    },
+    {
+      "name": "execution-safe.log",
+      "bytes": 428,
+      "sha256": "d6e40f75fcec7627c028bf6e95f5bb9332f6a3e7537ac6a0fff15e70f6293fff"
+    }
+  ],
+  "actual_provider": false,
+  "actual_webrtc": false,
+  "actual_db_writes": false,
+  "quality_or_acoustic_claim": false
+}

@@ -29,3 +29,23 @@
 초기 연결의 무한 대기·취소·정리·재시도·늦은 완료, 초기 기본 설정 뒤 올바른 ACK, 잘못된/없는 ACK, 최신 정적 API가 없는 환경, 자동재생 재시도를 실제 Chromium과 native 마이크 트랙·IndexedDB에서 검사한다. 전송은 명시적 fixture다. 같은 초기 정책 순서의 기존/수정 소스 비교와 390px·320px/큰 글자 화면을 별도로 확인했다.
 
 정상 연결이 먼저 필요한 복구 릴리스다. 캐릭터의 관점·양쪽 화자 근거가 있는 대화 기억·기억 무효화의 안전한 재설정은 별도 고도화 단계에서 적용한다. 문장 수·인사 길이를 제한하거나 검증되지 않은 끼어들기 분류로 해결하지 않는다. 배포·공개 빌드 확인 결과는 완료 후 기록한다.
+
+## 긴급 배포
+
+초기 PR20의 배포 검사는 제공자 echo를 권위로 승격하거나 데이터 채널/RTC 연결
+전에 통화 완료 화면을 기대하던 기존 fixture에서 실패했다. 제품의 연결 보호를
+유지하고 PR21·22에서 사건 순서를 정정했다. 최종 릴리스는
+`9caa42bcfde1eec20dd6b5fe4b8f11efebbfa974`이며,
+[CI43576944725](https://github.com/chungchung234/English/actions/runs/43576944725)의
+전체 타입·단위/DB·브라우저 검사, managed backend, Pages, 게시 후 접근 검사가
+모두 성공했다. 공개 원본의 빌드 대조와 별도 모의 연결 흐름 검수는 후속 기록한다.
+이 CI의 접근 차단 검사나 공개 fixture를 실제 승인 계정의 마이크 통화 증거로
+취급하지 않는다.
+
+공개 HTML·JS의 runtime SHA가 위 릴리스와 일치했고 파일명 hash·SRI·CSP를
+대조했다. 공개 원본을 수정하지 않고 인증·backend·provider·RTC만 모의한
+9개 흐름이 모두 통과했다. 정책 ACK 전 clock 00:00/첫 응답 0회, ACK 뒤 첫
+응답 1회, 호환 API 부재, 자동재생 gesture 재시도, native WASM/WebAudio,
+원문 저장과 fallback을 확인했다. 390px 대기/재생 화면은 실제 열어 검수했다.
+[공개 검증](design/web-call-recovery-20261114/public/verification.json)과
+[원본 hash](design/web-call-recovery-20261114/public/evidence-manifest.json)를 보존한다.

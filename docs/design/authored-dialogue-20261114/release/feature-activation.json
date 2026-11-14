@@ -1,0 +1,17 @@
+{
+  "release_sha": "10be1faaec5ec821fcb7b7e39af8380fa188555c",
+  "source_database_public_checks_passed": true,
+  "automatic_retries": 0,
+  "application_rows_modified": false,
+  "model_requests": 0,
+  "started_at_utc": "2026-11-14T12:02:07.849915+00:00",
+  "postgrest_schema_reload_status": 201,
+  "feature_secret_post_status": 201,
+  "enabled_feature_names": [
+    "AUTHORED_DIALOGUE_ENABLED",
+    "AUTHORED_DIALOGUE_FIDELITY_VERIFIED"
+  ],
+  "max_reservation_setting_unchanged": true,
+  "completed": true,
+  "finished_at_utc": "2026-11-14T12:02:10.286402+00:00"
+}

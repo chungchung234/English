@@ -1,0 +1,63 @@
+{
+  "verified": true,
+  "release_sha": "8d3f2a27dac84c1edd75631e5b8cef34ffadbb83",
+  "ci_deploy_success": true,
+  "exact_cases_passed": 12,
+  "html_sha256": "5a3992057de82b097f1452134032592b61b943837ae43e9c2582c148499ae881",
+  "main_js_sha256": "2a39113a5fe834c8eee849189c01770dc566737b72d03b5588cd00fd79f83d39",
+  "main_js_sri": "KjkROl/oNMju6EkYnAF3DcVmc3ty0DtViM0A/Xn4PTk=",
+  "worklet_sha256": "41f9726d8d2bd7a8fe992aa17888f45a3ba7633092d30b2a2d687b3f6f7856ea",
+  "public_html_main_bytes_browser_observed": true,
+  "browser_html_response_count": 15,
+  "browser_main_response_count": 15,
+  "worklet_hash_basis": "Separate original CDN GET plus exact canonical descriptor/CSP binding",
+  "worklet_browser_response_body_hash_observed": false,
+  "native_exact_CDN_worklet_module_loads": 7,
+  "native_WebAssembly_operation_count": 7,
+  "public_assets_fulfilled": false,
+  "public_html_js_or_worklet_rewritten": false,
+  "mocked_authored_capability_true": true,
+  "actual_runtime_flags_verified_by_this_runner": false,
+  "actual_auth_backend_provider_rtc_asr": false,
+  "actual_db_writes": false,
+  "actual_provider_requests": 0,
+  "actual_microphone": false,
+  "output_pcm_is_fixed_tone": true,
+  "screenshots_opened": [
+    "authored-budget-320.png",
+    "authored-budget-390.png",
+    "authored-recovery-blocked-320.png",
+    "authored-recovery-blocked-390.png",
+    "authored-recovery-restored-320.png",
+    "authored-recovery-restored-390.png",
+    "authored-resume-320.png",
+    "authored-resume-390.png",
+    "authored-resume-scroll-320.png"
+  ],
+  "screen_widths": [
+    320,
+    390
+  ],
+  "text_scale": 1.25,
+  "primary_actions_and_hangup_fit": true,
+  "help_and_transcript_reachable_by_scrolling_at_320": true,
+  "restored_failure_notice_absent_390_and_320": true,
+  "newer_warning_preservation_verified_by_expanded_case7_assertions": true,
+  "no_persistent_modal_or_false_call_ended_observed_in_fixture": true,
+  "conversation_quality_or_acoustic_quality_verified": false,
+  "historical_public10be_folder_unchanged": true,
+  "source_original_artifact_sha256": {
+    "public-index.html": "5a3992057de82b097f1452134032592b61b943837ae43e9c2582c148499ae881",
+    "public-app.js": "2a39113a5fe834c8eee849189c01770dc566737b72d03b5588cd00fd79f83d39",
+    "public-worklet.js": "41f9726d8d2bd7a8fe992aa17888f45a3ba7633092d30b2a2d687b3f6f7856ea",
+    "public-artifact.json": "34a3709bce73c982372c46714039ecf00a4885ba20d952ab9125ad757d386fd0",
+    "public-results.json": "1f0eed5b4e1ee773a5563924e561b42cdd34928642074a2e74c24f56dbf384d0",
+    "layout.json": "ec6a2a6159c3f4e5727b0fbbf9df12e49a9a673ddc1bb1e506a8a27b5b2b2188"
+  },
+  "source_preparation_json_sha256": {
+    "preparation-manifest.json": "b9a1665abbed679e47b1a1c865ff828dd50ac90d7277c66c63e4c62643aa9fb5",
+    "static-verification.json": "5ce16d0012c7395af456269564a36ad62068ee99fe7c026b23e988d1e2e07252",
+    "preparation-offline-verification.json": "505bc4636c6f7aff5b3bb68430cb61036545a4696160b35093d4b3b47df86e9f",
+    "independent-review.json": "5143e3a5cb8845a7d18a075c119465a0a6e312c1b296d908e9e66e46bff7db1f"
+  }
+}

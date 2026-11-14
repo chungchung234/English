@@ -1,0 +1,202 @@
+{
+  "version": "observed-writer-cache-layout-v1",
+  "source_result_sha256": "9eda267d20ba0ddbd78065421e7764513230581bc78d9cc82186e9eabaf1e7ba",
+  "source_manifest_sha256": "5c20175d92bce6fbe1a4fe030769c93aaed5f39a8384a8254afc1c5aa240afe2",
+  "source_controller_sha256": "99a38a2855add0df8b6a7475342b5f45f044743d062ceedb368272577b609737",
+  "source_helper_sha256": "6c2c877b2d47899287c71b9a855b317ef6c48bb891774a7c24267a57d598b736",
+  "blind_packet_sha256": "c56cd3e6bf6458e31682dfba456036bea9383cd8d63e41cc85c0b65a1faaa2cf",
+  "blind_judgment_sha256": "ceb0183a63d857b791b9c291a965f2c935e72237f3e8bf37f4704722c7e2e35c",
+  "blind_mapping_sha256": "2b8adc566f0683cf24764584e39bf96a93b52cce75492f8069c54cd0065bd5be",
+  "judge_review_saved_before_this_unblind": true,
+  "quality_interpretation": "The saved blind labels were joined to the private mapping only after root authorized unblinding. All four outputs passed all six frozen dimensions; this detects no obvious regression in these samples and does not prove broad quality equivalence.",
+  "quality_rating_counts": {
+    "PASS": 24,
+    "CONCERN": 0,
+    "FAIL": 0
+  },
+  "no_obvious_blind_quality_regression": true,
+  "root_decision": "Eligible behavior-preserving cache-efficiency fix plus separately tested scoped RPC parallelism; not a demonstrated end-user latency solution.",
+  "predeclared_non_timing_criteria_passed": true,
+  "rpc_parallelism_not_benchmarked_by_this_writer_only_probe": true,
+  "production_deployment_not_inferred_from_experiment": true,
+  "model": "gpt-6-luna",
+  "effort": "low",
+  "max_output_tokens": 6000,
+  "writer_generations_known": 4,
+  "unknown_generation_upper_bound": 0,
+  "reader_generations": 0,
+  "cache_criterion": {
+    "fixture": "fixture_2",
+    "arm": "candidate",
+    "cached_tokens": 1083,
+    "cache_write_tokens": 0,
+    "input_tokens": 2906,
+    "minimum_cached_tokens": 1024,
+    "metrics_known": true,
+    "passed": true
+  },
+  "request_semantics_exact": true,
+  "public_prefix_sha256": "f8ac75ff28f190e2b0a42a40bee7d7f40505ca0e3863e4a52994dbe29ee6bc34",
+  "public_prefix_utf8_bytes": 5730,
+  "observations": [
+    {
+      "fixture": "fixture_1",
+      "arm": "baseline",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "max_output_tokens": 6000,
+      "full_writer_completion_ms": 2817.915,
+      "server_offsets_ms": {
+        "dispatch": 6.861,
+        "headers": 2822.879,
+        "bodyComplete": 2824.263,
+        "validated": 2824.776
+      },
+      "controller_received_elapsed_ms": 3606.34962,
+      "request_sha256": "206affdf7d5f5d5aa5c71aa3b4bcf0aebee6fec8e45c2c61e111895c7f43dd2b",
+      "instructions_sha256": "853703583bf6527fedcfdb3323172f71ac0254ad64607eb8ac569772f3dbe092",
+      "semantic_request_sha256": "8dd533d411160b1b8ac63fc8c3f283fbd97a2c1f0889ac76fc47b21a06a2ed49",
+      "text_sha256": "cc7abab4a5c37fa73adee7c86ac4408adda992371851e0f509fa9073b83be867",
+      "usage": {
+        "input_tokens": 2825,
+        "output_tokens": 84,
+        "cached_tokens": 0,
+        "cache_write_tokens": 2733,
+        "reasoning_tokens": 37,
+        "cache_metrics_known": true,
+        "reasoning_metric_known": true
+      },
+      "cached_input_fraction": 0,
+      "write_input_fraction": 0.967433628318584
+    },
+    {
+      "fixture": "fixture_1",
+      "arm": "candidate",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "max_output_tokens": 6000,
+      "full_writer_completion_ms": 1524.44,
+      "server_offsets_ms": {
+        "dispatch": 2825.615,
+        "headers": 4349.068,
+        "bodyComplete": 4349.667,
+        "validated": 4350.055
+      },
+      "controller_received_elapsed_ms": 5116.658245,
+      "request_sha256": "ec97cf1a7d4241dbec25f7c5b1ee4b46c99cf380d1a42e5aa1cb905d32573cc8",
+      "instructions_sha256": "853703583bf6527fedcfdb3323172f71ac0254ad64607eb8ac569772f3dbe092",
+      "semantic_request_sha256": "8dd533d411160b1b8ac63fc8c3f283fbd97a2c1f0889ac76fc47b21a06a2ed49",
+      "text_sha256": "6e390a4bcff2a504e6c2077756d48323c86efab989c90bd9dc195b3db6100b14",
+      "usage": {
+        "input_tokens": 2826,
+        "output_tokens": 50,
+        "cached_tokens": 0,
+        "cache_write_tokens": 1083,
+        "reasoning_tokens": 0,
+        "cache_metrics_known": true,
+        "reasoning_metric_known": true
+      },
+      "cached_input_fraction": 0,
+      "write_input_fraction": 0.3832271762208068
+    },
+    {
+      "fixture": "fixture_2",
+      "arm": "candidate",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "max_output_tokens": 6000,
+      "full_writer_completion_ms": 2256.173,
+      "server_offsets_ms": {
+        "dispatch": 2.058,
+        "headers": 2257.612,
+        "bodyComplete": 2258.173,
+        "validated": 2258.231
+      },
+      "controller_received_elapsed_ms": 2366.9794600000005,
+      "request_sha256": "0bac3aa7ecbbf6d62aa545644d2f7eb0f8904feed2394bd632291bcbf6ca5a2a",
+      "instructions_sha256": "c4be1c5c991f53b60d1c8a57cb0a5ce97d63c474aaec2a97f01bcc827501abc3",
+      "semantic_request_sha256": "c42b63529354a05e3a09ce984233ccfb006b35fec0be8024c3dc2ecc2d980b50",
+      "text_sha256": "864504f26e4c5565b1e5861d21c8262441947ad20b4d71f97e5c101e1b241ea6",
+      "usage": {
+        "input_tokens": 2906,
+        "output_tokens": 53,
+        "cached_tokens": 1083,
+        "cache_write_tokens": 0,
+        "reasoning_tokens": 0,
+        "cache_metrics_known": true,
+        "reasoning_metric_known": true
+      },
+      "cached_input_fraction": 0.3726772195457674,
+      "write_input_fraction": 0
+    },
+    {
+      "fixture": "fixture_2",
+      "arm": "baseline",
+      "model": "gpt-6-luna",
+      "effort": "low",
+      "max_output_tokens": 6000,
+      "full_writer_completion_ms": 2014.838,
+      "server_offsets_ms": {
+        "dispatch": 2258.891,
+        "headers": 4273.047,
+        "bodyComplete": 4273.668,
+        "validated": 4273.729
+      },
+      "controller_received_elapsed_ms": 4367.500983,
+      "request_sha256": "c26ec2464a7d0c7ab962b4fce8b2d0d7b43bbd9aab3547cd87d9a57e35ea7365",
+      "instructions_sha256": "c4be1c5c991f53b60d1c8a57cb0a5ce97d63c474aaec2a97f01bcc827501abc3",
+      "semantic_request_sha256": "c42b63529354a05e3a09ce984233ccfb006b35fec0be8024c3dc2ecc2d980b50",
+      "text_sha256": "43af367de73d7eaef2950f352dc3b26fc2b08d6f6a87035313cd7d06fd4b852a",
+      "usage": {
+        "input_tokens": 2905,
+        "output_tokens": 46,
+        "cached_tokens": 0,
+        "cache_write_tokens": 2733,
+        "reasoning_tokens": 0,
+        "cache_metrics_known": true,
+        "reasoning_metric_known": true
+      },
+      "cached_input_fraction": 0,
+      "write_input_fraction": 0.9407917383820998
+    }
+  ],
+  "pairs": [
+    {
+      "fixture": "fixture_1",
+      "order": [
+        "baseline",
+        "candidate"
+      ],
+      "baseline_ms": 2817.915,
+      "candidate_ms": 1524.44,
+      "candidate_minus_baseline_ms": -1293.475
+    },
+    {
+      "fixture": "fixture_2",
+      "order": [
+        "candidate",
+        "baseline"
+      ],
+      "baseline_ms": 2014.838,
+      "candidate_ms": 2256.173,
+      "candidate_minus_baseline_ms": 241.3349999999998
+    }
+  ],
+  "baseline_cache_read_also_observed": false,
+  "limits": [
+    "Two synthetic reply fixtures, one baseline and one candidate observation per fixture; counterbalanced AB/BA does not eliminate shared provider cache contamination, eviction, service scheduling, cold/warm setup or network variance.",
+    "Full writer completion includes provider request through complete body/output validation; it is not first token/audio, ASR, end-of-utterance or full production call latency.",
+    "Actual server clocks/history/instructions/nonce are identical within each pair; clock/current input change between fixtures. The public cache prefix is the same exact5730byte natural renderer prefix; no padding/dummy request/prewarm/delay.",
+    "Both content partitions concatenate to the same complete instructions with identical request semantics. Different generated responses and token counts are retained; there is no shorter-answer quota or effort/model change.",
+    "Raw missing/null cache/reasoning metrics remain unknown, not0; reported read/write fractions do not by themselves prove attributable layout advantage when baseline also hits shared cache.",
+    "Candidate fixture2 requires at least1024 actual cached input tokens. Favorable timing cannot substitute for that mechanism criterion and saved blind quality review.",
+    "Small-n blind review detected no obvious regression, but cannot prove broad quality equivalence or human preference. The four writer calls do not benchmark the separately tested RPC parallelism change.",
+    "No retries or extra providers/generations. All ten prior actual model generations (two writers and eight readers) and these four writer originals remain immutable."
+  ],
+  "actual_db": false,
+  "actual_account": false,
+  "actual_microphone": false,
+  "production_coach_or_settings_changed_by_experiment": false,
+  "new_provider_generations_for_evidence": 0,
+  "new_network_requests_for_evidence": 0
+}

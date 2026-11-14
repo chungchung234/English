@@ -1,0 +1,55 @@
+{
+  "disposition": "clear",
+  "baselineRelease": "610e8db97f642253297f45ab723385c93e279c08",
+  "runtimeModules": 16,
+  "experimentalSegmentsIncluded": false,
+  "runtimeTreeSha256": "80e3478cbecb5d88fbffa1c8681e1607f834484ef6517b3483b1648ba59a8c0d",
+  "runtimeFreezeSha256": "3ba13703efb034122d2f0018eb2a2706f0edd07f2caec09bb4495423a1f85fe1",
+  "verifierSha256": "3eacbc6a8791a60c13e979ac839baccf4f6f8c1ba83f40e2f682518027eed9df",
+  "implementationSourceSha256": {
+    "authored-dialogue.ts": "382cefe72e28abae881ff8c71d22001d83407e0c774d87234717887d34e6801e",
+    "index.ts": "4020b235063584579f3c87fc4bbb4d3bd639ff32fe76e9849dff4c76a788556f"
+  },
+  "cacheLayout": {
+    "implementedBy": "latency_design_review",
+    "independentReviewer": "latency_stream_client",
+    "independentReviewDisposition": "clear",
+    "unitTestsExecutedByAuthor": 20,
+    "unitTestsPassed": 20,
+    "exactUtf8ConcatenationAndInstructionOrderPreserved": true,
+    "modelEffortServiceTierOutputCapHistoryAndAuthorityUnchanged": true,
+    "cachedPrefixOnlyExactKnownPublicRendererBlocks": true,
+    "dynamicClockMemoryOpeningCheckpointHintAndHistoryUnmarked": true,
+    "unknownRendererOnePartUncached": true,
+    "noUntrustedMarkerSearch": true
+  },
+  "memoryConcurrency": {
+    "independentReviewer": "latency_design_review",
+    "disposition": "clear",
+    "verificationSequentialByDefault": true,
+    "onlyAuthoredPrepareVerificationOptsIntoParallelReads": true,
+    "authoredFinalSqlDispatchAndTextCommitGuardsUnchanged": true,
+    "initialPairRetainsSubsequentEligibilityRead": true,
+    "lateExclusionAfterEarlyLearningRegressionReviewed": true,
+    "legacyInitialPreProviderPostProviderCoverageReviewed": true,
+    "authoredDispatchAndCommitRevocationCoverageReviewed": true,
+    "ownerReportedCoachAndFocusedTestsPassed": 89,
+    "ownerReportedDenoAndDiffExit0": true,
+    "testsExecutedByReviewer": false
+  },
+  "verifierPreparation": {
+    "staticAstSyntaxPassed": true,
+    "criticalParserTokenCompilerSourceProofSql49Ws19InspectPublicBodiesUnchanged": true,
+    "selfTestExecuted": false,
+    "independentVerifierReviewPending": true
+  },
+  "actualProviderRequestsByThisAgent": 0,
+  "actualExternalRequestsByThisAgent": 0,
+  "actualDeploymentsByThisAgent": 0,
+  "latencyOrCacheHitImprovementDemonstrated": false,
+  "remainingVerification": [
+    "root-owned heavy verifier self-test",
+    "exact committed release CI/deployed/public source checks",
+    "separately reviewed bounded provider cache comparison before improvement claims"
+  ]
+}

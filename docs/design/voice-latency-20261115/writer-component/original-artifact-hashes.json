@@ -1,0 +1,130 @@
+{
+  "original_files": {
+    "PLAN.md": {
+      "sha256": "505d603fc94f093f7a16e8d3b8448f1c4ff4b2c243aba25891d80177789cd844",
+      "bytes": 4890
+    },
+    "QUALITY-RUBRIC.md": {
+      "sha256": "3a9bd66bc4a2229646ba35889e72af495f4a80fc95ab7e11183883040f9b838b",
+      "bytes": 2003
+    },
+    "function.ts": {
+      "sha256": "f831efab59caab51298fdc43512969287883ec31526c86f459b7449da0261b24",
+      "bytes": 9024
+    },
+    "function.prepared.ts": {
+      "sha256": "6c2c877b2d47899287c71b9a855b317ef6c48bb891774a7c24267a57d598b736",
+      "bytes": 54071
+    },
+    "prepare.mjs": {
+      "sha256": "412516e11872d01881e04469f2973418588c9ec695b519636ccd7342d5c684d8",
+      "bytes": 11788
+    },
+    "run.mjs": {
+      "sha256": "99a38a2855add0df8b6a7475342b5f45f044743d062ceedb368272577b609737",
+      "bytes": 24851
+    },
+    "source-freeze.json": {
+      "sha256": "10fa89ca15b6bbdb1391222372dc290166fbddf3e085f420ba64fd05afa8aaf1",
+      "bytes": 3452
+    },
+    "private-inputs.json": {
+      "sha256": "c513d3a83f4904d3b799e2906db4784e5db19c193bb2254906ff31c13e2e0bd9",
+      "bytes": 10369
+    },
+    "private-fixture.json": {
+      "sha256": "aeac53bd355f492cf9cd586087d271b86f6992ff5e634bd3f04a76f261a11ebe",
+      "bytes": 22933
+    },
+    "request-equivalence.json": {
+      "sha256": "5e1a4013445d3b37983cf9d90cf0932387294e66857d4dccfff1c01605e5f13e",
+      "bytes": 884
+    },
+    "dependency-graph.json": {
+      "sha256": "2331f5f4bf23fcc90d738a1f268857b08d06ee53f03709c589e93cfa88ef8a76",
+      "bytes": 2842
+    },
+    "fixture-check.mjs": {
+      "sha256": "02b36c489581a255610239384a3da60663463d051e1dfdb18893944650f0ebf5",
+      "bytes": 255082
+    },
+    "verify-offline.mjs": {
+      "sha256": "7e2fc66e8246197c05676195f976adda09094a8ce56dc4cb1d0d0cc076a3879b",
+      "bytes": 8722
+    },
+    "verify-deno.mjs": {
+      "sha256": "d1b19ede505894e9d86f67ae1290e38d817f171fdf47e7c80997be3d11e0d645",
+      "bytes": 2252
+    },
+    "fake-fixture.mjs": {
+      "sha256": "7c535980b78666c7f3d926ec78327bfa5deb09f9f1d9631040c5680db777e1ac",
+      "bytes": 2768
+    },
+    "manifest.json": {
+      "sha256": "5c20175d92bce6fbe1a4fe030769c93aaed5f39a8384a8254afc1c5aa240afe2",
+      "bytes": 3692
+    },
+    "independent-review.json": {
+      "sha256": "f396b4d11a4821e48632b8c873f0d0f2ec75ddc5de52c58eccb63affb2ab8657",
+      "bytes": 3244
+    },
+    "offline-verification.json": {
+      "sha256": "82289108fb7c1fd222d3fe103f727d9532626b51995d56c951aad9d10cf1c750",
+      "bytes": 1331
+    },
+    "deno-check.json": {
+      "sha256": "d31e53a83559bb70dcecb216ea8cb7fa06182ef0d5938d233e0d9ae14094d285",
+      "bytes": 425
+    },
+    "safe-result.json": {
+      "sha256": "9eda267d20ba0ddbd78065421e7764513230581bc78d9cc82186e9eabaf1e7ba",
+      "bytes": 9370
+    },
+    "run-claim.jsonl": {
+      "sha256": "f952063eedd2bf28b42f332a07c5d27a91e76b3b7372c7f6aa4b2c0800d73cd8",
+      "bytes": 7864
+    },
+    "private-actual-stderr.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "private-actual-stdout.json": {
+      "sha256": "93000cd1fa88626de10228e8800de5262a301c9e49d23d6a04759559e57a77e7",
+      "bytes": 6852
+    },
+    "private-blind-judgment.json": {
+      "sha256": "ceb0183a63d857b791b9c291a965f2c935e72237f3e8bf37f4704722c7e2e35c",
+      "bytes": 10876
+    },
+    "private-blind-mapping.json": {
+      "sha256": "2b8adc566f0683cf24764584e39bf96a93b52cce75492f8069c54cd0065bd5be",
+      "bytes": 875
+    },
+    "private-blind-quality.json": {
+      "sha256": "c56cd3e6bf6458e31682dfba456036bea9383cd8d63e41cc85c0b65a1faaa2cf",
+      "bytes": 31657
+    },
+    "private-deno-check.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "private-fixture_1-baseline.json": {
+      "sha256": "ebe2f42893f297e4c3712f8f46ba945da6907ce0bd6ef5460b6f8cb8c0378492",
+      "bytes": 17177
+    },
+    "private-fixture_1-candidate.json": {
+      "sha256": "cecb8ec6101d664662bdacf3560627f0d06409c6934ac883e9bd6a3ae732cd18",
+      "bytes": 17296
+    },
+    "private-fixture_2-baseline.json": {
+      "sha256": "3ebf78fd7d78685b4395ad10dfd54d1286b0832498be51c1082cdac75d15e9af",
+      "bytes": 17912
+    },
+    "private-fixture_2-candidate.json": {
+      "sha256": "afc97da2a9618184d612ac53c6367300c14d764b5f606774fecc0a13679ae66e",
+      "bytes": 18019
+    }
+  },
+  "raw_originals_retained_private": true,
+  "originals_modified_by_evidence_generation": false
+}

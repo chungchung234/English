@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { createRealtimeReader, fidelityTokens, wordsMatch, verifySpeechCapture, pcmFromBase64, pcmToBase64, READER_INSTRUCTIONS, SYNTHESIS_MODEL, FIDELITY_POLICY_VERSION, realtimeReaderRequests, MAX_PCM_BYTES, PCM_RATE, SYNTHESIS_OUTPUT_CAP } from './verified-speech.ts';
+import { createPreparedRealtimeReader, createRealtimeReader, fidelityTokens, wordsMatch, verifySpeechCapture, pcmFromBase64, pcmToBase64, READER_INSTRUCTIONS, SYNTHESIS_MODEL, FIDELITY_POLICY_VERSION, realtimeReaderRequests, MAX_PCM_BYTES, PCM_RATE, SYNTHESIS_OUTPUT_CAP } from './verified-speech.ts';
 
 // Frozen experimental reference uses its original independent code-point scan.
 function reference(value) {
@@ -214,4 +214,46 @@ test('whole capture rejects oversized, silent, odd or mismatched audio and both 
  await rejectsOnce(fragmented(MAX_PCM_BYTES + 2), { deadlineMs: 30000 });
  const odd = await scripted({ response: frames => { frames[3].delta = 'AQ=='; return frames; } }).operation;
  await assert.rejects(verifySpeechCapture(odd, readerRequest.text), error => error.code === 'SYNTHESIS_AUDIO_INVALID');
+});
+
+test('request-owned warmup sends no text or response until explicitly consumed and then retains the whole capture gate', async () => {
+ let socket, opens=0;const prepared=createPreparedRealtimeReader(readerRequest,()=>{opens++;return socket=new ScriptedSocket();});
+ try {
+  await prepared.ready;
+  assert.equal(opens,1);assert.deepEqual(socket.sent.map(event=>event.type),['session.update']);assert(!JSON.stringify(socket.sent).includes(readerRequest.text));
+  const capture=await prepared.generate(readerRequest);await verifySpeechCapture(capture,readerRequest.text);
+  assert.equal(socket.sent.filter(event=>event.type==='response.create').length,1);assert.equal(socket.readyState,3);
+  await assert.rejects(prepared.generate(readerRequest));assert.equal(opens,1);assert.equal(socket.sent.length,2);
+ } finally {await prepared.dispose();}
+});
+
+test('prepared reader cannot change persisted nonce, voice, speed, key or signal after setup', async () => {
+ for(const change of [{nonce:'other'},{voice:'marin'},{speed:1},{key:'other-key'},{signal:new AbortController().signal}]) {
+  let socket;const prepared=createPreparedRealtimeReader(readerRequest,()=>socket=new ScriptedSocket());
+  try {await prepared.ready;await assert.rejects(prepared.generate({...readerRequest,...change}));assert.equal(socket.sent.length,1);assert.equal(socket.readyState,3);}
+  finally {await prepared.dispose();}
+ }
+});
+
+test('unexpected response or duplicate session ACK while warm cannot be converted into a playable generation', async () => {
+ for(const unexpected of [readerFrames()[0],readerFrames()[3],{type:'session.updated',session:{...clone(realtimeReaderRequests(readerRequest).session.session),model:SYNTHESIS_MODEL}}]) {
+  let socket;const prepared=createPreparedRealtimeReader(readerRequest,()=>socket=new ScriptedSocket());
+  try {await prepared.ready;socket.msg(unexpected);await assert.rejects(prepared.generate(readerRequest));assert.equal(socket.sent.length,1);assert.equal(socket.readyState,3);}
+  finally {await prepared.dispose();}
+ }
+});
+
+test('abandoned warm reader and an unsettled late factory are closed without creating a response', async () => {
+ let socket;const prepared=createPreparedRealtimeReader(readerRequest,()=>socket=new ScriptedSocket());await prepared.ready;await prepared.dispose();
+ assert.equal(socket.readyState,3);assert.equal(socket.sent.length,1);await assert.rejects(prepared.generate(readerRequest));
+ let release;const gate=new Promise(resolve=>{release=resolve;});const late=createPreparedRealtimeReader(readerRequest,()=>gate);
+ await Promise.resolve();await late.dispose();await assert.rejects(late.ready);
+ const arriving=new ScriptedSocket();release(arriving);for(let i=0;i<8;i++)await Promise.resolve();
+ assert.equal(arriving.readyState,3);assert.equal(arriving.sent.length,0);assert.equal(arriving.closeCalls,1);
+});
+
+test('disposal after open settled but before the ready continuation still closes the arriving socket',async()=>{
+ const socket=new ScriptedSocket();let prepared;
+ prepared=createPreparedRealtimeReader(readerRequest,()=>({then(resolve){resolve(socket);queueMicrotask(()=>{void prepared.dispose();});}}));
+ await assert.rejects(prepared.ready);await prepared.dispose();assert.equal(socket.readyState,3);assert.equal(socket.closeCalls,1);assert.equal(socket.sent.length,0);
 });

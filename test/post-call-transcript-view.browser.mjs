@@ -86,6 +86,31 @@ try {
   assert(Math.abs((await page.evaluate(() => window.scrollY)) - canceledPosition) <= 1, 'canceled source cannot scroll the reader');
   await page.evaluate(() => { sourceActive = true; view.showSource(['explicitly-canceled'], { isActive: () => sourceActive }); view.cancelSource(); const row = { id: 'explicitly-canceled', event_key: 'explicit-cancel-key', speaker: 'user', text: 'Canceled navigation.', occurred_at: '2026-11-11T09:17:00.000Z', storage: 'server' }; current.transcript.set(row.event_key, row); view.changed(current); });
   assert.equal(await page.evaluate(() => document.activeElement.dataset.transcriptEventId), 'source-arrives-later');
+  // A current-call save and a background retry can ACK the same immutable UUID.
+  // Neither may claim a newer/replaced row was saved merely by matching its key.
+  const acknowledgements = await page.evaluate(() => {
+    const original = { id: 'ack-event', event_key: 'ack-key', speaker: 'user', text: 'The exact saved caller source.', occurred_at: '2026-11-11T09:18:00.000Z' };
+    const changes = [{ id: 'replacement-id' }, { event_key: 'replacement-key' }, { speaker: 'assistant' },
+      { text: 'Newer caller source that has not been acknowledged.' }, { occurred_at: '2026-11-11T09:18:01.000Z' }];
+    const retained = [];
+    for (const change of changes) {
+      const row = { ...original, ...change, storage: 'device' };
+      current.transcript.set(original.event_key, row); view.changed(current);
+      view.confirm(owner.scope, owner.sessionId, [original]); retained.push(row.storage);
+    }
+    const pendingRow = { ...original, storage: 'device' }; current.transcript.set(original.event_key, pendingRow); view.changed(current);
+    view.confirm('different-account', owner.sessionId, [original]); retained.push(pendingRow.storage);
+    view.confirm(owner.scope, 'different-call', [original]); retained.push(pendingRow.storage);
+    const count = current.transcript.size;
+    view.confirm(owner.scope, owner.sessionId, [original]); const once = pendingRow.storage;
+    view.confirm(owner.scope, owner.sessionId, [original]); const duplicate = pendingRow.storage;
+    const legacy = { id: 'legacy-ack', event_key: 'legacy-ack-key', speaker: 'user', text: 'A source with the older timestamp field.', timestamp: '2026-11-11T09:19:00.000Z', storage: 'device' };
+    current.transcript.set(legacy.event_key, legacy); view.changed(current);
+    view.confirm(owner.scope, owner.sessionId, [{ id: legacy.id, event_key: legacy.event_key, speaker: legacy.speaker, text: legacy.text, occurred_at: legacy.timestamp }]);
+    return { retained, once, duplicate, noDuplicateRows: current.transcript.size === count + 1, legacy: legacy.storage };
+  });
+  assert.deepEqual(acknowledgements, { retained: Array(7).fill('device'), once: 'server', duplicate: 'server', noDuplicateRows: true, legacy: 'server' });
+  assert.match(await page.locator('[data-transcript-meta]').innerText(), /대화 저장됨/);
   // Late data from a prior selection cannot overwrite a new call.
   await page.evaluate(() => {
     owner.sessionId = 'call-two'; view.select({ id: 'call-two', companion_id: 'alex', status: 'ended' }, { name: 'Alex' });
@@ -99,7 +124,7 @@ try {
   await page.evaluate(() => view.clear());
   assert.equal(await page.locator('#post-call-transcript').count(), 0);
   assert.deepEqual(errors, []);
-  console.log('Transcript reading surface: stable rows, selection, late-event scroll anchor, source navigation and scope isolation passed.');
+  console.log('Transcript reading surface: stable rows, selection, late-event scroll anchor, exact ACK ownership, source navigation and scope isolation passed.');
 } finally {
   await browser?.close(); server.kill('SIGTERM');
 }

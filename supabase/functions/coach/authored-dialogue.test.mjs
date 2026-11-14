@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { handleAuthoredDialogue, authoredDialogueCapability, authoredOutput, synthesisReservation, synthesisUsage, authoringRequest } from './authored-dialogue.ts';
+import { handleAuthoredDialogue, authoredDialogueStream, authoredDialogueCapability, authoredOutput, synthesisReservation, synthesisUsage, authoringRequest } from './authored-dialogue.ts';
 import { FIDELITY_POLICY_VERSION, textDigest } from './verified-speech.ts';
 import { renderVoiceInstructions, renderOpeningInstructions, handler } from './index.ts';
 import { companionProfile, fingerprint } from './core.ts';
@@ -73,6 +73,14 @@ test('exact v5 authoring keeps current raw speech, private phase/reasoning and i
  assert.equal(f.trace.find(x=>x.name==='authored_dialogue_complete_text').body.p_opaque_output,null);assert(!JSON.stringify(result).includes('PRIVATE_CANARY'));assert(!JSON.stringify(result).includes('response-private'));
  const startup=fixture();await handleAuthoredDialogue('dialogue-turn',uid,turnBody({purpose:'startup',currentUserEventIds:[]}),startup.deps);assert.equal(startup.provider[0].input.length,1);assert(startup.provider[0].input[0].content[0].text.includes('Current caller utterance: null'));
 });
+
+test('optional legacy checkpoint lookup is skipped until the same raw-window compaction condition requires it',async()=>{
+ const short=fixture();let shortLookups=0;short.deps.legacyCheckpoints=async()=>{shortLookups++;throw Error('Unexpected short-history lookup');};
+ await handleAuthoredDialogue('dialogue-turn',uid,turnBody(),short.deps);assert.equal(shortLookups,0);assert.equal(short.provider.length,1);
+ const history=Array.from({length:30},(_,i)=>({id:id(500+i),session_id:sid,speaker:i%2?'assistant':'user',text:'A saved concrete conversation detail. '.repeat(30),timestamp:new Date(Date.parse(clock.session_created_at)+i*1000).toISOString()}));
+ const long=fixture({events:[...history,input]});let longLookups=0;long.deps.legacyCheckpoints=async()=>{longLookups++;throw Error('LONG_LOOKUP_MARKER');};
+ await assert.rejects(handleAuthoredDialogue('dialogue-turn',uid,turnBody({acceptedHistoryEventIds:history.map(event=>event.id)}),long.deps),/LONG_LOOKUP_MARKER/);assert.equal(longLookups,1);assert.equal(long.provider.length,0);
+});
 test('ended/forged-current/source-revoked requests fail before public reply or synthesis',async()=>{
  const ended=fixture({ended:true});await assert.rejects(handleAuthoredDialogue('dialogue-turn',uid,turnBody(),ended.deps));assert.equal(ended.provider.length,0);
  const forged=fixture({events:[{...input,speaker:'assistant'}]});await assert.rejects(handleAuthoredDialogue('dialogue-turn',uid,turnBody(),forged.deps));assert.equal(forged.provider.length,0);
@@ -113,5 +121,90 @@ test('actual HTTP handler maps sanitized DB source revocation and keeps unknown 
   globalThis.fetch=async url=>{const path=new URL(url).pathname;if(path==='/auth/v1/user')return Response.json({id:uid,email:'owner@example.com',email_confirmed_at:clock.server_now_utc});if(path==='/rest/v1/sessions')return Response.json([session]);if(path.endsWith('/conversation_context_authorized'))return Response.json(true);if(path.endsWith('/authored_dialogue_context'))return new Response(JSON.stringify({code:'40001',message}),{status:409,headers:{'content-type':'application/json'}});throw Error('Unexpected external call '+path);};
   const result=await handler(new Request('https://project.supabase.co/functions/v1/coach/dialogue-context',{method:'POST',headers:{Origin:'https://example.com',Authorization:'Bearer local-user','content-type':'application/json'},body:JSON.stringify({protocol,sessionId:sid,callEpoch:1,omitLearningContext:false})}));
   assert.equal(result.status,message.startsWith('DIALOGUE_')?409:503);const out=await result.json();assert.equal(out.error.code,message.startsWith('DIALOGUE_')?'MEMORY_SOURCE_CHANGED':'DATABASE_UNAVAILABLE');assert(!JSON.stringify(out).includes('personal data'));
+ }}finally{globalThis.fetch=oldFetch;globalThis.Deno=oldDeno;}
+});
+
+const deferred=()=>{let resolve;const promise=new Promise(accept=>{resolve=accept;});return{promise,resolve};};
+async function until(check){const deadline=Date.now()+2000;while(Date.now()<deadline){if(check())return;await new Promise(resolve=>setTimeout(resolve,1));}throw Error('Held stage did not arrive.');}
+async function frame(reader){const chunk=await reader.read();assert.equal(chunk.done,false);const text=new TextDecoder().decode(chunk.value);assert(text.endsWith('\n'));return JSON.parse(text);}
+async function remainder(reader){const frames=[];while(true){const chunk=await reader.read();if(chunk.done)return frames;const text=new TextDecoder().decode(chunk.value);assert(text.endsWith('\n'));frames.push(...text.trimEnd().split('\n').map(line=>JSON.parse(line)));}}
+
+test('combined stream starts setup during author work, exposes early text, then dispatches only after readiness and current guards',async()=>{
+ const f=fixture(),authorGate=deferred(),readyGate=deferred(),originalAuthor=f.deps.author,originalSynthesize=f.deps.synthesize;
+ let setup=false,ready=false,generated=0,disposed=0;
+ f.deps.author=async(body,signal)=>{await authorGate.promise;return originalAuthor(body,signal);};
+ f.deps.prepareSynthesis=binding=>{
+  setup=true;assert.equal(binding.voice,'cedar');assert.equal(binding.speed,.85);assert.equal(binding.nonce,nonce);assert.equal(Object.hasOwn(binding,'text'),false);
+  assert.equal(f.trace.at(-1).name,'authored_dialogue_dispatch');assert.equal(f.trace.at(-1).body.p_stage,'dialogue');
+  return{ready:readyGate.promise.then(()=>{ready=true;}),generate:request=>{assert(ready);assert.equal(f.trace.at(-1).name,'authored_dialogue_dispatch');assert.equal(f.trace.at(-1).body.p_stage,'dialogue_synthesis');generated++;return originalSynthesize(request);},dispose:async()=>{disposed++;}};
+ };
+ const reader=authoredDialogueStream(uid,turnBody(),f.deps).getReader();await until(()=>setup);
+ assert.equal(f.provider.length,0);assert.equal(generated,0,'preparation cannot synthesize before the author returns');
+ authorGate.resolve();const text=await frame(reader);assert.equal(text.type,'text');assert.deepEqual(text.result.owner,expectedOwner);
+ await until(()=>f.trace.some(row=>row.name==='authored_dialogue_synthesis_begin'));
+ assert.equal(generated,0);assert(!f.trace.some(row=>row.name==='authored_dialogue_dispatch'&&row.body.p_stage==='dialogue_synthesis'));
+ readyGate.resolve();const rest=await remainder(reader);assert.deepEqual(rest.map(row=>row.type),['audio','done']);assert.deepEqual(rest[0].result.manifest.owner,text.result.owner);assert.equal(generated,1);assert(disposed>=1);
+ assert.deepEqual(Object.keys(rest[1].timings).sort(),['authorMs','synthesisMs','totalMs']);assert(Object.values(rest[1].timings).every(n=>Number.isFinite(n)&&n>=0));
+ const wire=JSON.stringify([text,...rest]);assert(!wire.includes('never-export-mock'));assert(!wire.includes('PRIVATE_CANARY'));
+});
+
+test('source or budget revocation during warm readiness emits a typed error without audio or generation',async()=>{
+ for(const kind of ['source','budget']){
+  let revoked=false,generated=0,disposed=0;const readyGate=deferred();const f=fixture({rpc:(name,body)=>{
+   if(kind==='source'&&revoked&&name==='authored_dialogue_dispatch'&&body.p_stage==='dialogue_synthesis')return false;
+   if(kind==='budget'&&revoked&&name==='reserve_model_spend'&&body.p_model==='gpt-realtime-2.1-mini')return false;
+  }});
+  f.deps.prepareSynthesis=()=>({ready:readyGate.promise,generate:async()=>{generated++;throw Error('must not generate');},dispose:async()=>{disposed++;}});
+  const reader=authoredDialogueStream(uid,turnBody(),f.deps).getReader();assert.equal((await frame(reader)).type,'text');revoked=true;readyGate.resolve();
+  const frames=await remainder(reader);assert.deepEqual(frames.map(row=>row.type),['error']);assert.equal(frames[0].error.code,kind==='source'?'DIALOGUE_RPC_INVALID':'COST_BUDGET_EXCEEDED');assert.equal(generated,0);assert(disposed>=1);assert(!f.trace.some(row=>row.name==='authored_dialogue_publish'));
+ }
+});
+
+test('concurrent already-written text still prepares a reader before the synthesis dispatch guard',async()=>{
+ const f=fixture(),written=await handleAuthoredDialogue('dialogue-turn',uid,turnBody(),f.deps),original=f.deps.rpc,originalSynthesize=f.deps.synthesize;
+ let preparedAt='',generated=0;
+ // Represents a duplicate that observed generation0 before another request
+ // committed the identical nonce's text, then reached begin after completion.
+ f.deps.rpc=async(name,body)=>{
+  if(name==='authored_dialogue_state')return{...f.state,turn_generation:0};
+  if(name==='authored_dialogue_begin')return{turn:{...f.turn},assistant_event:{id:aid,session_id:sid,event_key:written.assistantEvent.event_key,speaker:'assistant',text:written.text,timestamp:written.assistantEvent.occurred_at}};
+  return original(name,body);
+ };
+ f.deps.prepareSynthesis=()=>{preparedAt=f.trace.at(-1).name;return{ready:Promise.resolve(),generate:request=>{assert.equal(f.trace.at(-1).name,'authored_dialogue_dispatch');assert.equal(f.trace.at(-1).body.p_stage,'dialogue_synthesis');generated++;return originalSynthesize(request);},dispose:async()=>{}};};
+ const frames=await remainder(authoredDialogueStream(uid,turnBody(),f.deps).getReader());assert.deepEqual(frames.map(row=>row.type),['text','audio','done']);assert.equal(preparedAt,'authored_dialogue_synthesis_begin');assert.equal(generated,1);assert.equal(f.provider.length,1,'cached canonical text must not be authored again');
+});
+
+test('consumer cancellation closes a warmed reader even while the author is still pending',async()=>{
+ const f=fixture(),gate=deferred(),original=f.deps.author;let setup=false,disposed=0,generated=0;
+ f.deps.author=async(body,signal)=>{await gate.promise;return original(body,signal);};
+ f.deps.prepareSynthesis=()=>{setup=true;return{ready:Promise.resolve(),generate:async()=>{generated++;throw Error('must not generate');},dispose:async()=>{disposed++;}};};
+ const reader=authoredDialogueStream(uid,turnBody(),f.deps).getReader();await until(()=>setup);await reader.cancel();assert(disposed>=1);gate.resolve();await until(()=>f.trace.some(row=>row.name==='fail_run'));
+ assert.equal(generated,0);assert(!f.trace.some(row=>row.name==='authored_dialogue_complete_text'));assert(!f.trace.some(row=>row.name==='authored_dialogue_publish'));
+});
+
+test('writer failure disposes setup and returns only sanitized typed error; disabled stream starts nothing',async()=>{
+ const f=fixture();let disposed=0;f.deps.prepareSynthesis=()=>({ready:Promise.resolve(),generate:async()=>{throw Error('must not generate');},dispose:async()=>{disposed++;}});
+ f.deps.author=async()=>{throw Error('PRIVATE provider detail and key');};const frames=await remainder(authoredDialogueStream(uid,turnBody(),f.deps).getReader());
+ assert.deepEqual(frames.map(row=>row.type),['error']);assert.equal(frames[0].error.code,'DIALOGUE_UNAVAILABLE');assert(!JSON.stringify(frames).includes('PRIVATE'));assert(disposed>=1);
+ const off=fixture();delete off.config.AUTHORED_DIALOGUE_ENABLED;assert.throws(()=>authoredDialogueStream(uid,turnBody(),off.deps),error=>error.code==='AUTHORED_DIALOGUE_DISABLED');assert.deepEqual(off.trace,[]);
+});
+
+test('server-ready diagnostics contain only fixed labels and the same numeric stage durations as the done frame',async()=>{
+ const prior=console.info,logs=[];console.info=value=>logs.push(JSON.parse(value));
+ try{
+  const f=fixture(),frames=await remainder(authoredDialogueStream(uid,turnBody(),f.deps).getReader());assert.equal(frames.at(-1).type,'done');assert.equal(logs.length,1);
+  assert.deepEqual(Object.keys(logs[0]).sort(),['authorMs','kind','policy','synthesisMs','totalMs']);assert.equal(logs[0].kind,'authored_dialogue_server_ready');
+  const{kind,policy,...timings}=logs[0];assert.deepEqual(timings,frames.at(-1).timings);assert(!JSON.stringify(logs).includes(uid));assert(!JSON.stringify(logs).includes('prepared reply'));
+ }finally{console.info=prior;}
+});
+
+test('HTTP dialogue-response is routed as NDJSON after authentication, and unapproved users never start its stages',async()=>{
+ const oldDeno=globalThis.Deno,oldFetch=globalThis.fetch,config={AUTHORED_DIALOGUE_ENABLED:'true',AUTHORED_DIALOGUE_FIDELITY_VERIFIED:'true',ACCESS_MODE:'public',ALLOWED_ORIGINS:'https://example.com',SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'local-private-key',OPENAI_API_KEY:'local-unused'};
+ globalThis.Deno={env:{get:name=>config[name]}};
+ try{for(const authorized of [false,true]){
+  const paths=[];globalThis.fetch=async url=>{const path=new URL(url).pathname;paths.push(path);if(path==='/auth/v1/user')return authorized?Response.json({id:uid,email:'owner@example.com',email_confirmed_at:clock.server_now_utc}):new Response('{}',{status:401});if(path==='/rest/v1/sessions')return Response.json([{...session,status:'ended'}]);throw Error('Unexpected external path');};
+  const result=await handler(new Request('https://project.supabase.co/functions/v1/coach/dialogue-response',{method:'POST',headers:{Origin:'https://example.com',Authorization:'Bearer fixture-user','content-type':'application/json'},body:JSON.stringify(turnBody())}));
+  if(!authorized){assert.equal(result.status,401);assert.deepEqual(paths,['/auth/v1/user']);}
+  else{assert.equal(result.status,200);assert.match(result.headers.get('content-type'),/^application\/x-ndjson/);assert.equal(result.headers.get('cache-control'),'no-store, no-transform');assert.equal(result.headers.get('x-accel-buffering'),'no');const frames=(await result.text()).trimEnd().split('\n').map(JSON.parse);assert.deepEqual(frames.map(row=>row.type),['error']);assert.equal(frames[0].error.code,'SESSION_ENDED');assert.deepEqual(paths,['/auth/v1/user','/rest/v1/sessions']);}
  }}finally{globalThis.fetch=oldFetch;globalThis.Deno=oldDeno;}
 });

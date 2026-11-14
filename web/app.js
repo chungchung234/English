@@ -22,7 +22,7 @@ import { createVerifiedPcmPlayback } from './verified-pcm-playback.js';
 import { createCallDiagnostics } from '../src/call-diagnostics.mjs';
 import { createCallAudioObserver } from './call-audio.js';
 import { createConversationClock, deviceTimeZone, formatInstant, recordTimeLabel, sessionTimeLabel, sessionTimeZone } from './conversation-time.js';
-import { createOutbox, flushOutbox } from '../src/outbox.js';
+import { createOutbox, flushOutbox, flushOutboxSession } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
 import { mountEmailLogin } from '../src/email-login.mjs';
 import { createAuthSession, LoginFlowError } from '../src/auth-session.mjs';
@@ -359,13 +359,20 @@ function connectAuthoredDialogue(current,attempt) {
   const active=()=>call===current&&!current.ending&&scope===current.scope&&auth?.user?.id===attempt.userId&&companionId===current.companionId;
   current.pcm=attempt.pcm;
   current.authored=createAuthoredDialogue({scope:current.scope,sessionId:current.id,companionId:current.companionId,callEpoch:attempt.callEpoch,
-    edge,player:current.pcm,playbackDelivery:authoredPlaybackDelivery,isCurrent:active,initialSpeed:current.initialSpeed,
+    edge,streamed:attempt.authoredStream,player:current.pcm,playbackDelivery:authoredPlaybackDelivery,isCurrent:active,initialSpeed:current.initialSpeed,
     savedInputs:async request=>{
       // The floor may request synchronously inside the ASR event callback. Let
       // that callback enqueue its raw capture before waiting for its server ACK.
-      await Promise.resolve();await saving;await sync();
+      await Promise.resolve();await saving;
       if(!active()||current.inputBlocked)throw Error('Saved caller input is unavailable.');
       const byItem=new Map([...current.transcript.values()].map(item=>[current.transcriptProviderItems.get(item.id),item]));
+      const needed=[...new Set([...request.userItemIds,...request.contextItemIds])].map(id=>byItem.get(id));
+      if(needed.some(item=>!item))throw Error('Caller input is unavailable.');
+      const pendingIds=needed.filter(item=>item.storage!=='server').map(item=>item.id);
+      if(pendingIds.length)await flushOutboxSession(outbox,current.scope,current.id,
+        (sessionId,events)=>appendSavedEvents(current.scope,sessionId,events,current),{eventIds:pendingIds});
+      if(!active()||current.inputBlocked)throw Error('Saved caller input is unavailable.');
+      void updatePending().catch(()=>{});
       const saved=ids=>ids.map(id=>{const item=byItem.get(id);if(!item||item.storage!=='server')throw Error('Caller input is still saving.');return item.id;});
       const userIds=saved(request.userItemIds),currentIds=new Set(userIds);
       return {currentUserEventIds:userIds,acceptedHistoryEventIds:saved(request.contextItemIds).filter(id=>!currentIds.has(id)),
@@ -735,10 +742,11 @@ function notice(message,{persistent=message instanceof Error,keepOnNavigation=fa
 }
 const protect = fn => async (...args) => { clearNotice();try { await fn(...args); } catch(e) { notice(e); } };
 function setStatus(text) { if(document.body.dataset.callPhase!=='ending')$('save-status').textContent = text; }
-async function request(path, {method='GET', body, token, headers={}, signal}={}) {
-  const cancellation=createRequestSignal({signal});
+async function request(path, {method='GET', body, token, headers={}, signal, readResponse, timeoutMs}={}) {
+  const cancellation=createRequestSignal({signal,...(timeoutMs===undefined?{}:{timeoutMs})});
   try {
     const response = await fetch(config.url + path, {method,headers:{apikey:config.key,...(token?{Authorization:'Bearer '+token}:{}),...(body!==undefined?{'Content-Type':'application/json'}:{}),...headers},body:body!==undefined?JSON.stringify(body):undefined,signal:cancellation.signal});
+    if(response.ok&&typeof readResponse==='function')return {data:await readResponse(response,cancellation.signal),response};
     const text = await response.text(); let data; try { data=JSON.parse(text); } catch { data={message:text.slice(0,200)}; }
     if (!response.ok) {const error=Error(data.error?.message || data.msg || data.message || data.error_description || `요청 실패 (${response.status})`);error.code=data.error?.code||data.code||data.error_code;error.status=response.status;error.retryAfter=response.headers.get('Retry-After');throw error;}
     return {data,response};
@@ -752,7 +760,7 @@ async function api(path, options={}) { const result=await request(path,{...optio
 async function rpc(name, body) { return api('/rest/v1/rpc/'+name,{method:'POST',body}); }
 async function edge(name, body, options={}) {
   for(let attempt=0;;attempt++)try{return await api('/functions/v1/coach/'+name,{method:body===undefined?'GET':'POST',body,...options});}
-  catch(error){if(error.code!=='ANALYSIS_CONTINUE'||attempt>=3)throw error;}
+  catch(error){if(name==='dialogue-response'||error.code!=='ANALYSIS_CONTINUE'||attempt>=3)throw error;}
 }
 const conversationMemory=createConversationMemoryDelivery({identity:()=>auth&&scope?scope:null,busy:()=>Boolean(call||callStarting||callEnding),prepare:body=>edge('memory-prepare',body)});
 async function allRows(table, query='') {
@@ -808,6 +816,24 @@ function pruneAuthoredAsr(current) {
     });
   }
 }
+async function appendSavedEvents(accountScope,sessionId,events,expectedCall=null) {
+  const valid=()=>Boolean(auth?.user?.id&&scope===accountScope&&accountScope===config.url+'|'+auth.user.id&&
+    (!expectedCall||call===expectedCall&&!expectedCall.ending&&expectedCall.scope===accountScope));
+  if(!valid())throw Error('The saving account changed.');
+  const token=await accessToken();if(!valid())throw Error('The saving account changed.');
+  const {data:ack}=await request('/rest/v1/rpc/append_events',{method:'POST',token,body:{p_session_id:sessionId,p_events:events}});
+  if(!valid())throw Error('The saving account changed.');
+  if(!Array.isArray(ack?.event_ids)||ack.event_ids.length!==events.length||!events.every((event,i)=>ack.event_ids[i]===event.id))throw Error('The saved caller input was not acknowledged.');
+  cloudVerified=true;
+  if(call?.scope===accountScope&&call.id===sessionId){
+    for(const event of events){
+      const row=call.transcript.get(event.event_key||event.id);
+      if(row&&row.id===event.id&&row.event_key===event.event_key&&row.speaker===event.speaker&&row.text===event.text&&row.occurred_at===(event.occurred_at??event.timestamp))row.storage='server';
+    }
+    captureConversationPlayback(call);pruneAuthoredAsr(call);
+  }
+  transcriptReview.confirm(accountScope,sessionId,events);
+}
 async function sync() {
   if(!auth||!scope)return;
   void callDiagnostics.flush();
@@ -815,11 +841,8 @@ async function sync() {
   void authoredPlaybackDelivery.flush();
   if(flushing)return flushing;
   const current=scope;
-  flushing=flushOutbox(outbox,current,async(sessionId,events)=>{
-    await rpc('append_events',{p_session_id:sessionId,p_events:events});
-    if(call?.scope===current&&call.id===sessionId){for(const event of events){const row=call.transcript.get(event.event_key||event.id);if(row)row.storage='server';}captureConversationPlayback(call);pruneAuthoredAsr(call);}
-    transcriptReview.confirm(current,sessionId,events);
-  }).then(updatePending).catch(async e=>{await updatePending();throw e;}).finally(()=>{flushing=null;});
+  flushing=flushOutbox(outbox,current,(sessionId,events)=>appendSavedEvents(current,sessionId,events))
+    .then(updatePending).catch(async e=>{await updatePending();throw e;}).finally(()=>{flushing=null;});
   return flushing;
 }
 function renderTurn(event,pending=false) {
@@ -968,6 +991,7 @@ async function startCall() {
   let stream,current,failureHelp=false;
   try {
     if(authoredRequested){
+      attempt.authoredStream=voiceCapabilities.authored_dialogue_stream_v1===true;
       const asset=globalThis.LOOP_PCM_WORKLET_ASSET;
       attempt.callEpoch=Date.now();attempt.userId=callUserId;
       attempt.pcm=createVerifiedPcmPlayback({workletUrl:asset?.url,workletSha256:asset?.sha256,
@@ -984,7 +1008,9 @@ async function startCall() {
         onState:state=>{attempt.localVoiceState=state.status;if(call===current&&current&&!current.ending){current.localVoiceState=state.status;recordCallIssue(current,{kind:'audio_configuration',code:'LOCAL_VOICE_'+state.status.toUpperCase(),request_type:'unknown',audio_context:{output_state:current.aiSpeaking?'playing':current.responding?'generating':'idle'}});renderFloor(current);}}
       });
     }
-    await sync();checkAttempt();
+    if(authoredRequested)void sync().catch(()=>{if(scope===callScope)void updatePending().catch(()=>{});});
+    else await sync();
+    checkAttempt();
     await learning.load();checkAttempt();await learning.flush();checkAttempt();
     const omitLearningContext=learning.hasPendingExclusions();
     $('call-status').textContent='마이크 사용을 허용해 주세요';
@@ -1511,7 +1537,8 @@ async function ready(){
   }
   if(epoch!==readyEpoch)return;
   auth.user=user;
-  voiceCapabilities={manual_turns_v1:data?.capabilities?.manual_turns_v1===true,authored_dialogue_v1:data?.capabilities?.authored_dialogue_v1===true};
+  voiceCapabilities={manual_turns_v1:data?.capabilities?.manual_turns_v1===true,authored_dialogue_v1:data?.capabilities?.authored_dialogue_v1===true,
+    authored_dialogue_stream_v1:data?.capabilities?.authored_dialogue_stream_v1===true};
   scope=config.url+'|'+user.id;firstUse.bind();
   renderAuthControls();$('auth-reset').hidden=true;
   const lastCallCompanion=localStorage.getItem(lastCallCompanionStorageKey()),savedCompanion=localStorage.getItem(companionStorageKey());

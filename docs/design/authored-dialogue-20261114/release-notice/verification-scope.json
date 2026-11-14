@@ -1,0 +1,17 @@
+{
+  "release_sha": "8d3f2a27dac84c1edd75631e5b8cef34ffadbb83",
+  "verifier_sha256": "2d7a05b6851ab6605371ad63afee87c10370da9f5e76677bf9ef01d11631ada6",
+  "backend_runtime_tree_sha256": "9080f39f63615fd7ec6a913cc737199fe83f953eb28c6f29eec851cd5cfc336a",
+  "backend_eszip_unchanged_from_initial_activation": true,
+  "initial_activation_evidence": "../release/flags-observation.json",
+  "feature_flags_changed_by_notice_release": false,
+  "new_flags_checker_invoked": false,
+  "actual_approved_account_call_verified": false,
+  "actual_pc_chrome_edge_acoustics_verified": false,
+  "actual_additional_model_generation_requests": 0,
+  "root_opened_public_screenshots": [
+    "authored-recovery-restored-320.png",
+    "authored-recovery-restored-390.png"
+  ],
+  "screenshots_text_scale": 1.25
+}

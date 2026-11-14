@@ -1,0 +1,16 @@
+{
+  "release_sha": "10be1faaec5ec821fcb7b7e39af8380fa188555c",
+  "committed_app_source_sha256": "78b926aa2bbd078aac1c28ce9691f69fea389ca82cae01be3418f51d2444e925",
+  "fixture": "invalid PCM manifest, explicit memory-free authority recovery",
+  "recovery_capture_timing": "Immediately after mocked dialogue-context response count becomes2, then390/320 captures; no six-second post-recovery wait",
+  "failure_notice_persistent": false,
+  "failure_notice_auto_clear_ms": 6000,
+  "timer_basis": "notice() code schedules clearNotice after6000ms when persistent=false; ordinary onFailure passes budgetExhausted=false",
+  "success_explicitly_clears_old_notice": false,
+  "observed_overlap_after_success": true,
+  "actual_expiry_observed": false,
+  "modal_or_native_alert_in_this_failure_path": false,
+  "recovery_success_ends_call": false,
+  "evidence_basis": "Root/agent opened both restored captures and inspected exact release source; no new browser/network/model run",
+  "product_code_changed_for_observation": false
+}

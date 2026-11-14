@@ -1,0 +1,15 @@
+{
+  "release_sha": "10be1faaec5ec821fcb7b7e39af8380fa188555c",
+  "verifier_sha256": "2d7a05b6851ab6605371ad63afee87c10370da9f5e76677bf9ef01d11631ada6",
+  "flags_controller_sha256": "c4f154190a3c853a5d4bd50d11acc41cd6d5dd0f23dab011f8cf276d13c053cb",
+  "flags_template_sha256": "9eeecba58b7bd817ec1b36df6b4d3282f7a3a22075e02cd6542d4eb9ba8711c3",
+  "root_opened_public_screenshots": [
+    "authored-resume-320.png",
+    "authored-budget-390.png",
+    "authored-recovery-restored-320.png"
+  ],
+  "source_and_schema_checks_passed": true,
+  "runtime_capability_enabled": true,
+  "actual_approved_account_production_call_verified": false,
+  "actual_pc_chrome_or_edge_microphone_acoustics_verified": false
+}

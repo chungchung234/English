@@ -1,0 +1,20 @@
+{
+  "release_sha": "8d3f2a27dac84c1edd75631e5b8cef34ffadbb83",
+  "pinned_fixture_sha256": "217ce4850bd63bc26630c3ff4e5230b09a8f2196f91d921a37601ea08533216a",
+  "expanded_case7_passed": true,
+  "failed503_retains_owned_failure_notice_and_muted_input": true,
+  "redundant_connected_does_not_fake_successful_authority": true,
+  "fresh_verified_authority_immediately_clears_owned_failure_notice": true,
+  "microphone_active_at_clear_assertion": true,
+  "newer_asr_warning_retained_after_held_ack_success": true,
+  "newer_asr_warning_retained_after_redundant_connected": true,
+  "replacement_warning_retained_across_actual_mock_reconnect": true,
+  "connected_clears_only_its_own_transport_notice": true,
+  "recovery_does_not_retry_or_replay_failed_reply": true,
+  "restored_390_and_320_screens_opened_notice_absent": true,
+  "clear_checked_without_waiting_for_six_second_notice_timer": true,
+  "old10be_six_second_overlap_evidence_preserved": true,
+  "actual_provider_or_db_requests": 0,
+  "fixture_rtc_asr_and_backend_only": true,
+  "physical_acoustic_or_model_quality_claim": false
+}

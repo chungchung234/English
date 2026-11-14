@@ -1,0 +1,46 @@
+{
+  "actual_auth_backend_or_db_operations": 0,
+  "actual_browser_runs": 0,
+  "actual_provider_requests": 0,
+  "actual_public_fetches": 0,
+  "adapter_review": {
+    "actual_runtime_flags_not_claimed_by_fixture": true,
+    "all12_functional_cases_preserved": true,
+    "all_service_origin_routes_mocked_unknown_routes_fail_closed": true,
+    "case7_slice_sha256": "7e5fc73f7c76a1b03896c7ff2a4e162ecb27facb7076e3d1cdea49ab5973ea36",
+    "exact_release_ci_deploy_success_and_committed_fixture_pin_before_fetch": true,
+    "expanded_case7_byte_exact_after_removing_two_capture_calls_and_native_close_hook": true,
+    "fixed_tone_pcm_not_acoustic_or_conversation_quality_evidence": true,
+    "fresh_isolated_browser_contexts_only": true,
+    "public_assets_original_get_only": true,
+    "public_html_main_worklet_not_rewritten_or_fulfilled": true,
+    "service_workers_blocked": true,
+    "third_party_http_and_all_websockets_blocked": true
+  },
+  "app_source_sha256": "bf4832961158af9ad0cd23cfa0a27f41114ac1e2b85c051a32016c2a5c79b778",
+  "fixture_sha256": "217ce4850bd63bc26630c3ff4e5230b09a8f2196f91d921a37601ea08533216a",
+  "future_execution_gate": "Root must approve this exact manifest, supply the final deployed40hex SHA and completed successful Pages CI; this review is not execution or a production-call result.",
+  "independent_offline_checks": {
+    "default_dry_run_passed": true,
+    "guard_mock_modes_passed": 11,
+    "manifest_or_product_modified_by_review": false,
+    "node_syntax_passed": true
+  },
+  "manifest_sha256": "b9a1665abbed679e47b1a1c865ff828dd50ac90d7277c66c63e4c62643aa9fb5",
+  "predecessor_manifest_sha256": "63d50e00f0c95d3f838bd16a38eb558e7b38537d277f357009d53f2f9fe55b81",
+  "reviewer": "/root/resume_receipt_queue",
+  "runner_sha256": "afcb7493f36fedc71c039935a497e7cbcfb6b584fdb11bf7ee086ae9c30f9ce9",
+  "source_notice_review": {
+    "actual_connected_clears_only_owned_transport_notice": true,
+    "budget_terminal_notice_excluded_from_recovery_clear": true,
+    "exact_message_node_ownership": true,
+    "failed_context_refresh_retains_notice_and_blocks_mic": true,
+    "newer_unrelated_notices_preserved": true,
+    "redundant_connected_does_not_clear_failure_or_newer_warning": true,
+    "same_call_scope_and_not_ending_gate_before_failure_clear": true
+  },
+  "support_byte_identical_to_approved_predecessor": true,
+  "support_sha256": "08f2b698decb15d31a20284e0afca52d7c4cf5d181f379c419c8dfbb1d05db2c",
+  "verdict": "clear for root-authorized execution only after final exact release CI succeeds",
+  "version": "independent-recovery-notice-public-preflight-review-v1"
+}

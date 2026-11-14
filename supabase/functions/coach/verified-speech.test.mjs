@@ -257,3 +257,11 @@ test('disposal after open settled but before the ready continuation still closes
  prepared=createPreparedRealtimeReader(readerRequest,()=>({then(resolve){resolve(socket);queueMicrotask(()=>{void prepared.dispose();});}}));
  await assert.rejects(prepared.ready);await prepared.dispose();assert.equal(socket.readyState,3);assert.equal(socket.closeCalls,1);assert.equal(socket.sent.length,0);
 });
+
+test('explicit remaining output cap is bound into session ACK and cannot grow by mutating the warm binding',async()=>{
+ const request={...readerRequest,maxOutputTokens:37},source={...request};let socket;
+ const prepared=createPreparedRealtimeReader(source,()=>socket=new ScriptedSocket({},request));source.maxOutputTokens=4096;
+ await prepared.ready;assert.equal(socket.sent[0].session.max_output_tokens,37);await prepared.generate(request);assert.equal(socket.readyState,3);
+ let wrong;const rejected=createPreparedRealtimeReader(request,()=>wrong=new ScriptedSocket({session:frames=>{frames[0].session.max_output_tokens=4096;return frames;}},request));await assert.rejects(rejected.ready);assert.equal(wrong.sent.filter(event=>event.type==='response.create').length,0);assert.equal(wrong.readyState,3);
+ let opens=0;for(const maxOutputTokens of [0,4097,NaN,1.5])assert.throws(()=>createPreparedRealtimeReader({...request,maxOutputTokens},()=>{opens++;return new ScriptedSocket();}),error=>error.code==='SYNTHESIS_OUTPUT_LIMIT');assert.equal(opens,0);
+});

@@ -45,12 +45,12 @@ export async function pcmSha256(bytes, subtle = globalThis.crypto?.subtle) {
 }
 
 export function createVerifiedPcmPlayback({ workletUrl, workletSha256, baseUrl = globalThis.location?.href,
-  isCurrent = () => true, canUnlockContext = value => value === null || isCurrent(value), onEvent = () => {}, AudioContextConstructor = globalThis.AudioContext || globalThis.webkitAudioContext,
+  isCurrent = () => true, canUnlockContext = value => value === null || isCurrent(value), canStart = () => true, onEvent = () => {}, AudioContextConstructor = globalThis.AudioContext || globalThis.webkitAudioContext,
   AudioWorkletNodeConstructor = globalThis.AudioWorkletNode, subtle = globalThis.crypto?.subtle,
   maxPcmBytes = 16 * 1024 * 1024, commandTimeoutMs = 5000, drainTimeoutMs = 5000, pollIntervalMs = 25,
   setTimer = setTimeout, clearTimer = clearTimeout, now = () => performance.now() } = {}) {
   const url = assetUrl(workletUrl, baseUrl, workletSha256);
-  if (typeof isCurrent !== 'function' || typeof canUnlockContext !== 'function' || typeof onEvent !== 'function' || !integer(maxPcmBytes) || maxPcmBytes < 2 ||
+  if (typeof isCurrent !== 'function' || typeof canUnlockContext !== 'function' || typeof canStart !== 'function' || typeof onEvent !== 'function' || !integer(maxPcmBytes) || maxPcmBytes < 2 ||
     ![commandTimeoutMs, drainTimeoutMs, pollIntervalMs].every(value => Number.isFinite(value) && value > 0)) throw new TypeError('Invalid PCM playback options');
   let context = null, gain = null, reference = null, moduleFlight = null, current = null, sequence = 0, disposed = false;
   const terminalKeys = new Set();
@@ -108,6 +108,9 @@ export function createVerifiedPcmPlayback({ workletUrl, workletSha256, baseUrl =
   }
   function startOrResume(record, resume = false) {
     if (!check(record) || !record.loaded || record.completed || record.candidates.size) return false;
+    // A coordinator may retain an independent context/queue hold after this
+    // clip's own candidate resolved. Never reopen its gain through that hold.
+    try { if (!canStart(record.owner)) return false; } catch { return false; }
     if (context.state !== 'running') { record.status = 'blocked'; record.contextHeld = true; emit(record, 'blocked'); return false; }
     record.contextHeld = false;
     // The source may have drained before the context was interrupted. Resume

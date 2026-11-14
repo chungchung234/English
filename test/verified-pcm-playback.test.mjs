@@ -246,6 +246,19 @@ test('explicit user resume is not a fabricated noise decision and cannot release
   f.player.cancel(c.owner); assert.equal(await f.player.resumeFromGesture(c.owner), false);
 });
 
+test('an independent coordinator start gate blocks automatic and gesture gain reopening until its own hold resolves', async t => {
+  let allowed = true, throws = false;
+  const f = harness(t, { canStart: () => { if (throws) throw Error('held'); return allowed; } }), c = await clip();
+  await f.player.unlockFromGesture(); assert(await f.player.prepare(c.owner, textHash, c.manifest, c.bytes)); assert(f.player.play(c.owner));
+  const node = f.nodes[0]; node.advance(127); assert(f.player.pauseCandidate(c.owner, 'noise', 1)); await settle();
+  const before = node.cursor.snapshot(), commands = node.commands.length; allowed = false;
+  assert(f.player.resolveCandidate(c.owner, { kind: 'rejected_noise', candidateId: 'noise', decisionEpoch: 1 }));
+  assert.equal(await f.player.resumeFromGesture(c.owner), false); assert.equal(node.commands.slice(commands).some(value => ['play', 'resume'].includes(value.kind)), false);
+  node.advance(200); assert.deepEqual(node.cursor.snapshot(), before);
+  allowed = true; throws = true; assert.equal(await f.player.resumeFromGesture(c.owner), false);
+  throws = false; assert(await f.player.resumeFromGesture(c.owner)); node.advance(); assert(node.cursor.sourceFrame > before.sourceFrame);
+});
+
 test('44.1/48kHz rational cursor preserves bit-identical content across arbitrary pause blocks and terminal clear', () => {
   const samples = Float32Array.from({ length: 1009 }, (_, i) => Math.sin(i * .27) * .7);
   for (const rate of [44100, 48000]) {

@@ -1,4 +1,4 @@
-import { authoredDialogueCapability, authoredDialogueStream, handleAuthoredDialogue, type DialogueDependencies } from './authored-dialogue.ts';
+import { authoredDialogueCapability, authoredDialogueSegmentsCapability, authoredDialogueSegmentsStream, authoredDialogueStream, handleAuthoredDialogue, type DialogueDependencies } from './authored-dialogue.ts';
 import { weeklyLearningPlan } from './weekly.ts';
 import {authorizeBackground,drainPostCall,type PostCallTask} from './background.ts';
 import { HANDOFF_VERSION, HANDOFF_INSTRUCTIONS, handoffSchema, validateHandoff, handoffFailure } from './conversation-memory.ts';
@@ -888,7 +888,7 @@ export async function handler(req: Request): Promise<Response> {
     if (origin) cors = { ...cors, 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Max-Age': '600' };
     if (req.method === 'OPTIONS') { if (!origin) throw new AppError(403, 'ORIGIN_NOT_ALLOWED', 'An allowed origin is required.'); return new Response(null, { status: 204, headers: cors }); }
     const endpoint = new URL(req.url).pathname.replace(/\/$/, '').split('/').pop();
-    if (!['dialogue-context', 'dialogue-turn', 'dialogue-synthesis', 'dialogue-response', 'dialogue-cancel', 'dialogue-playback', 'dialogue-voice', 'config', 'voice', 'voice-context', 'review', 'weekly', 'memory', 'memory-prepare', 'background-work', 'checkpoint', 'memory-index', 'memory-manage', 'reconsider', 'usage-observe'].includes(endpoint || '')) throw new AppError(404, 'NOT_FOUND', 'This endpoint was not found.');
+    if (!['dialogue-context', 'dialogue-turn', 'dialogue-synthesis', 'dialogue-response', 'dialogue-response-segments', 'dialogue-cancel', 'dialogue-playback', 'dialogue-voice', 'config', 'voice', 'voice-context', 'review', 'weekly', 'memory', 'memory-prepare', 'background-work', 'checkpoint', 'memory-index', 'memory-manage', 'reconsider', 'usage-observe'].includes(endpoint || '')) throw new AppError(404, 'NOT_FOUND', 'This endpoint was not found.');
     if (req.method !== 'POST' && !(endpoint === 'config' && req.method === 'GET')) throw new AppError(405, 'METHOD_NOT_ALLOWED', 'Use POST for this endpoint.');
     const env = environment();
     if(endpoint==='background-work'){
@@ -901,9 +901,10 @@ export async function handler(req: Request): Promise<Response> {
       return json(await drainPostCall({rpc:(name,body)=>rpc(env,name,body),memory:task=>prepareConversationMemory(env,task.user_id,{sessionId:task.session_id,companionId:task.companion_id}),review:task=>review(env,task.user_id,{sessionId:task.session_id},'session',task)}),200,cors);
     }
     const userId = await authenticate(req, env);
-    if (endpoint === 'config') return json({ models: { voice: env.voice, coach: env.coach, checkpoint: env.checkpoint, analysis: env.analysis, embedding: env.embedding, transcription: 'gpt-realtime-whisper' }, policy: {version: POLICY_VERSION,session:reviewPolicy('session',envValue),weekly:reviewPolicy('weekly',envValue),checkpoint:reviewPolicy('checkpoint',envValue),dailyTextReservationUsd:1}, capabilities: {manual_turns_v1:true,authored_dialogue_v1:authoredDialogueCapability(envValue),authored_dialogue_stream_v1:authoredDialogueCapability(envValue)}, companions: COMPANIONS }, 200, cors);
+    if (endpoint === 'config') return json({ models: { voice: env.voice, coach: env.coach, checkpoint: env.checkpoint, analysis: env.analysis, embedding: env.embedding, transcription: 'gpt-realtime-whisper' }, policy: {version: POLICY_VERSION,session:reviewPolicy('session',envValue),weekly:reviewPolicy('weekly',envValue),checkpoint:reviewPolicy('checkpoint',envValue),dailyTextReservationUsd:1}, capabilities: {manual_turns_v1:true,authored_dialogue_v1:authoredDialogueCapability(envValue),authored_dialogue_stream_v1:authoredDialogueCapability(envValue),authored_dialogue_segments_v1:authoredDialogueSegmentsCapability(envValue)}, companions: COMPANIONS }, 200, cors);
     const body = await readBody(req);
     if (endpoint === 'dialogue-response') return new Response(authoredDialogueStream(userId, body, authoredDependencies(env), req.signal), { headers: { ...cors, 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store, no-transform', 'X-Accel-Buffering': 'no' } });
+    if (endpoint === 'dialogue-response-segments') return new Response(authoredDialogueSegmentsStream(userId, body, authoredDependencies(env), req.signal), { headers: { ...cors, 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store, no-transform', 'X-Accel-Buffering': 'no' } });
     let result: unknown;
     if (endpoint?.startsWith('dialogue-')) result = await handleAuthoredDialogue(endpoint, userId, body, authoredDependencies(env), req.signal);
     else if (endpoint === 'voice-context') result = await voiceContext(env, userId, body);

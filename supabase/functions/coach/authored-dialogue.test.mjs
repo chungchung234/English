@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { handleAuthoredDialogue, authoredDialogueStream, authoredDialogueCapability, authoredOutput, synthesisReservation, synthesisUsage, authoringRequest } from './authored-dialogue.ts';
+import { handleAuthoredDialogue, authoredDialogueStream, authoredDialogueSegmentsStream, authoredDialogueSegmentsCapability, authoredDialogueCapability, authoredOutput, synthesisReservation, synthesisUsage, authoringRequest } from './authored-dialogue.ts';
 import { FIDELITY_POLICY_VERSION, textDigest } from './verified-speech.ts';
 import { renderVoiceInstructions, renderOpeningInstructions, handler } from './index.ts';
 import { companionProfile, fingerprint } from './core.ts';
@@ -32,7 +32,7 @@ function fixture(options={}){
  },
  summarize:async(user,s,fresh,prior,run,preDispatch)=>{await preDispatch();trace.push({name:'summarize'});assert(trace.some(row=>row.name==='authored_dialogue_batchplaybacks'),'pending playback admission must precede checkpoint model work');return 'The caller is discussing an exhibition.';},
  bootstrapVoice:async(user,body)=>{trace.push({name:'bootstrap',body});return{audio_policy:{turn_control:'manual_turns_v1'},memory_revision:null,memory_mode:'omitted'};},
- author:async body=>{provider.push(body);return{ok:true,status:200,payload:{id:'response-private',status:'completed',model:body.model,store:false,metadata:body.metadata,text:{format:{type:'text'}},usage:{input_tokens:100,output_tokens:20},output:[{type:'reasoning',id:'reason-private',summary:[],encrypted_content:'ENCRYPTED_PRIVATE_CANARY'},{type:'message',id:'message-private',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:'A prepared reply.'}]}]}};},
+ author:async body=>{provider.push(body);return{ok:true,status:200,payload:{id:'response-private',status:'completed',model:body.model,store:false,metadata:body.metadata,text:{format:{type:'text'}},usage:{input_tokens:100,output_tokens:20},output:[{type:'reasoning',id:'reason-private',summary:[],encrypted_content:'ENCRYPTED_PRIVATE_CANARY'},{type:'message',id:'message-private',role:'assistant',phase:'final_answer',content:[{type:'output_text',text:options.text??'A prepared reply.'}]}]}};},
  synthesize:async request=>{trace.push({name:'synthesize',text:request.text});return{pcm:new Uint8Array([1,0,2,0]),protocolVerified:true,transcript:options.mismatch?'A different reply.':request.text,finalTranscript:request.text,usage:{input_tokens:100,output_tokens:100,total_tokens:200}};},
  rpc:async(name,body)=>{trace.push({name,body});if(options.rpc){const custom=await options.rpc(name,body,{turn,state,event,trace});if(custom!==undefined)return custom;}
   if(name==='conversation_context_authorized')return true;
@@ -198,12 +198,46 @@ test('server-ready diagnostics contain only fixed labels and the same numeric st
  }finally{console.info=prior;}
 });
 
+test('segmented capability is explicitly opt-in and preserves the disabled old fallback',async()=>{
+ const f=fixture();assert.equal(authoredDialogueSegmentsCapability(f.deps.get),false);assert.throws(()=>authoredDialogueSegmentsStream(uid,turnBody(),f.deps),error=>error.code==='AUTHORED_DIALOGUE_SEGMENTS_DISABLED');assert.deepEqual(f.trace,[]);
+ f.config.AUTHORED_DIALOGUE_SEGMENTS_ENABLED='true';assert.equal(authoredDialogueSegmentsCapability(f.deps.get),true);delete f.config.AUTHORED_DIALOGUE_ENABLED;assert.equal(authoredDialogueSegmentsCapability(f.deps.get),false);
+});
+
+test('segmented stream keeps one writer/parent synthesis job and settles summed usage once before full publication',async()=>{
+ const text='I like the crooked edge. It gives the paper moon its character.',f=fixture({text});f.config.AUTHORED_DIALOGUE_SEGMENTS_ENABLED='true';const prior=console.info,logs=[];console.info=value=>logs.push(JSON.parse(value));
+ try{
+  const frames=await remainder(authoredDialogueSegmentsStream(uid,turnBody(),f.deps).getReader());assert.deepEqual(frames.map(row=>row.type),['text','segment','segment','final','done']);assert.equal(frames[0].result.text,text);assert.equal(frames[0].plan.count,2);
+  const parts=frames.filter(row=>row.type==='segment');assert(parts.every(row=>JSON.stringify(row.result.manifest.owner)===JSON.stringify(expectedOwner)));assert.equal(Object.hasOwn(frames.at(-2).result,'pcmBase64'),false);
+  const pcm=Buffer.concat(parts.map(row=>Buffer.from(row.result.pcmBase64,'base64')));assert.equal(frames.at(-2).result.manifest.pcmSha256,createHash('sha256').update(pcm).digest('hex'));assert.equal(frames.at(-2).result.manifest.byteLength,8);
+  assert.deepEqual(f.trace.filter(row=>row.name==='reserve_run').map(row=>row.body.p_kind),['dialogue','dialogue_synthesis']);
+  const costs=f.trace.filter(row=>row.name==='reserve_model_spend'&&row.body.p_model==='gpt-realtime-2.1-mini');assert.equal(costs.length,1);assert(costs[0].body.p_reserved_usd<.15);assert.equal(costs[0].body.p_policy.global_output_tokens,4096);
+  const accounts=f.trace.filter(row=>row.name==='record_model_spend');assert.equal(accounts.length,2);assert.deepEqual(accounts[1].body.p_usage,{input_tokens:200,output_tokens:200,total_tokens:400});assert.equal(accounts[1].body.p_outcome,'generated_audio');
+  assert.equal(f.trace.filter(row=>row.name==='authored_dialogue_dispatch'&&row.body.p_stage==='dialogue_synthesis').length,4);assert.equal(f.trace.filter(row=>row.name==='authored_dialogue_publish').length,1);
+  assert.deepEqual(Object.keys(logs[0]).sort(),['authorMs','firstSegmentMs','kind','policy','segmentCount','synthesisMs','totalMs']);assert.equal(logs[0].segmentCount,2);assert(Number.isFinite(logs[0].firstSegmentMs));assert(!JSON.stringify(logs).includes(uid));
+ }finally{console.info=prior;}
+});
+
+test('segmented text and plan remain withheld until fresh source authorization after pending first readiness',async()=>{
+ let revoked=false,generated=0;const readyGate=deferred(),f=fixture({text:'A first sentence. Another complete sentence.',rpc:(name,body)=>name==='authored_dialogue_dispatch'&&body.p_stage==='dialogue_synthesis'&&revoked?false:undefined});f.config.AUTHORED_DIALOGUE_SEGMENTS_ENABLED='true';
+ f.deps.prepareSynthesis=binding=>{assert.equal(binding.nonce,nonce+':0');assert.equal(binding.maxOutputTokens,4096);return{ready:readyGate.promise,generate:async()=>{generated++;throw Error('must not generate');},dispose:async()=>{}};};
+ const reader=authoredDialogueSegmentsStream(uid,turnBody(),f.deps).getReader();await until(()=>f.trace.some(row=>row.name==='authored_dialogue_synthesis_begin'));revoked=true;readyGate.resolve();
+ const frames=await remainder(reader);assert.deepEqual(frames.map(row=>row.type),['error']);assert.equal(generated,0);assert.equal(frames[0].error.code,'DIALOGUE_RPC_INVALID');
+});
+
+test('failure of a later verified segment leaves no final publication or whole completion and never retries generation',async()=>{
+ const f=fixture({text:'The first complete sentence. The second complete sentence.'});f.config.AUTHORED_DIALOGUE_SEGMENTS_ENABLED='true';const synthesize=f.deps.synthesize;let generated=0;
+ f.deps.synthesize=async request=>{generated++;const value=await synthesize(request);return generated===2?{...value,transcript:'Different second words.'}:value;};
+ const frames=await remainder(authoredDialogueSegmentsStream(uid,turnBody(),f.deps).getReader());assert.deepEqual(frames.map(row=>row.type),['text','segment','error']);assert.equal(generated,2);assert.equal(f.trace.filter(row=>row.name==='authored_dialogue_publish').length,0);
+ const accounts=f.trace.filter(row=>row.name==='record_model_spend');assert.equal(accounts.length,2);assert.equal(accounts[1].body.p_estimated_usd,null);assert.equal(accounts[1].body.p_usage,null);assert.equal(accounts[1].body.p_outcome,'transport_unknown');
+});
+
 test('HTTP dialogue-response is routed as NDJSON after authentication, and unapproved users never start its stages',async()=>{
  const oldDeno=globalThis.Deno,oldFetch=globalThis.fetch,config={AUTHORED_DIALOGUE_ENABLED:'true',AUTHORED_DIALOGUE_FIDELITY_VERIFIED:'true',ACCESS_MODE:'public',ALLOWED_ORIGINS:'https://example.com',SUPABASE_URL:'https://project.supabase.co',SUPABASE_SERVICE_ROLE_KEY:'local-private-key',OPENAI_API_KEY:'local-unused'};
  globalThis.Deno={env:{get:name=>config[name]}};
- try{for(const authorized of [false,true]){
+ try{for(const endpoint of ['dialogue-response','dialogue-response-segments'])for(const authorized of [false,true]){
+  config.AUTHORED_DIALOGUE_SEGMENTS_ENABLED='true';
   const paths=[];globalThis.fetch=async url=>{const path=new URL(url).pathname;paths.push(path);if(path==='/auth/v1/user')return authorized?Response.json({id:uid,email:'owner@example.com',email_confirmed_at:clock.server_now_utc}):new Response('{}',{status:401});if(path==='/rest/v1/sessions')return Response.json([{...session,status:'ended'}]);throw Error('Unexpected external path');};
-  const result=await handler(new Request('https://project.supabase.co/functions/v1/coach/dialogue-response',{method:'POST',headers:{Origin:'https://example.com',Authorization:'Bearer fixture-user','content-type':'application/json'},body:JSON.stringify(turnBody())}));
+  const result=await handler(new Request('https://project.supabase.co/functions/v1/coach/'+endpoint,{method:'POST',headers:{Origin:'https://example.com',Authorization:'Bearer fixture-user','content-type':'application/json'},body:JSON.stringify(turnBody())}));
   if(!authorized){assert.equal(result.status,401);assert.deepEqual(paths,['/auth/v1/user']);}
   else{assert.equal(result.status,200);assert.match(result.headers.get('content-type'),/^application\/x-ndjson/);assert.equal(result.headers.get('cache-control'),'no-store, no-transform');assert.equal(result.headers.get('x-accel-buffering'),'no');const frames=(await result.text()).trimEnd().split('\n').map(JSON.parse);assert.deepEqual(frames.map(row=>row.type),['error']);assert.equal(frames[0].error.code,'SESSION_ENDED');assert.deepEqual(paths,['/auth/v1/user','/rest/v1/sessions']);}
  }}finally{globalThis.fetch=oldFetch;globalThis.Deno=oldDeno;}

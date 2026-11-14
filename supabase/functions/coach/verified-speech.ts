@@ -10,10 +10,15 @@ export const SYNTHESIS_MODEL = 'gpt-realtime-2.1-mini';
 export const PCM_RATE = 24000;
 export const SYNTHESIS_OUTPUT_CAP = 4096;
 export type SpeechCapture = { pcm: Uint8Array; transcript: string; finalTranscript: string; usage: unknown; protocolVerified: boolean };
-export type SpeechRequest = { text: string; nonce: string; voice: string; speed: number; key: string; signal?: AbortSignal; deadlineMs?: number };
+export type SpeechRequest = { text: string; nonce: string; voice: string; speed: number; key: string; signal?: AbortSignal; deadlineMs?: number; maxOutputTokens?: number };
 export type SynthesisAdapter = (request: SpeechRequest) => Promise<SpeechCapture>;
-export function realtimeReaderRequests(request: Pick<SpeechRequest, 'text' | 'voice' | 'speed' | 'nonce'>) {
-  return { session: { type: 'session.update', session: { type: 'realtime', reasoning: { effort: 'low' }, instructions: READER_INSTRUCTIONS, max_output_tokens: SYNTHESIS_OUTPUT_CAP, truncation: 'disabled', output_modalities: ['audio'], tools: [], tool_choice: 'none', audio: { input: { transcription: null, turn_detection: null }, output: { voice: request.voice, speed: request.speed, format: { type: 'audio/pcm', rate: PCM_RATE } } } } },
+export function readerOutputCap(value: number | undefined): number {
+  if (value === undefined) return SYNTHESIS_OUTPUT_CAP;
+  if (!Number.isSafeInteger(value) || value < 1 || value > SYNTHESIS_OUTPUT_CAP) throw new AppError(503, 'SYNTHESIS_OUTPUT_LIMIT', 'The spoken response budget could not be verified.');
+  return value;
+}
+export function realtimeReaderRequests(request: Pick<SpeechRequest, 'text' | 'voice' | 'speed' | 'nonce' | 'maxOutputTokens'>) {
+  return { session: { type: 'session.update', session: { type: 'realtime', reasoning: { effort: 'low' }, instructions: READER_INSTRUCTIONS, max_output_tokens: readerOutputCap(request.maxOutputTokens), truncation: 'disabled', output_modalities: ['audio'], tools: [], tool_choice: 'none', audio: { input: { transcription: null, turn_detection: null }, output: { voice: request.voice, speed: request.speed, format: { type: 'audio/pcm', rate: PCM_RATE } } } } },
     response: { type: 'response.create', response: { conversation: 'none', input: [], instructions: 'Say exactly the following:\n' + request.text, output_modalities: ['audio'], tools: [], tool_choice: 'none', metadata: { turn_nonce: request.nonce, purpose: 'authored_dialogue_synthesis' } } } };
 }
 
@@ -84,9 +89,11 @@ export function createPreparedRealtimeReader(binding: PreparedSpeechBinding, ope
   return preparedReader(binding, open);
 }
 function preparedReader(binding: PreparedSpeechBinding, open: OpenReaderSocket, absoluteDeadline?: number): PreparedSpeech {
+  binding = { ...binding };
   const unavailable = () => new AppError(502, 'SYNTHESIS_UNAVAILABLE', 'The spoken response could not be completed.');
   const invalid = () => new AppError(502, 'SYNTHESIS_UNVERIFIED', 'The spoken response could not be verified.');
   const duration = Math.min(55_000, Math.max(1, binding.deadlineMs ?? 55_000));
+  const outputCap = readerOutputCap(binding.maxOutputTokens);
   let deadline = absoluteDeadline ?? Date.now() + Math.min(15_000, duration);
   let socket: ReaderSocket | null = null, openingAbort: (() => void) | null = null, disposing: Promise<void> | null = null;
   let fault = false, opened = false, closed = false, closing = false, disposed = false, prepared = false, consumed = false, generating = false;
@@ -119,7 +126,7 @@ function preparedReader(binding: PreparedSpeechBinding, open: OpenReaderSocket, 
       if (event.type === 'session.updated') {
         sessionAcks++;
         const session = event.session;
-        if (sessionAcks !== 1 || session?.model !== SYNTHESIS_MODEL || session?.instructions !== READER_INSTRUCTIONS || session?.audio?.output?.voice !== binding.voice || session?.audio?.output?.speed !== binding.speed || session?.audio?.output?.format?.type !== 'audio/pcm' || session?.audio?.output?.format?.rate !== PCM_RATE || session?.audio?.input?.turn_detection !== null || session?.audio?.input?.transcription !== null || !Array.isArray(session?.tools) || session.tools.length !== 0 || session.tool_choice !== 'none') fail();
+        if (sessionAcks !== 1 || session?.model !== SYNTHESIS_MODEL || session?.instructions !== READER_INSTRUCTIONS || (binding.maxOutputTokens !== undefined && session?.max_output_tokens !== outputCap) || session?.audio?.output?.voice !== binding.voice || session?.audio?.output?.speed !== binding.speed || session?.audio?.output?.format?.type !== 'audio/pcm' || session?.audio?.output?.format?.rate !== PCM_RATE || session?.audio?.input?.turn_detection !== null || session?.audio?.input?.transcription !== null || !Array.isArray(session?.tools) || session.tools.length !== 0 || session.tool_choice !== 'none') fail();
       }
       if (event.type === 'conversation.item.created' || event.type === 'conversation.item.added') fail();
       if (event.type === 'response.created') {
@@ -190,7 +197,7 @@ function preparedReader(binding: PreparedSpeechBinding, open: OpenReaderSocket, 
     socket.on('close', () => { closed = true; if (!closing) fault = true; pulse(); }); socket.on('message', onMessage);
     if (disposed || binding.signal?.aborted) throw unavailable();
     await waitFor(() => opened);
-    send(realtimeReaderRequests({ text: '', nonce: binding.nonce, voice: binding.voice, speed: binding.speed }).session);
+    send(realtimeReaderRequests({ text: '', nonce: binding.nonce, voice: binding.voice, speed: binding.speed, maxOutputTokens: binding.maxOutputTokens }).session);
     await waitFor(() => sessionAcks === 1);
     prepared = true;
   })().catch(async error => { fail(); await dispose(); throw error; });
@@ -198,7 +205,7 @@ function preparedReader(binding: PreparedSpeechBinding, open: OpenReaderSocket, 
   // receives the same rejection without an unhandled-promise side channel.
   void ready.catch(() => {});
   function generate(request: SpeechRequest): Promise<SpeechCapture> {
-    if (consumed || disposed || fault || !prepared || request.nonce !== binding.nonce || request.voice !== binding.voice || request.speed !== binding.speed || request.key !== binding.key || request.signal !== binding.signal || typeof request.text !== 'string' || !request.text.trim() || request.text.length > 20_000) {
+    if (consumed || disposed || fault || !prepared || request.nonce !== binding.nonce || request.voice !== binding.voice || request.speed !== binding.speed || request.key !== binding.key || request.signal !== binding.signal || (request.maxOutputTokens === undefined ? SYNTHESIS_OUTPUT_CAP : request.maxOutputTokens) !== outputCap || typeof request.text !== 'string' || !request.text.trim() || request.text.length > 20_000) {
       fail(); void dispose(); return Promise.reject(invalid());
     }
     consumed = true; generating = true; deadline = absoluteDeadline ?? Date.now() + Math.min(55_000, Math.max(1, request.deadlineMs ?? 55_000));

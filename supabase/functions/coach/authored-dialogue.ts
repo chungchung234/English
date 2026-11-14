@@ -2,7 +2,8 @@ import { AppError, allowKeys, bytes, companionProfile, fingerprint, requireSpeec
 import { POLICY_VERSION, reviewPolicy, spendReservation, usageEstimate } from './policy.ts';
 import { CONVERSATION_CHECKPOINT_VERSION } from './live-context.ts';
 import { compactQualifiedHistory, qualifiedHistoryNeedsCheckpoint, safeCheckpoint, verifiedLegacyCheckpoint, type QualifiedCheckpoint } from './dialogue-continuity.ts';
-import { createPreparedRealtimeReader, createRealtimeReader, FIDELITY_POLICY_VERSION, pcmToBase64, realtimeReaderRequests, SYNTHESIS_MODEL, SYNTHESIS_OUTPUT_CAP, textDigest, verifySpeechCapture, type PreparedSpeech, type PreparedSpeechBinding, type PrepareSynthesisAdapter, type SynthesisAdapter } from './verified-speech.ts';
+import { planSpeechSegments, runSpeechSegments, segmentedSynthesisReservation, speechSegmentNonce, SEGMENT_SYNTHESIS_DEADLINE_MS, type SpeechSegmentPlan } from './authored-segments.ts';
+import { createPreparedRealtimeReader, createRealtimeReader, FIDELITY_POLICY_VERSION, pcmToBase64, realtimeReaderRequests, SYNTHESIS_MODEL, SYNTHESIS_OUTPUT_CAP, textDigest, verifySpeechCapture, type PreparedSpeech, type PreparedSpeechBinding, type PrepareSynthesisAdapter, type SpeechCapture, type SpeechRequest, type SynthesisAdapter } from './verified-speech.ts';
 
 export const AUTHORED_DIALOGUE_PROTOCOL = 'authored_dialogue_v1';
 export const AUTHORED_DIALOGUE_POLICY = '2026-11-14-authored-dialogue-v1';
@@ -26,6 +27,7 @@ export type DialogueDependencies = {
   prepareSynthesis?: PrepareSynthesisAdapter;
   onAuthorDispatch?(binding: PreparedSpeechBinding): void;
   beforeSynthesisDispatch?(binding: PreparedSpeechBinding): Promise<void>;
+  segmentSynthesis?: { plan: SpeechSegmentPlan; run(request: SpeechRequest, context: { owner: PlaybackOwner; synthesisId: string; dispatch(): Promise<void> }): Promise<SpeechCapture> };
   bootstrapVoice(userId: string, body: Data): Promise<Data>;
 };
 const data = (value: unknown): Data => value && typeof value === 'object' && !Array.isArray(value) ? value as Data : {};
@@ -36,6 +38,7 @@ function ids(value: unknown): string[] { if (!Array.isArray(value) || value.leng
 function omitted(value: unknown): boolean { if (typeof value !== 'boolean') throw invalid(); return value; }
 function reservationCeiling(get: DialogueDependencies['get']): number | null { const n = Number(get('AUTHORED_SYNTHESIS_MAX_RESERVATION_USD') ?? 1); return Number.isFinite(n) && n > 0 && n <= 1 ? n : null; }
 export function authoredDialogueCapability(get: DialogueDependencies['get']): boolean { return get('AUTHORED_DIALOGUE_ENABLED') === 'true' && get('AUTHORED_DIALOGUE_FIDELITY_VERIFIED') === 'true' && reservationCeiling(get) !== null; }
+export function authoredDialogueSegmentsCapability(get: DialogueDependencies['get']): boolean { return authoredDialogueCapability(get) && get('AUTHORED_DIALOGUE_SEGMENTS_ENABLED') === 'true'; }
 const scopeOf = (deps: DialogueDependencies, userId: string) => deps.supabase.replace(/\/$/, '') + '|' + userId;
 function ownerOf(value: unknown, deps: DialogueDependencies, userId: string): PlaybackOwner {
   const item = data(value); allowKeys(item, ['scope', 'sessionId', 'companionId', 'callEpoch', 'turnNonce', 'turnId', 'assistantEventId', 'authorityGeneration', 'expectedMemoryRevision', 'playbackEpoch']);
@@ -195,17 +198,23 @@ export async function handleAuthoredDialogue(endpoint: string, userId: string, b
       if (typeof text !== 'string' || !text.trim() || typeof voice !== 'string' || !Number.isFinite(speed) || makeOwner(turn, deps, userId).assistantEventId !== owner.assistantEventId) throw invalid();
       const settings = data(raw?.settings);
       if (settings.model !== SYNTHESIS_MODEL || settings.verification_policy !== FIDELITY_POLICY_VERSION || settings.voice !== voice || settings.speed !== speed || settings.approved_text_sha256 !== await textDigest(text) || JSON.stringify(makeOwner(turn, deps, userId)) !== JSON.stringify(owner)) throw rpcInvalid();
-      const reservation = synthesisReservation(text, voice, speed, owner.turnNonce);
+      const segments = deps.segmentSynthesis;
+      if (segments && segments.plan.textSha256 !== settings.approved_text_sha256) throw rpcInvalid();
+      const reservation = segments ? segmentedSynthesisReservation(text, segments.plan, voice, speed, owner.turnNonce) : synthesisReservation(text, voice, speed, owner.turnNonce);
       if (reservation > reservationCeiling(deps.get)!) throw new AppError(503, 'SYNTHESIS_COST_CONFIGURATION', 'The spoken response budget is not configured.');
       // A request-owned reader may have connected while the author ran. Its
       // readiness is resolved before the final cost/source dispatch boundary.
       await deps.beforeSynthesisDispatch?.({ nonce: owner.turnNonce, voice, speed, key: deps.key, signal });
-      await cost(deps, run, SYNTHESIS_MODEL, { ...settings, pricing_policy: 'realtime-mini-text-input-audio-output-v1' }, reservation);
-      notAborted();
-      if (await deps.rpc('authored_dialogue_dispatch', { p_user_id: userId, p_session_id: session.id, p_call_epoch: owner.callEpoch, p_authority_generation: owner.authorityGeneration, p_expected_generation: generation,
-        p_expected_memory_revision: owner.expectedMemoryRevision, p_turn_nonce: owner.turnNonce, p_turn_id: owner.turnId, p_stage: 'dialogue_synthesis', p_job_id: run.job_id, p_lease_token: run.lease_token, p_source_event_digests: data(turn.source_manifest).event_digests }) !== true) throw rpcInvalid();
-      notAborted();
-      const capture = await (deps.synthesize ?? createRealtimeReader())({ text, nonce: owner.turnNonce, voice, speed, key: deps.key, signal });
+      await cost(deps, run, SYNTHESIS_MODEL, { ...settings, pricing_policy: segments ? 'realtime-mini-segment-global-output-v1' : 'realtime-mini-text-input-audio-output-v1', ...(segments ? { segments: segments.plan.count, global_output_tokens: SYNTHESIS_OUTPUT_CAP } : {}) }, reservation);
+      const dispatchSynthesis = async () => {
+        notAborted();
+        if (await deps.rpc('authored_dialogue_dispatch', { p_user_id: userId, p_session_id: session.id, p_call_epoch: owner.callEpoch, p_authority_generation: owner.authorityGeneration, p_expected_generation: generation,
+          p_expected_memory_revision: owner.expectedMemoryRevision, p_turn_nonce: owner.turnNonce, p_turn_id: owner.turnId, p_stage: 'dialogue_synthesis', p_job_id: run!.job_id, p_lease_token: run!.lease_token, p_source_event_digests: data(turn.source_manifest).event_digests }) !== true) throw rpcInvalid();
+        notAborted();
+      };
+      if (!segments) await dispatchSynthesis();
+      const request = { text, nonce: owner.turnNonce, voice, speed, key: deps.key, signal };
+      const capture = await (segments ? segments.run(request, { owner, synthesisId: run.job_id, dispatch: dispatchSynthesis }) : (deps.synthesize ?? createRealtimeReader())(request));
       const settlement = synthesisUsage(capture.usage);
       await account(deps, run, settlement.usage, settlement.estimatedUsd, settlement.estimatedUsd !== null && settlement.estimatedUsd > reservation ? 'reservation_exceeded' : 'generated_audio'); accounted = true;
       if (settlement.estimatedUsd !== null && settlement.estimatedUsd > reservation) throw new AppError(503, 'SYNTHESIS_COST_CONFIGURATION', 'The spoken response budget could not be verified.');
@@ -216,7 +225,7 @@ export async function handleAuthoredDialogue(endpoint: string, userId: string, b
         p_transcript: capture.transcript, p_audio_sha256: clip.pcmSha256, p_audio_bytes: clip.byteLength, p_audio_frames: clip.sourceFrames, p_pcm_rate: 24000, p_settings: settings });
       if (published?.published !== true || published.turn_id !== owner.turnId || published.turn_generation !== generation || published.synthesis_id !== run.job_id) throw rpcInvalid();
       return { protocol, manifest: { version: 'verified-pcm-candidate-v1', owner, textSha256: clip.textSha256, pcmSha256: clip.pcmSha256, format: 'pcm_s16le', sampleRate: 24000, channels: 1, sourceFrames: clip.sourceFrames, byteLength: clip.byteLength, synthesisId: run.job_id,
-        transcriptVerification: { status: 'matched', policyVersion: FIDELITY_POLICY_VERSION, approvedTextSha256: clip.textSha256 }, synthesisSpeed: speed }, pcmBase64: pcmToBase64(clip.pcm) };
+        transcriptVerification: { status: 'matched', policyVersion: FIDELITY_POLICY_VERSION, approvedTextSha256: clip.textSha256 }, synthesisSpeed: speed }, ...(segments ? {} : { pcmBase64: pcmToBase64(clip.pcm) }) };
     } catch (error) { if (run && !accounted) try { await account(deps, run, null, null, 'transport_unknown'); } catch { /* pre-spend validation may have failed */ } await fail(deps, run, error); throw error; }
   }
   if (endpoint !== 'dialogue-turn') throw new AppError(404, 'NOT_FOUND', 'This endpoint was not found.');
@@ -304,27 +313,37 @@ export async function handleAuthoredDialogue(endpoint: string, userId: string, b
 // hiding reader setup under author work. PCM is still published only after the
 // unchanged synthesis handler's spend/source/lexical/closed-socket checks.
 export function authoredDialogueStream(userId: string, body: Data, deps: DialogueDependencies, signal?: AbortSignal): ReadableStream<Uint8Array> {
+  return streamAuthoredDialogue(userId, body, deps, signal, false);
+}
+export function authoredDialogueSegmentsStream(userId: string, body: Data, deps: DialogueDependencies, signal?: AbortSignal): ReadableStream<Uint8Array> {
+  if (!authoredDialogueSegmentsCapability(deps.get)) throw new AppError(409, 'AUTHORED_DIALOGUE_SEGMENTS_DISABLED', 'This conversation option is not available.');
+  return streamAuthoredDialogue(userId, body, deps, signal, true);
+}
+function streamAuthoredDialogue(userId: string, body: Data, deps: DialogueDependencies, signal: AbortSignal | undefined, segmented: boolean): ReadableStream<Uint8Array> {
   if (body.protocol !== protocol) throw invalid();
   if (!authoredDialogueCapability(deps.get)) throw new AppError(409, 'AUTHORED_DIALOGUE_DISABLED', 'This conversation option is not available.');
   const aborter = new AbortController(), combined = signal ? AbortSignal.any([signal, aborter.signal]) : aborter.signal;
   const encoder = new TextEncoder(), started = performance.now();
-  let prepared: PreparedSpeech | null = null, cancelled = false;
+  let prepared: PreparedSpeech | null = null, cancelled = false, firstSegmentMs: number | undefined;
+  let segmentDeadlineAt: number | undefined, segmentTimer: ReturnType<typeof setTimeout> | undefined, segmentEnded: Promise<never> | undefined;
   const elapsed = () => Math.round(Math.max(0, performance.now() - started));
   const factory = deps.prepareSynthesis ?? (deps.synthesize ? null : createPreparedRealtimeReader);
+  const firstBinding = (binding: PreparedSpeechBinding): PreparedSpeechBinding => segmented ? { ...binding, nonce: speechSegmentNonce(binding.nonce, 0), maxOutputTokens: SYNTHESIS_OUTPUT_CAP } : binding;
   const shared: DialogueDependencies = {
     ...deps,
     onAuthorDispatch: binding => {
       deps.onAuthorDispatch?.(binding);
       if (factory) {
         if (prepared) throw rpcInvalid();
-        prepared = factory(binding);
+        prepared = factory(firstBinding(binding));
       }
     },
     beforeSynthesisDispatch: async binding => {
       // A concurrent duplicate may obtain already-written canonical text and
       // skip the author hook. It still prepares before the final dispatch gate.
-      if (!prepared && factory) prepared = factory(binding);
-      if (prepared) await prepared.ready;
+      if (!prepared && factory) prepared = factory(firstBinding(binding));
+      if (segmented && (segmentDeadlineAt === undefined || Date.now() >= segmentDeadlineAt)) throw new AppError(502, 'SYNTHESIS_UNAVAILABLE', 'The spoken response could not be completed.');
+      if (prepared) await (segmentEnded ? Promise.race([prepared.ready, segmentEnded]) : prepared.ready);
       await deps.beforeSynthesisDispatch?.(binding);
     },
     synthesize: request => prepared ? prepared.generate(request) : (deps.synthesize ?? createRealtimeReader())(request),
@@ -338,19 +357,30 @@ export function authoredDialogueStream(userId: string, body: Data, deps: Dialogu
       void (async () => {
         try {
           const text = await handleAuthoredDialogue('dialogue-turn', userId, body, shared, combined), authorMs = elapsed();
-          emit({ type: 'text', result: text });
-          const synthesisStart = elapsed();
+          if (segmented) {
+            segmentDeadlineAt = Date.now() + SEGMENT_SYNTHESIS_DEADLINE_MS;
+            segmentEnded = new Promise<never>((_resolve, reject) => { segmentTimer = setTimeout(() => { reject(new AppError(502, 'SYNTHESIS_UNAVAILABLE', 'The spoken response could not be completed.')); void prepared?.dispose(); }, SEGMENT_SYNTHESIS_DEADLINE_MS); });
+            void segmentEnded.catch(() => {});
+          }
+          const plan = segmented ? await planSpeechSegments(text.text) : null;
+          if (!plan) emit({ type: 'text', result: text });
+          if (plan) shared.segmentSynthesis = { plan, run: (request, context) => runSpeechSegments({ text: request.text, plan,
+            binding: { nonce: request.nonce, voice: request.voice, speed: request.speed, key: request.key, signal: request.signal },
+            owner: context.owner, synthesisId: context.synthesisId, dispatch: context.dispatch, onBegin: () => emit({ type: 'text', result: text, plan }), onPart: result => { const at = elapsed(); emit({ type: 'segment', result }); firstSegmentMs ??= at; },
+            firstPrepared: prepared, prepare: factory ?? undefined, synthesize: deps.synthesize, deadlineAt: segmentDeadlineAt }) };
+          const synthesisStart = plan ? authorMs : elapsed();
           const audio = await handleAuthoredDialogue('dialogue-synthesis', userId, { protocol, owner: text.owner, generation: text.generation }, shared, combined);
-          emit({ type: 'audio', result: audio });
+          emit({ type: segmented ? 'final' : 'audio', result: audio });
           const totalMs = elapsed(), timings = { totalMs, authorMs, synthesisMs: Math.max(0, totalMs - synthesisStart) };
           emit({ type: 'done', timings });
-          try { console.info(JSON.stringify({ kind: 'authored_dialogue_server_ready', policy: AUTHORED_DIALOGUE_POLICY, ...timings })); } catch { /* optional numeric diagnostics cannot alter playback availability */ }
+          try { console.info(JSON.stringify({ kind: segmented ? 'authored_dialogue_segments_server_ready' : 'authored_dialogue_server_ready', policy: AUTHORED_DIALOGUE_POLICY, ...timings, ...(plan ? { firstSegmentMs, segmentCount: plan.count } : {}) })); } catch { /* optional numeric diagnostics cannot alter playback availability */ }
         } catch (error) {
           if (!cancelled && !combined.aborted) {
             const code = error instanceof AppError && /^[A-Z][A-Z_0-9]{0,63}$/.test(error.code) ? error.code : 'DIALOGUE_UNAVAILABLE';
             try { emit({ type: 'error', error: { code, message: 'The conversation reply could not be completed.' } }); } catch { /* an abandoned stream cannot publish */ }
           }
         } finally {
+          clearTimeout(segmentTimer);
           try { await prepared?.dispose(); } catch { /* generation was already blocked or closed */ }
           try { controller.close(); } catch { /* consumer cancellation already closed the stream */ }
         }

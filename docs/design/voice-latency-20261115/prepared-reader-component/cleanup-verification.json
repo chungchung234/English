@@ -1,0 +1,13 @@
+{
+  "version": "controller-cleanup-witness-v1",
+  "manifest_sha256": "76b459da1f8059389b84fcabe8789a9577c29f408d69d2cff3f5146b94fd64aa",
+  "controller_sha256": "73e122c4e4fb075b3bb98c9ac256f1ae5f0ab3de4a53b4e866dd77992ac997b3",
+  "run_claim_sha256": "cd538e3368aea565d77ab64cda4da24cc5e8c0ae65bde441e5094872c4d3adac",
+  "temporary_function_deployment_attempts": 1,
+  "case_invocations_attempted": 2,
+  "delete_attempt_recorded": true,
+  "independent_absence_observation_reported": true,
+  "original_claim_retained": true,
+  "secrets_or_function_identity_exported": false,
+  "scope": "Existing controller journal and result; no new management request performed."
+}

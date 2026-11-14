@@ -174,8 +174,19 @@ function omitLearningContext(body: Record<string, unknown>): boolean {
 function omittedMemories(companionId: CompanionId): Awaited<ReturnType<typeof memories>> {
   return { companionId, facts: [] as unknown[], memories: [], recent_conversation:null, conversation_memories:[], practiced: [], focus: [] as LearningFocus[], suppress_memory: true, revision: 0, limited: false, retrieval: 'keyword' as const, selection: 'Learning context omitted for this conversation.' };
 }
-async function verifyMemory(env: Env, userId: string, companionId: CompanionId, memory: { revision: number; focus: LearningFocus[]; suppress_memory: boolean; facts?: unknown[]; shared_exchanges?: unknown }) {
-  const current = await memoryContext(env, userId, companionId);
+async function verifyMemory(env: Env, userId: string, companionId: CompanionId, memory: { revision: number; focus: LearningFocus[]; suppress_memory: boolean; facts?: unknown[]; shared_exchanges?: unknown }, authoredSqlGuarded = false) {
+  let current: MemoryContext, guardedLearning: PromiseSettledResult<LearningContext> | undefined;
+  if (authoredSqlGuarded) {
+    // Only authored prepare.verify opts in: dispatch and complete_text each
+    // recheck suppression, facts and source stamps under the authority lock.
+    // Legacy callers must read eligibility after the potentially slow memory
+    // lookup, since they do not have that final atomic SQL source guard.
+    const [currentRead, learningRead] = await Promise.allSettled([
+      memoryContext(env, userId, companionId), learningContext(env, userId, companionId, true),
+    ]);
+    if (currentRead.status === 'rejected') throw currentRead.reason;
+    current = currentRead.value; guardedLearning = learningRead;
+  } else current = await memoryContext(env, userId, companionId);
   if (current.revision !== memory.revision) throw new AppError(409, 'MEMORY_CHANGED', '기억이 변경되었습니다. 다시 시도해 주세요.');
   // A materialized spoken forget marker need not change memory_state.revision.
   // Revalidate the already-selected quotes against current facts and the fresh
@@ -190,13 +201,25 @@ async function verifyMemory(env: Env, userId: string, companionId: CompanionId, 
   }
   // Learning exclusions have their own revisions; verify them as well as the
   // existing memory profile revision immediately before publishing instructions.
-  const learning = await learningContext(env, userId, companionId, true);
+  if (guardedLearning?.status === 'rejected') throw guardedLearning.reason;
+  const learning = guardedLearning?.status === 'fulfilled' ? guardedLearning.value : await learningContext(env, userId, companionId, true);
   if (learning.suppress_memory !== memory.suppress_memory) throw new AppError(409, 'MEMORY_CHANGED', '기억이 변경되었습니다. 다시 시도해 주세요.');
 }
 async function memories(env: Env, userId: string, companionId: CompanionId, session?: Session, search?: string, lexicalOnly = false, livePrivacy = false) {
-  const learning = await learningContext(env, userId, companionId, livePrivacy);
-  const queryText = (search ?? conversationQuery(session?.scenario ?? '')).trim();
-  let context = await memoryContext(env, userId, companionId, queryText);
+  const [learningRead, contextRead] = await Promise.allSettled([
+    learningContext(env, userId, companionId, livePrivacy),
+    (async () => {
+      const queryText = (search ?? conversationQuery(session?.scenario ?? '')).trim();
+      return { queryText, context: await memoryContext(env, userId, companionId, queryText) };
+    })(),
+  ]);
+  // Eligibility still wins if both independent reads fail. Nothing is selected,
+  // sent to an embedding provider or published until both have been validated.
+  if (learningRead.status === 'rejected') throw learningRead.reason;
+  const learning = learningRead.value;
+  if (contextRead.status === 'rejected') throw contextRead.reason;
+  const queryText = contextRead.value.queryText;
+  let context = contextRead.value.context;
   if (!learning.suppress_memory && queryText && context.memories.length && !lexicalOnly) {
     let vector: number[] | undefined;
     try { [vector] = await embed(env, userId, companionId, 'query', context.revision, [queryText], queryText); }
@@ -866,7 +889,7 @@ function authoredDependencies(env: Env): DialogueDependencies {
       const context = liveVoiceContext(companion.id, scenario, memory, clock, note, session.id).context;
       const opening = purpose === 'startup' ? await prepareOpening(env, userId, companion, session, memory, scenario, clock) : null;
       return { instructions: opening ? opening.instructions : renderVoiceInstructions(companion, { ...session, scenario }, memory, undefined, clock, note), context, opening: opening?.context ?? null,
-        verify: async () => { if (!omitted) await verifyMemory(env, userId, session.companion_id, memory); if (opening) await opening.verify(); } };
+        verify: async () => { if (!omitted) await verifyMemory(env, userId, session.companion_id, memory, true); if (opening) await opening.verify(); } };
     },
     summarize: async (userId, session, fresh, prior, run, preDispatch) => {
       // The summary contains conversation continuity only. Provider reasoning

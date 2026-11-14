@@ -1,0 +1,36 @@
+{
+  "candidate_source_commit": "584c60db8e57fff816c05a20ca2f1447904bb26d",
+  "runtime_modules": 16,
+  "runtime_tree_sha256": "80e3478cbecb5d88fbffa1c8681e1607f834484ef6517b3483b1648ba59a8c0d",
+  "changed_runtime_modules": [
+    "authored-dialogue.ts",
+    "index.ts"
+  ],
+  "experimental_segments_included": false,
+  "syntax_and_deno_check_passed": true,
+  "owner_cache_tests_passed": 20,
+  "owner_coach_and_scoped_concurrency_tests_passed": 89,
+  "related_run": {
+    "tests": 137,
+    "pass": 135,
+    "fail": 2,
+    "reason": "One SQL child assertion and its parent assumed all instructions lived in the first content block. The assertion now inspects the exact concatenation, retaining its original current-caller-null check."
+  },
+  "affected_sql_rerun": {
+    "tests": 7,
+    "pass": 7,
+    "fail": 0
+  },
+  "source_verifier": {
+    "passed": true,
+    "source_checks": 106,
+    "local_only": true
+  },
+  "actual_models_in_local_tests": false,
+  "production_account_microphone_flow_verified": false,
+  "evidence_sha256": {
+    "check_log": "2ebd3a63533816a3a5eec17cea7149d9d4afe4631a99dee03627621eb3107f7c",
+    "related_log": "0417d7eeb50c61f37664d36c469ef44a461fc0c9c5e466b9d115c7c746610561",
+    "affected_sql_log": "94a6df7e5b14ddab95c722231dd93426c1a0cc967cd4b0b5b9bb5e0692a45e23"
+  }
+}

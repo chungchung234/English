@@ -89,7 +89,7 @@ test('actual authored handler and canonical SQL enforce the complete two-stage l
  });
  await t.test('startup, batch playback, raw reply, cancellation and already-omitted reset preserve authority',async()=>{
   const f=await fixture(db),start=await f.invoke('dialogue-turn',f.body(f.context));
-  assert.equal(start.generation,1);assert.equal(start.assistantEvent.storage,'server');assert.equal(f.authors[0].input.length,1);assert(f.authors[0].input[0].content[0].text.includes('Current caller utterance: null'));
+  assert.equal(start.generation,1);assert.equal(start.assistantEvent.storage,'server');assert.equal(f.authors[0].input.length,1);assert(f.authors[0].input[0].content.map(part=>part.text).join('').includes('Current caller utterance: null'));
   const clip=await f.invoke('dialogue-synthesis',{owner:start.owner,generation:start.generation});assert.equal(clip.manifest.textSha256,start.textSha256);assert.equal(clip.manifest.byteLength,4);
   const caller=await f.addUser('난 비뚤어진 모서리가 마음에 들었어.');
   const report={protocol,owner:start.owner,generation:1,receiptId:start.owner.assistantEventId,qualifiedUserEventIds:[]};

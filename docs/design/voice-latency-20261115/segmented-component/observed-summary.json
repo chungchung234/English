@@ -1,0 +1,228 @@
+{
+  "version": "observed-independent-whole-segmented-native-outcome-v1",
+  "outcome": "negative_speed_criterion_not_met",
+  "source_result_sha256": "66b0f63d738733fdaf2a03d9c380d52eab0c44c56ebf49f632df27c742341ecb",
+  "source_manifest_sha256": "0b247e1a8130a595b29fe940433840df5c725161fe8fee11f3e6c8bbc163f113",
+  "source_controller_sha256": "439c069c4283f75c2bbb65b1f44f55292b8771162a3ceda8b4995b6ad46755c3",
+  "source_compiled_helper_sha256": "6879fc5118c712e2dbfdcfd5eda1867af437137cd05db598d714c0949a800571",
+  "executed_candidate_release": "a568f41a03269a3be8fcb835ff2c0910166326fd",
+  "canonical_text_sha256": "db12815441e7ad4277070a4f324ae4c8f1b8fd92604d1c33626fc02e662df7e6",
+  "canonical_text_utf8_bytes": 189,
+  "order": [
+    "segmented",
+    "whole"
+  ],
+  "same_voice": "cedar",
+  "same_speed": 0.85,
+  "invocations": 2,
+  "writer_generations": 0,
+  "reader_generations_known": 4,
+  "reader_generations_unknown_upper_bound": 0,
+  "criteria": {
+    "first_native_signal_lead_ms": -515.6999999880791,
+    "threshold_ms": 500,
+    "first_signal_threshold_pass": false,
+    "first_signal_with_tail_transport_pending": true,
+    "all_next_native_ready_proved": true,
+    "no_observed_starvation": true,
+    "full_fidelity_and_strong_completion": true,
+    "adoption_supported": false
+  },
+  "segmented_minus_whole_first_signal_ms": 515.6999999880791,
+  "protocol_fidelity_full_eof_strong_output_and_cleanup_passed": true,
+  "cases": [
+    {
+      "mode": "segmented",
+      "reader_generations": 3,
+      "writer_generations": 0,
+      "part_count": 3,
+      "server_clock_offsets_ms": {
+        "text_emitted": 1163.778,
+        "text_phase": "after first prepared reader READY and fresh dispatch guard",
+        "verified_parts_ready": [
+          2136.672,
+          3604.925,
+          4617.459
+        ],
+        "final_emitted": 4624.393
+      },
+      "browser_clock_offsets_from_invocation_ms": {
+        "part_received": [
+          3149.300000011921,
+          4531.300000011921,
+          5531.099999964237
+        ],
+        "first_native_postgain_nonzero": 3230.599999964237,
+        "transport_eof": 5538.099999964237,
+        "product_parser_eof": 5538.5,
+        "admission": 3171.399999976158,
+        "strong_full_completion": 15342.599999964237
+      },
+      "first_signal_with_transport_body_pending": true,
+      "later_parts_still_not_received_at_first_signal": [
+        1,
+        2
+      ],
+      "first_part_receipt_to_first_nonzero_ms": 81.29999995231628,
+      "native_contexts": 1,
+      "max_connected_worklet_nodes": 2,
+      "native_sample_rate": 44100,
+      "continuity": {
+        "correlation": "unique-source-frame-length",
+        "observed_starvation": false,
+        "all_next_ready_proved": true,
+        "boundaries": [
+          {
+            "prior_index": 0,
+            "next_index": 1,
+            "prior_final_context_frame": 405595,
+            "next_loaded_frame_upper": 194688,
+            "next_load_sent_frame": 194047,
+            "status": "ready_before_render_end",
+            "native_message_gap_ms": 70.09999996423721,
+            "gap_is_message_boundary_not_acoustic": true
+          },
+          {
+            "prior_index": 1,
+            "next_index": 2,
+            "prior_final_context_frame": 599308,
+            "next_loaded_frame_upper": 408576,
+            "next_load_sent_frame": 408448,
+            "status": "ready_before_render_end",
+            "native_message_gap_ms": 71.20000004768372,
+            "gap_is_message_boundary_not_acoustic": true
+          }
+        ]
+      },
+      "source_pcm": {
+        "source_sample_rate": 24000,
+        "total_frames": 287339,
+        "total_duration_ms": 11972.458333333334,
+        "per_part_frames": [
+          147519,
+          103869,
+          35951
+        ],
+        "per_part_pcm_sha256": [
+          "551758a5523eee7eb23326cb466d57cf8b211588f99ecc40e84a9d80cf3c745f",
+          "375946899f79f86aa5cce517e2d894bf69270ca6d32cf282348d97e2e7a4d215",
+          "fa46d60d802582dfa1b51d6f0e59dde01d2d314f122f28f87de4f0fa2ff3b430"
+        ],
+        "per_part_exact_leading_zero_frames": [
+          0,
+          0,
+          0
+        ],
+        "leading_zero_metric_is_exact_zeros_not_perceptual_silence": true
+      },
+      "usage": {
+        "input_tokens": 77,
+        "output_tokens": 328,
+        "global_output_cap": 4096,
+        "per_reader_caps": [
+          4096,
+          3940,
+          3825
+        ]
+      },
+      "native_cleanup": {
+        "context_closed": true,
+        "connected_nodes": 0,
+        "all_ports_closed": true,
+        "owned_reference_tracks_ended": true
+      },
+      "page_error_count": 0,
+      "console_error_count": 0,
+      "csp_violation_count": 0,
+      "denied_request_count": 0
+    },
+    {
+      "mode": "whole",
+      "reader_generations": 1,
+      "writer_generations": 0,
+      "part_count": 1,
+      "server_clock_offsets_ms": {
+        "text_emitted": 8.351,
+        "text_phase": "before cold whole reader setup",
+        "verified_parts_ready": [
+          1891.52
+        ],
+        "final_emitted": 1895.475
+      },
+      "browser_clock_offsets_from_invocation_ms": {
+        "part_received": [
+          2617.199999988079
+        ],
+        "first_native_postgain_nonzero": 2714.899999976158,
+        "transport_eof": 2602,
+        "product_parser_eof": 2648.5,
+        "admission": 2639.099999964237,
+        "strong_full_completion": 14553.699999988079
+      },
+      "first_signal_with_transport_body_pending": false,
+      "later_parts_still_not_received_at_first_signal": [],
+      "first_part_receipt_to_first_nonzero_ms": 97.69999998807907,
+      "native_contexts": 1,
+      "max_connected_worklet_nodes": 1,
+      "native_sample_rate": 44100,
+      "continuity": {
+        "correlation": "unique-source-frame-length",
+        "observed_starvation": false,
+        "all_next_ready_proved": true,
+        "boundaries": []
+      },
+      "source_pcm": {
+        "source_sample_rate": 24000,
+        "total_frames": 283068,
+        "total_duration_ms": 11794.5,
+        "per_part_frames": [
+          283068
+        ],
+        "per_part_pcm_sha256": [
+          "efbf736e86ff2074cf0ff0e513441e48ed2867ce111d05ce40f39d8ea36dc0fc"
+        ],
+        "per_part_exact_leading_zero_frames": [
+          0
+        ],
+        "leading_zero_metric_is_exact_zeros_not_perceptual_silence": true
+      },
+      "usage": {
+        "input_tokens": 51,
+        "output_tokens": 282,
+        "global_output_cap": 4096,
+        "per_reader_caps": [
+          4096
+        ]
+      },
+      "native_cleanup": {
+        "context_closed": true,
+        "connected_nodes": 0,
+        "all_ports_closed": true,
+        "owned_reference_tracks_ended": true
+      },
+      "page_error_count": 0,
+      "console_error_count": 0,
+      "csp_violation_count": 0,
+      "denied_request_count": 0
+    }
+  ],
+  "limits": [
+    "One exact canonical reply and one sequential observation per mode, segmented first then whole; function/cache/order/provider/network variance are confounded.",
+    "This starts with canonical text ready; it does not measure a user utterance end, ASR, writer, actual account/auth/DB path or full production call.",
+    "WHOLE uses the frozen phase1 whole reader wrapped in the current one-part queue protocol; this is a component comparison, not the full phase1 and phase2 applications.",
+    "Browser performance.now offsets, independent server performance.now offsets and native AudioContext frame evidence remain distinct; no absolute cross-clock timestamp subtraction.",
+    "The server segmented text frame is emitted after READY plus fresh guard; whole text frame precedes its reader setup. These text offsets are not matching stage timings.",
+    "Same muted256-frame ScriptProcessor reference observer and bounded eager transport tee were used in separate fresh processes; observer and tee buffering/backpressure add measurement effects.",
+    "Different TTS waveforms and durations remain; exact zero-prefix counts do not establish perceptual onset or prosody quality.",
+    "Native part-message gaps70.1/71.2ms are observed scheduling/message boundaries, not sample-exact acoustic silence or physical-hearing evidence.",
+    "No raw provider response.done/generation-pending claim. Browser observations prove later parts/body were pending on receipt.",
+    "No retry, no extra generation, no post-hoc winning threshold. The frozen speed criterion failed and activation is not supported by this result."
+  ],
+  "actual_db": false,
+  "actual_account": false,
+  "actual_microphone": false,
+  "physical_hearing_verified": false,
+  "production_coach_or_settings_changed_by_probe": false,
+  "prior_six_generation_run_unchanged": true,
+  "new_network_requests_for_derived_evidence": 0
+}

@@ -1,0 +1,30 @@
+{
+  "fixture": true,
+  "transports": [
+    "auth",
+    "backend",
+    "provider",
+    "RTC"
+  ],
+  "actualProvider": false,
+  "actualRtc": false,
+  "baselineCommit": "322ccd01565679e63a9624065962d4c623fabe73",
+  "baselineWebSourceEqualsPublicRelease": "ef11416d7ffc556d2b6aa209d002f5adf441fd2e",
+  "eventSequence": [
+    "RTC+datachannel open",
+    "server_vad:on",
+    "semantic_vad:off"
+  ],
+  "baseline": {
+    "prematureReady": true,
+    "clockBeforeAck": "00:01",
+    "greetingsAfterAck": 0,
+    "policyFaultEvents": 1
+  },
+  "fixed": {
+    "prematureReady": false,
+    "clockBeforeAck": "00:00",
+    "greetingsAfterAck": 1,
+    "policyFaultEvents": 0
+  }
+}

@@ -1,6 +1,6 @@
 {
-  "buildScript": "assets/app.a92002e6c070.js",
-  "scriptSri": "qSAC5sBwqB1RUnO7xcVy93nICVBoIPy6YzbruzAtQfc=",
+  "buildScript": "assets/app.462bc661343b.js",
+  "scriptSri": "RivGYTQ7GsLLc9nNfl5NnBQ2DxFRjT+5fsfyxIZrTu4=",
   "limits": "Synthetic auth/DB/models/ASR/RTC. Native Chromium AudioWorklet and WASM. Tone PCM; no real microphone, model, speech fidelity or physical acoustics proven.",
   "results": [
     {
@@ -33,6 +33,18 @@
     },
     {
       "case": "native output timestamp permits strong report",
+      "passed": true
+    },
+    {
+      "case": "already-omitted reset reports only the current writer caller sources",
+      "passed": true
+    },
+    {
+      "case": "BUDGET_EXCEEDED is terminal for generation but preserves raw save and hangup",
+      "passed": true
+    },
+    {
+      "case": "COST_BUDGET_EXCEEDED is terminal for generation but preserves raw save and hangup",
       "passed": true
     },
     {

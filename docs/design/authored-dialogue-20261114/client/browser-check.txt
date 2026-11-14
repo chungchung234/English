@@ -1,1 +1,78 @@
-Authored dialogue browser: 9/9 passed
+
+> loop-english@0.1.0 test:browser
+> node test/browser.mjs && node test/post-call.browser.mjs && node test/enhancements.browser.mjs && node test/end-transcript.browser.mjs && node test/voice-turn-controls.browser.mjs && node test/research-recall.browser.mjs && node test/temporal-memory.browser.mjs && node test/call-transition.browser.mjs && node test/post-call-experience.browser.mjs && node test/save-completion.browser.mjs && node test/post-call-transcript-view.browser.mjs && node test/session-review-state.browser.mjs && node test/first-use.browser.mjs && node test/review-journal.browser.mjs && node test/call-connection.browser.mjs && node test/voice-reliability.browser.mjs && node test/call-audio.browser.mjs && node test/qualified-turns.browser.mjs && node --test test/build-worklet.browser.mjs && node test/verified-pcm-native.browser.mjs && node test/authored-dialogue.browser.mjs
+
+PASS: slow provider settings do not block entry; user/approval checks run concurrently with a visible transition and no private reads before approval.
+PASS: official SDK OAuth uses matching PKCE proof, scrubs callback URLs/provider tokens, keeps login across reloads/tabs/refresh, links Kakao to the same user, and propagates logout. Providers are simulated.
+PASS: unapproved OAuth accounts cannot read history; unsolicited and cancelled callbacks do not exchange codes or leak provider errors.
+PASS: login deduplicates sends/verifications, persists cooldowns without codes, respects Retry-After, permits existing codes, never retries automatically, and retains account approval.
+PASS: call details preserve cached feedback and isolate delayed transcripts; separate feedback has readable contrast; weekly availability, result display and request deduplication follow eligible calls.
+PASS: character slides follow tab direction, retain real outgoing artwork, settle on the last rapid selection, and respect reduced motion.
+PASS: slow 40px touch, pause before release and initial thumb wobble change companions; vertical scroll stays native.
+PASS: mouse drag and real browser touch swipe change companions; short, vertical and boundary gestures preserve selection.
+PASS: swipes on description and blank page space work beyond the artwork, with full-width fades and unchanged artwork size.
+PASS: a swipe can start on the call button without activating it; normal button taps remain available.
+PASS: three speed options, native radio keyboard selection, cancel, deferred playback-safe update, acknowledged persistence, settings failure/retry and compact sheet.
+PASS: 50-minute deadline stops microphone, saves the final turn, and creates feedback without automatically restarting.
+PASS: direct contact calls, failed starts/retry, terminal failures, refresh failures, row-bound redial and idempotent end preserve saved state and companion identity.
+PASS: returning shows the last connected companion in front, even after browsing another companion.
+PASS: browser reload retains offline records; retry syncs exact IDs; voice-event wiring saves and reviews; mobile layout fits. Full export handles a lower DB page cap. Voice upstream is simulated, not validated.
+PASS: unapproved accounts stay on login and never attempt history reads or queued uploads.
+PASS: visitors see a ready-to-use email login, no backend setup or API key fields; unconfigured deployment shows preparation status.
+PASS: production HTML runs under hashed CSP; visitors can start without configuring a backend.
+PASS: separate source-backed feedback, explicit source navigation, real visibility exposure and preserved historical attempt linkage.
+PASS T04/T05/T08: explicit candidate enrollment and extra recommendation cap, defer date, source hold without editing transcript.
+PASS T10/T11/T29: offline exclusion retained across reload, no premature server success, exact-ID retry and next-call context suppression (voice transport simulated).
+PASS: concurrent historical clients receive CAS conflicts and cannot resurrect excluded expressions.
+PASS T19/T22: late transcript invalidates old feedback, same-expression reanalysis keeps history and changed expression gets no inherited practice.
+PASS T12/T13: running server job survives reload, blocks duplicate generation and completes without forced navigation.
+PASS T16/T18: quota shows KST reset and prevents repeated requests; oversized analysis preserves full source and hides raw errors.
+PASS T03: no-user-speech record offers home without invented corrections or analysis request.
+PASS T15: explicit partial finalization persists a missing-audio warning through reload and analysis.
+PASS: long feedback fits 320/390/desktop, merged sources and historical library attribution remain intact.
+PASS T28: stored weekly result displays exact 168-hour period and generation time without including later calls.
+PASS T20: companion switch closes practice and scopes visible feedback; authenticated SQL excludes another account.
+PASS T21: v2 export includes source and learning history; interrupted learning batch is retryable, v1 remains accepted, older backup preserves latest state.
+PASS T14: pending finish reveals transcript and allows explicit home exit, keeps save state honest, blocks overlap, releases start and avoids forced navigation.
+PASS: production bundle runs post-call feedback under hashed CSP without JavaScript errors.
+PASS E01: real RTC boundary, one failed IndexedDB write, autonomous retry, offline reload and exact server acknowledgement preserve one connection receipt.
+PASS E02: held intent → separate explanation → proposal → explicit acceptance/dismissal survives reload, preserves originals and never reuses held content automatically.
+PASS E03: optional 1/3/7-day KST schedules, concealed delayed recall and three self-report choices remain separate from immediate practice and preserve the default cap.
+PASS E04: a service-prepared actual connection binds original user evidence; observation requires explicit self-review, leaves context/opportunity unknown and never labels success/mastery.
+PASS E05: exact saved 168-hour period and generation disclosure remain fixed through goal selection → preparation → actual connection → delayed recall.
+PASS Privacy: authenticated roles isolate accounts/companions, excluded sources revoke derivative evidence/plans, and approval guards both client and service RPCs.
+PASS: 6 enhancement acceptance scenarios; live voice and human quality gates remain external.
+PASS: automatic transcript reveal exposes received and late-final speech during held append/finish; failed feedback keeps the full transcript.
+PASS: reload restores exact server transcript rows and the generated/heard warning before optional time metadata; ended-call history opens its actual transcript directly.
+PASS: zero-turn transcript states that no speech is available and never invents a successful review.
+PASS: transcription failure preserves received speech and visible partial/save recovery without claiming completion.
+PASS: explicit received-only recovery updates partial status while preserving the missing-audio limitation.
+PASS: device-save failure still exposes received text with explicit unconfirmed storage and no false completed call.
+4 voice browser groups PASS: removed manual wait/time clutter and 390/320 enlarged-text layout; microphone and spoken wait/continue capture; hint/cancelled-output safety; final/delayed/duplicate commits on hangup. Provider behavior is fixture-only; manual engine races remain covered by voice-turn-controls.test.mjs.
+PASS: labelled, target-safe semantic cues; optional help; sticky assisted classification; pending, replay, stale scope and source guards.
+4 temporal-memory browser groups PASS: server clock/midnight/timezone with device skew; durable per-turn and session timestamps/reload; legacy-zone honesty; isolated new-call fallback and compact live layout without clock/memory clutter. Provider/DB are fixtures.
+PASS: real pending connection cues, two-part readiness, no artificial connect delay, and one greeting.
+PASS: immediate microphone/audio/control/avatar stop, short ended frame, automatic transcript reading and parallel late-transcript preservation.
+PASS: failed connection cleanup/retry, silent AudioContext fallback, and idempotent data-channel closure.
+PASS: transcript before save ACK; stable late ASR/save/feedback reading; 320/390/large text; full sourced feedback; source/back scroll; finish without learning actions; exclusion/account/companion protection; revisit, background, empty, retry and weekly race.
+9 save-completion browser cases PASS: measured ACK excludes cue/feedback; source opens before object/single-row ACK; slow storage keeps transcript and exit available; feedback readiness preserves scroll/footer and opens separately; transport failure and invalid session/status/time/multiple-row ACK remain incomplete. Fixture timings are not production averages.
+Transcript reading surface: stable rows, selection, late-event scroll anchor, source navigation and scope isolation passed.
+3 session-review browser regression groups PASS: stale/failed feedback hides old corrections without navigation; per-session retry ownership; stale source promise and queued navigation isolation. Real shipped HTML/CSS/modules; controlled local inputs.
+PASS: delayed loading/empty/retry states; optional guide has no mic side effects, ESC/focus, compact layout and account-scoped persistence; permission recovery; late microphone and voice responses after cancel cannot revive a call; immediate retry remains isolated.
+Review journal browser PASS: date/call groups, all expressions and uneven kinds, single-expression detail, source and back restoration, acknowledged bookmarks, saved tab, old-page/date navigation, 320px/large type, desktop, stale-account isolation; actual shipped HTML/CSS/module with synthetic inputs.
+PASS: 15 initial-connection lifecycle scenarios cover bounded setup, explicit policy acknowledgement, owned cleanup, stale completions, retry, missing optional signal helpers, pending VAD and user-gesture playback recovery. Auth/backend/provider/RTC are fixtures.
+PASS: ten-minute low-token calls stay uninterrupted; compaction waits for matching settings/deletion receipts, retries only unconfirmed items, bypasses the cooldown for a real context limit, recovers from timeout, records command errors without false warnings/partial completion, and preserves real disconnection/ASR failure guidance. Provider and diagnostic transports are fixtures.
+PASS: browser microphone has no artificial mode selector, old preferences are never read or transmitted, account controls remain usable at 390/320px, unknown-route audio diagnostics stay private and account-scoped, and speech detection alone neither cancels playback nor changes the speaking display. Actual noise suppression quality is not measured.
+PASS: owned startup input[], typed historical opening context, real WASM-qualified interruption/replies, noise-safe startup, duplicate/reconnect/hint/checkpoint ownership, playback receipts after raw ACK, privacy-retired context recovery and explicit retry, explicit stop/reply fallback and legacy compatibility; the actual production build also runs native WebAudio/WASM under verified hash CSP and SRI without JavaScript unsafe-eval. Provider speech, model conversational quality and acoustic quality remain unverified.
+✔ built hash-only CSP loads the exact native Worklet under a site subpath and blocks a neighboring module (2356.74659ms)
+✔ local source server provides matching hashed Worklet metadata and rejects stale content paths (2750.019102ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6113.467451
+PASS: native Chromium 24→44.1kHz PCM output, real post-gain reference silence on pause/clear, exact acknowledged candidate/user resume cursor/phase, suspended-output gesture recovery, empty-context next-turn preflight after completion/stop without old-turn replay, native output-clock completion, prepare-only strict admission with trusted gesture preload, and terminal account/reconnect invalidation. Local synthetic fixtures only; no provider, authentication, production, or physical-hearing claim.
+Authored dialogue browser: 12/12 passed

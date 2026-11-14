@@ -75,5 +75,45 @@
         "hit": true
       }
     ]
+  },
+  {
+    "state": "budget",
+    "width": 390,
+    "height": 844,
+    "textScale": 1.25,
+    "screenshot": "test-results/authored-budget-390.png",
+    "overflow": false,
+    "end": {
+      "y": 755,
+      "bottom": 827,
+      "hit": true,
+      "disabled": false
+    },
+    "notice": {
+      "y": 672,
+      "bottom": 744,
+      "visible": true
+    },
+    "status": "오늘 이용 한도에 도달했어요"
+  },
+  {
+    "state": "budget",
+    "width": 320,
+    "height": 568,
+    "textScale": 1.25,
+    "screenshot": "test-results/authored-budget-320.png",
+    "overflow": false,
+    "end": {
+      "y": 479,
+      "bottom": 551,
+      "hit": true,
+      "disabled": false
+    },
+    "notice": {
+      "y": 370,
+      "bottom": 468,
+      "visible": true
+    },
+    "status": "오늘 이용 한도에 도달했어요"
   }
 ]

@@ -1,10 +1,10 @@
 {
   "base_commit": "a4f712e808145742239855edf1add136d6824edf",
-  "status": "uncommitted candidate, not production verification",
-  "captured_at": "2026-11-14T10:42:59.867779+00:00",
+  "status": "local integrated candidate verification; not production verification",
+  "captured_at": "2026-11-14T11:22:05.192992+00:00",
   "source_sha256": {
-    "web/app.js": "077c3846927afcb31b4a736a99365972905516319ecb747823a37f04270d41c5",
-    "web/authored-dialogue.js": "2ef44f6d1d7becc7b58578dbe41c88f8c56a80d3e8d2612a052cdc97d3d02d2a",
+    "web/app.js": "78b926aa2bbd078aac1c28ce9691f69fea389ca82cae01be3418f51d2444e925",
+    "web/authored-dialogue.js": "daea40a75b4da7432a6b51b122a31dca121fa07df8a787eeaa6a6ff852a3ea24",
     "web/qualified-turn-controls.js": "6745a16f5cfe9f682113efe2b3d45c27905170bfcf4390b164a5d3b58cbe1f06",
     "web/verified-pcm-playback.js": "c3126463f6f179a33d6ba9da18e2048e0525aeff121ff6e99c996c88bc2bbab8",
     "web/verified-pcm-worklet.js": "a87ca26fa53befc218beca27d85ae4afaef6b528abcc9713013c241d0f65fb44",
@@ -12,30 +12,44 @@
     "web/style.css": "107188dab75da478036ef88dbb27c2baf6cbdcca9ed2efe226c4837bd6a775e2",
     "scripts/build-web.mjs": "1979cb3788574177fcf3224fa1b143962261a998ccb8a307f4c615f469ba7f82",
     "scripts/bundle-web.mjs": "d1a4f4c7e9e5d0cfa49515cf5dbe63a6b5ce47263044c8ad6c184e2386fc7bf3",
-    "test/authored-dialogue.browser.mjs": "e5a722c3b772e4fdf331f9fa27ceecf49727c9a8632c11381efa6d48a44f0b7e",
-    "test/authored-dialogue.test.mjs": "1b1d537ab975629a096b8bd57bf46022690dada448ea4f7a574c930b491d96e4",
+    "test/authored-dialogue.browser.mjs": "d09098326163a08d8b25ac837a36e7dc7998a99f8311fbfd13442b154eae7a06",
+    "test/authored-dialogue.test.mjs": "82728c693325e2e8deb8ce9de9befd4d71fb959f69a530c2eb6b0d6a087ae768",
     "test/qualified-turn-controls.test.mjs": "dcb141accb9871704ac4047fe3857f5df0600fa123a84247c05d90870c3f7091"
   },
   "artifacts_sha256": {
-    "README.md": "476f7867f3d683d0ca5e6ee3701411a1a5ffec5bf7f745cb53906f3478bc3f9a",
-    "authored-dialogue-layout.json": "c0b504addb2d43720bbb128ac4fa55e5273d45ef06bf30950fa4648b1cfa97cf",
-    "authored-dialogue-results.json": "3b312174a27f0f3555eef113b21c9f1eaee72f699be094504bde1ce3779e0e5f",
+    "README.md": "8bbd4d62bc51ceae7b16ea78c909fed7459a14fe63a9f49f1beb5d4d549cbca1",
+    "authored-budget-320.png": "eda49fdaadba0ec9fb252e6aaee46b125e2f99012084aa47e3174fd664d07fc9",
+    "authored-budget-390.png": "ec40a11d83630ab69f5578f49a94804216fdf65ff6255e2d878712f40fb4b48f",
+    "authored-dialogue-layout.json": "63114604e7b95278c3658c0903a52605713bb91e22b935d0379171d3cea59e19",
+    "authored-dialogue-results.json": "f730c294084b53a76561e030ca365e9bc15b40ef0e7a84fd93b27cf6feeb960d",
     "authored-resume-320.png": "9670eae2c008b82d2b6d6c9baf6415ed6a5470679094153cd317b9da49e8272e",
     "authored-resume-390.png": "433f867f83f218e09c8a344b0c7260ac93362acafdd1b1b0b046baf95d5460d3",
     "authored-resume-scroll-320.png": "df60cabe7e8acdb338edfeebeb92a1e58276d1dfdf9679ccac55bce344ebf668",
-    "browser-check.txt": "6ff6fd69f1181f54b30b197ed83626ac1d4351e78fdf696734675648a406b13e",
-    "client-unit-check.txt": "b46fa6fe113a7e98502b0e4986f750fdd90d2de9c465fdd4e18b1625bc07788f",
+    "browser-check.txt": "c17395efba64bae661d0386b0ce8f71143a6f9d7c9a9ca5493f91fbf67c6eb22",
+    "client-unit-check.txt": "4849e57600e3bc3e9f9bd80af6df3592a45290ad86c4ad7bb8840398046643ee",
     "legacy-qualified-browser-check.txt": "87150a7697fbe1236f90ed26dba533f0d6d16613c50369a638c73cca165537fe"
   },
   "browser": "native Chromium /usr/bin/chromium, isolated actual production-style build and real HTTP asset server",
   "fixtures": "synthetic auth, database, writer, synthesis, ASR and RTC; tone PCM not speech",
   "gates": {
-    "client_units": 75,
-    "browser_cases": 9,
+    "client_units": 78,
+    "browser_cases": 12,
     "actual_microphone": false,
     "actual_provider": false,
     "physical_acoustics": false,
     "human_hearing": false,
-    "Edge_binary": false
+    "Edge_binary": false,
+    "root_full_browser_script_entries": 21
+  },
+  "verified_source_commit": "b6d856cfbc539d6c9798fe5cbff3a896643a4af8",
+  "root_pipeline_report": {
+    "unit_tests": 633,
+    "npm_check": "passed",
+    "evals": "passed, as reported by root",
+    "presence": "passed",
+    "source": "root completion message; browser-check.txt preserves the independently read full browser log"
+  },
+  "derived_artifacts": {
+    "legacy-qualified-browser-check.txt": "Exact qualified-turns PASS line extracted from browser-check.txt"
   }
 }

@@ -10,7 +10,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash, randomUUID } from 'node:crypto';
 import { chromium } from 'playwright';
-const port=49447,base=`http://127.0.0.1:${port}`,project='https://authored-test.supabase.co',uid='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const project='https://authored-test.supabase.co',uid='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const protocol='authored_dialogue_v1',policy={type:'semantic_vad',eagerness:'low',create_response:false,interrupt_response:false};
 const instructions='ASR connection only. Never create a response. Caller dialogue authority is maintained separately.';
 const wav=await readFile(new URL('./fixtures/live-smoke-utterance.wav',import.meta.url));
@@ -21,23 +21,17 @@ const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 const outputPcm=Buffer.alloc(24000*15*2);for(let i=0;i<outputPcm.length/2;i++)outputPcm.writeInt16LE(Math.round(Math.sin(i*2*Math.PI*220/24000)*1200),i*2);
 const shortPcm=outputPcm.subarray(0,24000*2);
 const root=fileURLToPath(new URL('../',import.meta.url)),directory=await mkdtemp(path.join(tmpdir(),'authored-browser-'));
-await Promise.all(['web','src','scripts'].map(name=>cp(path.join(root,name),path.join(directory,name),{recursive:true})));
-await cp(path.join(root,'package.json'),path.join(directory,'package.json'));await symlink(path.join(root,'node_modules'),path.join(directory,'node_modules'),'dir');
-execFileSync('npm',['run','build','--','--require-config'],{cwd:directory,stdio:'pipe',env:{...process.env,BUILD_SITE_URL:base+'/authored-built/',PUBLIC_SUPABASE_URL:project,PUBLIC_SUPABASE_KEY:'sb_publishable_fixture',GITHUB_SHA:'',CI_COMMIT_SHA:'',VERCEL_GIT_COMMIT_SHA:'',BUILD_SOURCEVERSION:''}});
-const html=await readFile(path.join(directory,'dist/index.html'),'utf8'),script=html.match(/src="(assets\/app\.[a-f0-9]{12}\.js)" integrity="sha256-([^"]+)"/);
-assert(script);assert.equal(createHash('sha256').update(await readFile(path.join(directory,'dist',script[1]))).digest('base64'),script[2]);
 // AudioWorklet module fetches must reach a real HTTP server. Page.route does
 // not reliably intercept this execution context and would hide asset failures.
 const server=createServer(async(request,response)=>{
- const pathname=new URL(request.url,base).pathname;
+ const pathname=new URL(request.url,'http://127.0.0.1').pathname;
  if(!pathname.startsWith('/authored-built/')){response.writeHead(404);response.end();return;}
  const name=decodeURIComponent(pathname.slice('/authored-built/'.length))||'index.html';
  if(name.includes('..')){response.writeHead(404);response.end();return;}
  try{const bytes=await readFile(path.join(directory,'dist',name));response.writeHead(200,{'Content-Type':{'.html':'text/html','.js':'text/javascript','.webp':'image/webp','.svg':'image/svg+xml','.png':'image/png'}[path.extname(name)]||'application/octet-stream'});response.end(bytes);}
  catch{response.writeHead(404);response.end();}
 });
-await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,'127.0.0.1',resolve);});
-const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--enable-unsafe-swiftshader','--use-angle=swiftshader','--autoplay-policy=no-user-gesture-required']});
+let base,browser,script;
 const eventually=async(check,label,timeout=15000)=>{const end=Date.now()+timeout;while(Date.now()<end){if(await check())return;await new Promise(resolve=>setTimeout(resolve,25));}assert.fail(label);};
 const results=[],screens=[];const documentHeight=height=>height-105;
 async function layout(page,state){
@@ -122,6 +116,16 @@ async function setup({holdPolicy=false,holdRaw=false,badManifest=false,short=fal
  return {context,page,sessions,saved,turns,syntheses,cancels,reports,contexts,errors,routeErrors,diagnostics,consoleErrors,releaseRaw,emit,local,input};
 }
 try{
+ // Bind first so the exact Worklet CSP/build URL uses the OS-assigned port.
+ await new Promise((resolve,reject)=>{server.once('error',error=>reject(Error(`Authored fixture HTTP server failed (${error.code||error.name}).`,{cause:error})));server.listen(0,'127.0.0.1',resolve);});
+ const address=server.address();assert(address&&typeof address==='object'&&Number.isInteger(address.port)&&address.port>0,'actual fixture listener port required');
+ base=`http://127.0.0.1:${address.port}`;
+ await Promise.all(['web','src','scripts'].map(name=>cp(path.join(root,name),path.join(directory,name),{recursive:true})));
+await cp(path.join(root,'package.json'),path.join(directory,'package.json'));await symlink(path.join(root,'node_modules'),path.join(directory,'node_modules'),'dir');
+execFileSync('npm',['run','build','--','--require-config'],{cwd:directory,stdio:'pipe',env:{...process.env,BUILD_SITE_URL:base+'/authored-built/',PUBLIC_SUPABASE_URL:project,PUBLIC_SUPABASE_KEY:'sb_publishable_fixture',GITHUB_SHA:'',CI_COMMIT_SHA:'',VERCEL_GIT_COMMIT_SHA:'',BUILD_SOURCEVERSION:''}});
+const html=await readFile(path.join(directory,'dist/index.html'),'utf8');script=html.match(/src="(assets\/app\.[a-f0-9]{12}\.js)" integrity="sha256-([^"]+)"/);
+assert(script);assert.equal(createHash('sha256').update(await readFile(path.join(directory,'dist',script[1]))).digest('base64'),script[2]);
+ browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--enable-unsafe-swiftshader','--use-angle=swiftshader','--autoplay-policy=no-user-gesture-required']});
  await mkdir('test-results',{recursive:true});
  const f=await setup({holdPolicy:true,holdRaw:true,failPrune:1});
  await eventually(()=>f.page.evaluate(()=>!!window.fixture.releasePolicy),'policy command sent');assert.equal(f.turns.length,0);assert.equal(await f.page.locator('#call-timer').textContent(),'00:00');
@@ -183,6 +187,6 @@ try{
   await limited.page.locator('#end-call').click();await eventually(()=>limited.sessions[0].status==='ended','budget call normal finish ACK');await eventually(()=>limited.page.evaluate(()=>window.fixture.peer.connectionState==='closed'),'budget call closes after saving');assert.match(await limited.page.locator('#save-status').textContent(),/^(저장 완료|대화 저장을 확인했어요)$/);assert([...limited.saved.values()].some(row=>row.text==='My synthetic thought before the daily limit.'));assert.deepEqual(limited.errors,[]);assert.deepEqual(limited.routeErrors,[]);await limited.context.close();results.push({case:code+' is terminal for generation but preserves raw save and hangup',passed:true});
  }
  const weak=await setup({short:true,weak:true});await eventually(()=>weak.page.evaluate(()=>window.fixture.pcmEvents.some(event=>event.kind==='render_drained')),'weak source renders');await new Promise(resolve=>setTimeout(resolve,5500));assert.equal(weak.reports.length,0,'estimated drain must not produce a receipt');assert.deepEqual(weak.errors,[]);assert.deepEqual(weak.routeErrors,[]);await weak.context.close();results.push({case:'missing output timestamp never reports strong completion',passed:true});
- await writeFile('test-results/authored-dialogue-layout.json',JSON.stringify(screens,null,2));await writeFile('test-results/authored-dialogue-results.json',JSON.stringify({buildScript:script[1],scriptSri:script[2],limits:'Synthetic auth/DB/models/ASR/RTC. Native Chromium AudioWorklet and WASM. Tone PCM; no real microphone, model, speech fidelity or physical acoustics proven.',results},null,2));
+ await writeFile('test-results/authored-dialogue-layout.json',JSON.stringify(screens,null,2));await writeFile('test-results/authored-dialogue-results.json',JSON.stringify({fixtureOrigin:base,buildScript:script[1],scriptSri:script[2],limits:'Synthetic auth/DB/models/ASR/RTC. Native Chromium AudioWorklet and WASM. Tone PCM; no real microphone, model, speech fidelity or physical acoustics proven.',results},null,2));
  console.log(`Authored dialogue browser: ${results.length}/${results.length} passed`);
-}finally{await browser.close();await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});}
+}finally{try{await browser?.close();}finally{try{await new Promise(resolve=>server.close(resolve));}finally{await rm(directory,{recursive:true,force:true});}}}

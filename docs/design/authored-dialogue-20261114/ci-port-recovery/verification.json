@@ -1,0 +1,15 @@
+{
+  "failed_ci_run": 43589882831,
+  "release_sha": "4073056f181f5bac5618b0674bcc29c037fdc64d",
+  "failed_stage": "qualified browser fixture child server exited before readiness",
+  "historical_ci_stderr_available": false,
+  "historical_ci_exact_errno_confirmed": false,
+  "local_fixed_port_collision_reproduced": true,
+  "both_new_tests_pass_with_both_old_ports_held": true,
+  "application_or_runtime_source_changed": false,
+  "actual_provider_requests": 0,
+  "evidence_sha256": {
+    "occupied-ports.json": "ba8473cc8a8a4aee8d92e5056d95aaade6319900bb6622778dd00434fe5984c7",
+    "old-bind-reproduction.json": "4f7f1a6df9bec37ebbc187f86edb93d2720c5eabee8ad419eb6a0e4cef6ca3fa"
+  }
+}

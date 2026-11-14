@@ -878,7 +878,7 @@ test('config exposes exactly the three companion profiles and their voices', asy
     const result = await handler(new Request('https://project.supabase.co/functions/v1/coach/config', { headers: { Origin: 'https://example.com', Authorization: 'Bearer test-user' } }));
     assert.equal(result.status, 200);
     const data = await result.json();
-    assert.deepEqual(data.capabilities, { manual_turns_v1: true });
+    assert.deepEqual(data.capabilities, { manual_turns_v1: true, authored_dialogue_v1: false });
     assert.deepEqual(data.companions.map(({ id, voice }) => [id, voice]), [['mia', 'marin'], ['alex', 'cedar'], ['juno', 'verse']]);
     assert.equal(data.models.voice, 'gpt-realtime-2.1-mini');
     assert.equal(JSON.stringify(data).includes('test-service'), false);

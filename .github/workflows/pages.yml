@@ -12,6 +12,9 @@ on:
       - scripts/evaluate-memory.mjs
       - scripts/evaluate-learning-enhancements.mjs
       - scripts/build-web.mjs
+      - scripts/bundle-web.mjs
+      - scripts/isolated-coach-check.mjs
+      - scripts/serve.mjs
       - scripts/deploy.py
       - scripts/prepare-hosting.mjs
       - scripts/live-smoke.mjs

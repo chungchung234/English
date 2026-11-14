@@ -8,14 +8,16 @@ const nonempty = value => typeof value === 'string' && Boolean(value.trim());
 
 export function createQualifiedTurnControls({ send, instructions = () => '', openingInstructions = () => '',
   hasRecentVoice = () => false, now = () => performance.now(), changed = () => {}, blockOutput = () => {},
-  failed = () => {}, timeoutMs = 8000, graceMs = 350,
+  failed = () => {}, outputTransport = null, timeoutMs = 8000, graceMs = 350,
   generationTimeoutMs = Math.max(timeoutMs, 30000), playbackTimeoutMs = Math.max(timeoutMs, 60000) } = {}) {
   if (typeof send !== 'function') throw new TypeError('A send function is required.');
+  const authored = outputTransport?.kind === 'authored_dialogue_v1';
+  if (outputTransport && (!authored || !['create', 'cancel', 'pauseCandidate', 'resolveCandidate', 'resume'].every(key => typeof outputTransport[key] === 'function'))) throw new TypeError('Invalid output transport.');
   const born = now(), inputs = new Map(), history = new Map(), responses = new Map(), commands = new Map();
   let available = false, started = false, disposed = false, policy = null, ready = false;
   let desiredHold = false, blocked = true, fault = false, current = null, sequence = 0;
-  let startupResolved = false, startupAt = null, startupTimer = null, policyTimer = null, policyRequest = null;
-  let lastVoice = -Infinity, pendingHint = null, activeInputId = null, approvalBoundary = -1;
+  let startupResolved = false, startupAt = null, startupTimer = null, policyTimer = null, policyRequest = null, authoredRequested = false;
+  let lastVoice = -Infinity, pendingHint = null, activeInputId = null, approvalBoundary = -1, decisionEpoch = 0;
 
   // Unconfirmed server VAD may stay open on background noise. It cannot claim
   // the floor; only locally qualified speech can delay an opening/reply.
@@ -33,7 +35,9 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
     current?.cancelled ? 'interrupting' : current ? (current.id ? 'responding' : 'thinking') :
       !startupResolved && started ? 'startup' : 'listening';
   const state = () => ({ ready, held: blocked, desiredHold, phase: phase(),
-    pending: Boolean(current || policyRequest || startupTimer), inputBusy: inputBusy(), needsManualReply: uncertain() });
+    pending: Boolean(current || policyRequest || startupTimer), inputBusy: inputBusy(), needsManualReply: uncertain(),
+    outputPaused: Boolean(current?.pauses?.size || current?.playbackBlocked),
+    needsResume: Boolean(current?.playbackBlocked || [...(current?.pauses?.values() || [])].some(value => ['uncertain', 'asr_failed'].includes(value.kind))) });
   function publish() { if (!disposed) { try { changed(state()); } catch { /* Rendering cannot alter ownership. */ } } }
   function output(value) {
     if (blocked === value) return;
@@ -74,6 +78,7 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
       // candidate open so real speech later in that same server item may still
       // qualify. The app retains all transcription/save failure accounting.
       item.timedOut = true;
+      resolvePause(item, 'uncertain');
       pump();
     }, timeoutMs);
   }
@@ -88,8 +93,31 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
     if (!item.qualified) { item.qualified = true; armInput(item); }
     // Speech takes priority over an opening, including speech whose ASR is late.
     startupResolved = true; clearTimeout(startupTimer); startupTimer = null;
-    if (item.speaking && current && !current.cancelled) cancelCurrent();
+    if (item.speaking && current && !current.cancelled) {
+      if (authored) pauseCurrent(item);
+      else cancelCurrent();
+    }
     return true;
+  }
+  function pauseCurrent(item) {
+    const response = current;
+    if (!authored || !response || response.cancelled || response.pauses.has(item.id)) return;
+    const decision = { candidateId: item.id, decisionEpoch: ++decisionEpoch, kind: 'pending' };
+    response.pauses.set(item.id, decision); clearTimeout(response.timer); response.timer = null;
+    try { outputTransport.pauseCandidate({ turnNonce: response.nonce, ...decision }); }
+    catch { fail('답변을 잠시 멈추지 못했어요. 답변을 멈추거나 통화를 다시 시작해 주세요.'); }
+  }
+  function resolvePause(item, kind) {
+    const response = current, decision = response?.pauses?.get(item?.id);
+    if (!authored || !response || response.cancelled || !decision) return;
+    if (kind === 'accepted_turn') { cancelCurrent('accepted_turn', decision); return; }
+    decision.kind = kind;
+    try { outputTransport.resolveCandidate({ turnNonce: response.nonce, candidateId: item.id, decisionEpoch: decision.decisionEpoch, kind }); }
+    catch { fail('답변 상태를 확인하지 못했어요. 답변을 멈추거나 통화를 다시 시작해 주세요.'); }
+    if (kind === 'rejected_noise') {
+      response.pauses.delete(item.id);
+      if (!response.pauses.size && !response.playbackBlocked) armResponse(response, '음성 종료를 확인하지 못했어요. 답변을 멈추거나 통화를 다시 시작해 주세요.', playbackTimeoutMs);
+    }
   }
   function acceptedItems(live = true) {
     return [...history.values()].sort((a, b) => a.order - b.order).filter(item => {
@@ -99,7 +127,7 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
         return source && source.committed && source.final && source.nonempty && source.qualified && (!live || !source.deleted);
       }
       const response = responses.get(item.responseId);
-      return (!live || (!item.deleted && !response?.contextRetired)) && response?.generationDone && response.audioStarted && response.audioEnded && !response.audioCleared && response.status === 'completed' && !response.cancelled;
+      return (!live || (!item.deleted && !response?.contextRetired)) && response?.generationDone && response.audioStarted && response.audioEnded && !response.audioCleared && response.status === 'completed' && !response.cancelled && (!response.authored || response.playedThrough);
     });
   }
   const references = () => acceptedItems().map(item => ({ type: 'item_reference', id: item.id }));
@@ -122,10 +150,16 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
     response.clearRequested = true; response.audioEnded = false;
     transmit({ type: 'output_audio_buffer.clear' }, { response, op: 'clear' });
   }
-  function cancelCurrent() {
+  function cancelCurrent(reason = 'explicit_stop', candidate = null) {
     if (!current) return false;
     const response = current;
     response.cancelled = true; output(true);
+    if (authored) {
+      armResponse(response, '답변 중지를 확인하지 못했어요. 통화를 다시 시작해 주세요.');
+      try { outputTransport.cancel({ turnNonce: response.nonce, reason, ...(candidate ? { candidateId: candidate.candidateId, decisionEpoch: candidate.decisionEpoch } : {}) }); }
+      catch { fail('답변 중지를 확인하지 못했어요. 통화를 다시 시작해 주세요.'); }
+      publish(); return true;
+    }
     // response_id is mandatory. Never cancel a different response because a
     // response.created receipt for this request has not arrived yet.
     if (response.id) {
@@ -145,12 +179,18 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
     if (!base || !ready || !available || current || desiredHold || fault || disposed || inputBusy()) return false;
     const response = { nonce: crypto.randomUUID(), purpose, id: null, items: new Set(), users: userItems.map(item => item.id), generationDone: false,
       audioEnded: false, audioStarted: false, audioCleared: false, cancelled: false, cancelRequested: false, clearRequested: false,
-      status: null, timer: null };
+      status: null, timer: null, authored, pauses: new Map(), playbackBlocked: false, playedThrough: false };
     current = response;
     if (purpose === 'startup') startupResolved = true;
     for (const item of userItems) { item.consumed = true; approvalBoundary = Math.max(approvalBoundary, item.order); }
-    armResponse(response, '답변 시작을 확인하지 못했어요. 통화를 다시 시작해 주세요.');
+    armResponse(response, '답변 시작을 확인하지 못했어요. 통화를 다시 시작해 주세요.', authored ? generationTimeoutMs : timeoutMs);
     try {
+      if (authored) {
+        authoredRequested = true;
+        outputTransport.create({ turnNonce: response.nonce, purpose, userItemIds: [...response.users],
+          contextItemIds: acceptedItems().map(item => item.id), ...(hint ? { hint: 'next_sentence' } : {}) });
+        publish(); return true;
+      }
       transmit({ type: 'response.create', response: { conversation: 'auto',
         input: purpose === 'startup' ? [] : references(),
         instructions: hint ? base + '\nFor this response only: ' + hint : base,
@@ -231,6 +271,52 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
       pump(); return true;
     },
     retry,
+    resumeOutput() {
+      if (!authored || disposed || fault || !current || current.cancelled || desiredHold || !ready || !available || inputBusy()) return false;
+      const response = current;
+      const decisions = [...response.pauses.values()].filter(value => ['uncertain', 'asr_failed'].includes(value.kind)).map(value => ({ candidateId: value.candidateId, decisionEpoch: value.decisionEpoch }));
+      if (!response.playbackBlocked && !decisions.length) return false;
+      try { outputTransport.resume({ turnNonce: response.nonce, decisions }); return true; }
+      catch { fail('이어 듣기를 시작하지 못했어요. 답변을 멈추거나 통화를 다시 시작해 주세요.'); return false; }
+    },
+    // These are internal transport receipts, never synthesized provider packets.
+    authoredOutput(event) {
+      if (!authored || disposed || !event) return false;
+      const response = current?.nonce === event.turnNonce ? current : [...responses.values()].find(value => value.nonce === event.turnNonce);
+      if (!response || response !== current && (event.kind !== 'played_through' || response.contextRetired)) return false;
+      if (event.kind === 'text_ready' && !response.cancelled && nonempty(event.turnId) && nonempty(event.itemId)) {
+        if (response.id && response.id !== event.turnId) return false;
+        response.id = event.turnId; responses.set(event.turnId, response); response.generationDone = true; response.status = 'completed';
+        if (!history.has(event.itemId)) { response.items.add(event.itemId); history.set(event.itemId, { id: event.itemId, role: 'assistant', responseId: event.turnId, order: sequence++ }); }
+        if (!response.pauses.size && !response.playbackBlocked) armResponse(response, '음성을 준비하지 못했어요. 답변을 멈추거나 통화를 다시 시작해 주세요.', playbackTimeoutMs);
+      } else if (event.kind === 'started' && !response.cancelled) response.audioStarted = true;
+      else if (['blocked', 'uncertain'].includes(event.kind) && !response.cancelled) { response.playbackBlocked = true; clearTimeout(response.timer); response.timer = null; }
+      else if (event.kind === 'candidate_dismissed' && !response.cancelled) {
+        if(response.pauses.get(event.candidateId)?.decisionEpoch!==event.decisionEpoch)return false;
+        response.pauses.delete(event.candidateId);response.playbackBlocked=true;
+        const item=inputs.get(event.candidateId);if(item){item.consumed=true;item.qualified=false;}
+      }
+      else if (event.kind === 'resumed' && !response.cancelled) {
+        response.playbackBlocked = false;
+        for (const decision of event.decisions || []) if (response.pauses.get(decision.candidateId)?.decisionEpoch === decision.decisionEpoch) {
+          response.pauses.delete(decision.candidateId);
+          const item = inputs.get(decision.candidateId); if (item) { item.consumed = true; item.qualified = false; }
+        }
+        if (!response.pauses.size) armResponse(response, '음성 종료를 확인하지 못했어요. 답변을 멈추거나 통화를 다시 시작해 주세요.', playbackTimeoutMs);
+      } else if (['played_through', 'estimated_drain'].includes(event.kind) && !response.cancelled) {
+        response.audioEnded = true; response.playedThrough = event.kind === 'played_through';
+      } else if (event.kind === 'terminal') { response.cancelled = true; response.generationDone = true; response.audioEnded = true; response.status = 'cancelled'; }
+      else if (event.kind === 'failed') {
+        for (const id of response.users) { const item=inputs.get(id);if(item&&!item.deleted){item.consumed=false;item.retryRequired=true;} }
+        fail('답변을 준비하지 못했어요. 대화를 다시 연결하거나 통화를 마쳐 주세요.'); return true; }
+      else return false;
+      pump(); return true;
+    },
+    authoredAuthorityAccepted() {
+      if (!authored || disposed) return false;
+      if (current) { clearTimeout(current.timer); current.cancelled = true; current.generationDone = true; current.audioEnded = true; current.status = 'cancelled'; current = null; }
+      fault = false; startupResolved = true; pump(); return true;
+    },
     requestHint(value) {
       if (disposed || !nonempty(value) || !fullInstructions() || !ready || !available || fault || desiredHold || current || inputBusy()) return false;
       startupResolved = true; clearTimeout(startupTimer); startupTimer = null;
@@ -253,6 +339,9 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
     // summarize the same accepted, saved turns after their provider items were
     // deleted, without promoting the app's raw noise transcript into context.
     acceptedItemIds() { return acceptedItems(false).map(item => item.id); },
+    // ASR-only transport needs no provider conversation history. This list is
+    // transient-buffer eligibility, never permission to delete a raw source.
+    prunableProviderItemIds() { return authored ? [...inputs.values()].filter(item=>item.committed&&item.final&&!item.providerDeleted&&!item.deleted).map(item=>item.id) : []; },
     // A checkpoint may still cover approved items deleted from the provider's
     // live buffer, but must never reintroduce privacy-retired conversation.
     // The separate acceptedItemIds ledger remains available for source/playback
@@ -309,16 +398,27 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
       if (event.type === 'conversation.item.input_audio_transcription.completed') {
         const item = input(event.item_id);
         if (activeInputId === event.item_id) activeInputId = null;
-        if (item) { item.final = true; item.nonempty = nonempty(event.transcript); item.speaking = false; item.awaitingCommit = false; clearTimeout(item.timer); }
+        if (item && !item.final) {
+          item.final = true; item.nonempty = nonempty(event.transcript); item.speaking = false; item.awaitingCommit = false; clearTimeout(item.timer);
+          resolvePause(item, item.nonempty ? 'accepted_turn' : 'rejected_noise');
+          if (authored && !item.nonempty && !authoredRequested && !pendingUsers().length) startupResolved = false;
+        }
       }
       if (event.type === 'conversation.item.input_audio_transcription.failed') {
         const item = input(event.item_id);
         if (activeInputId === event.item_id) activeInputId = null;
-        if (item) { item.final = true; item.speaking = false; item.awaitingCommit = false; clearTimeout(item.timer); }
+        if (item && !item.final) { item.final = true; item.speaking = false; item.awaitingCommit = false; clearTimeout(item.timer); resolvePause(item, 'asr_failed'); }
       }
       if (event.type === 'conversation.item.deleted' && event.item_id) {
-        const item = inputs.get(event.item_id); if (item) { item.deleted = true; clearTimeout(item.timer); }
-        const entry = history.get(event.item_id); if (entry) entry.deleted = true;
+        const item = inputs.get(event.item_id); if (item) { if(authored)item.providerDeleted=true;else item.deleted=true;clearTimeout(item.timer); }
+        const entry = history.get(event.item_id); if (entry&&!authored) entry.deleted = true;
+      }
+      if (authored && (event.type?.startsWith('response.') || event.type?.startsWith('output_audio_buffer.'))) {
+        if (event.type === 'response.created' && event.response?.id) {
+          try { transmit({ type: 'response.cancel', response_id: event.response.id }, { op: 'unexpected-cancel' }); transmit({ type: 'output_audio_buffer.clear' }, { op: 'unexpected-clear' }); } catch { /* Authored audio remains independently owned. */ }
+          cancelCurrent('unexpected_provider_output'); fail('예상하지 못한 답변이 시작되어 멈췄어요. 통화를 다시 시작해 주세요.');
+        }
+        publish(); return false;
       }
       if (event.type === 'response.created') {
         const response = event.response, expected = current;

@@ -1,0 +1,98 @@
+{
+  "alex_startup": {
+    "input_files": [
+      {
+        "file": "product/authored-dialogue.ts",
+        "sha256": "5daa42d61a076655728a332df3713540f02a611af1a87ce932cd62abff1c54ea"
+      },
+      {
+        "file": "product/core.ts",
+        "sha256": "6ce6bc74c46e2dc61222e733a3976c36ec834d5f744761a14ee68ba085d9d1fc"
+      },
+      {
+        "file": "product/dialogue-continuity.ts",
+        "sha256": "cd6fb09bc77156f73921ba38ca8c810f7093e583caeeeffdc2a18cd6893ca85e"
+      },
+      {
+        "file": "product/live-context.ts",
+        "sha256": "f977c81d3a9f30577ea232f882908c0cb0e95af08478b47015f8034b06cb85e5"
+      },
+      {
+        "file": "product/policy.ts",
+        "sha256": "20f93aa80dc28e74761f6c2e1f4e9c598d2517737a76b0b92732f6dd853e6e6c"
+      },
+      {
+        "file": "product/review-learning.ts",
+        "sha256": "0a9f4e5722f92a245e9027954e717262813bc632bddd1121368bfdf252123990"
+      },
+      {
+        "file": "product/shared-exchanges.ts",
+        "sha256": "e02a40a6714fbfd619f3b36e569bd2997b0d75bc43da31655b5b1c15aeb077ea"
+      },
+      {
+        "file": "product/temporal-context.ts",
+        "sha256": "8da033dda6df6904bac26e4a38f3f9d58e82a194ef31b74ad7bfadc6d737583c"
+      },
+      {
+        "file": "product/verified-speech.ts",
+        "sha256": "8f433d387785022eb042a0d8f63394c528d47f517d8cd11659c4a90288e7345f"
+      }
+    ],
+    "external_imports": [
+      {
+        "path": "npm:ws@8.18.3",
+        "kind": "dynamic-import",
+        "external": true
+      }
+    ],
+    "default_adapter_used": true
+  },
+  "alex_reply": {
+    "input_files": [
+      {
+        "file": "product/authored-dialogue.ts",
+        "sha256": "5daa42d61a076655728a332df3713540f02a611af1a87ce932cd62abff1c54ea"
+      },
+      {
+        "file": "product/core.ts",
+        "sha256": "6ce6bc74c46e2dc61222e733a3976c36ec834d5f744761a14ee68ba085d9d1fc"
+      },
+      {
+        "file": "product/dialogue-continuity.ts",
+        "sha256": "cd6fb09bc77156f73921ba38ca8c810f7093e583caeeeffdc2a18cd6893ca85e"
+      },
+      {
+        "file": "product/live-context.ts",
+        "sha256": "f977c81d3a9f30577ea232f882908c0cb0e95af08478b47015f8034b06cb85e5"
+      },
+      {
+        "file": "product/policy.ts",
+        "sha256": "20f93aa80dc28e74761f6c2e1f4e9c598d2517737a76b0b92732f6dd853e6e6c"
+      },
+      {
+        "file": "product/review-learning.ts",
+        "sha256": "0a9f4e5722f92a245e9027954e717262813bc632bddd1121368bfdf252123990"
+      },
+      {
+        "file": "product/shared-exchanges.ts",
+        "sha256": "e02a40a6714fbfd619f3b36e569bd2997b0d75bc43da31655b5b1c15aeb077ea"
+      },
+      {
+        "file": "product/temporal-context.ts",
+        "sha256": "8da033dda6df6904bac26e4a38f3f9d58e82a194ef31b74ad7bfadc6d737583c"
+      },
+      {
+        "file": "product/verified-speech.ts",
+        "sha256": "8f433d387785022eb042a0d8f63394c528d47f517d8cd11659c4a90288e7345f"
+      }
+    ],
+    "external_imports": [
+      {
+        "path": "npm:ws@8.18.3",
+        "kind": "dynamic-import",
+        "external": true
+      }
+    ],
+    "default_adapter_used": true
+  }
+}

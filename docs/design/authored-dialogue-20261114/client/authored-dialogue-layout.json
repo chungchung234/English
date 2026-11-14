@@ -1,0 +1,79 @@
+[
+  {
+    "state": "resume",
+    "width": 390,
+    "height": 844,
+    "textScale": 1.25,
+    "screenshot": "test-results/authored-resume-390.png",
+    "overflow": false,
+    "reply": {
+      "y": 432.046875,
+      "bottom": 476.296875,
+      "visible": true,
+      "text": "이어 듣기"
+    },
+    "stop": {
+      "y": 432.046875,
+      "bottom": 476.296875,
+      "visible": true,
+      "text": "답변 멈춤"
+    },
+    "end": {
+      "y": 755,
+      "bottom": 827,
+      "visible": true,
+      "text": "통화 종료"
+    },
+    "replyHit": true,
+    "scrollable": false
+  },
+  {
+    "state": "resume",
+    "width": 320,
+    "height": 568,
+    "textScale": 1.25,
+    "screenshot": "test-results/authored-resume-320.png",
+    "overflow": false,
+    "reply": {
+      "y": 355.125,
+      "bottom": 399.375,
+      "visible": true,
+      "text": "이어 듣기"
+    },
+    "stop": {
+      "y": 355.125,
+      "bottom": 399.375,
+      "visible": true,
+      "text": "답변 멈춤"
+    },
+    "end": {
+      "y": 479,
+      "bottom": 551,
+      "visible": true,
+      "text": "통화 종료"
+    },
+    "replyHit": true,
+    "scrollable": true
+  },
+  {
+    "state": "resume-scrolled",
+    "width": 320,
+    "height": 568,
+    "textScale": 1.25,
+    "screenshot": "test-results/authored-resume-scroll-320.png",
+    "secondary": [
+      {
+        "selector": "#call-quick-help summary",
+        "y": 357.375,
+        "bottom": 401.375,
+        "hit": true
+      },
+      {
+        "selector": ".transcript-details summary",
+        "y": 409.375,
+        "bottom": 455.375,
+        "hit": true
+      }
+    ]
+  }
+]

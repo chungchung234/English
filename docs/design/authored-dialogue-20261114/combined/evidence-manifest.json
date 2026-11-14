@@ -1,0 +1,61 @@
+{
+  "version": "combined-safe-evidence-manifest-v1",
+  "source_manifest_sha256": "6272ece2601fdab3e903181695b2edaf2226bf04380bbae7385549afc348002f",
+  "source_tree_sha256": "9080f39f63615fd7ec6a913cc737199fe83f953eb28c6f29eec851cd5cfc336a",
+  "raw_text_audio_auth_state_or_prepared_code_included": false,
+  "source_private_artifacts_preserved": true,
+  "files": {
+    "README.md": {
+      "sha256": "b2905ec6dfad8ea5c1c96e0494903e8ec068444ad735ed76d149d126f7ca416c",
+      "bytes": 3181
+    },
+    "alex_reply-native.json": {
+      "sha256": "50bdb7b16b398aed63b256d01b01da5f996033f735647378ace339f77778702f",
+      "bytes": 3787
+    },
+    "alex_startup-native.json": {
+      "sha256": "b276a19cb3ce6bea4b59f77a8bab8abfd8e076f268103acd0f7606b3d25efb63",
+      "bytes": 3796
+    },
+    "cleanup-verification.json": {
+      "sha256": "2f3b0a4e245b79fec356e3a7d3833413e2388ed28f22c4385e4a3af719aea90f",
+      "bytes": 211
+    },
+    "controller-offline-verification.json": {
+      "sha256": "20d8d30c318db8c62e97c6ce2859ad11daa97aa299dca67ae33ca163652c13bb",
+      "bytes": 1449
+    },
+    "deno-check.json": {
+      "sha256": "9c31c2f0a30868d60f0d271553684f5a3d57e3fa456fffacba8949bb73f4edae",
+      "bytes": 464
+    },
+    "dependency-graph.json": {
+      "sha256": "aa71cbff2eda7ed8fe9a52a92d17ca2183d5f0aeec0bf3ff1317d90066f81e95",
+      "bytes": 3087
+    },
+    "independent-review.json": {
+      "sha256": "f0bc1b731f4184f91769c289c4f6e07ce48e32433bd23b7fdc6a9095ea24eb16",
+      "bytes": 4780
+    },
+    "manifest-metadata.json": {
+      "sha256": "13717c26a441914afa4c7ea0bdce2bbd0646674655424e38195069882bb786bf",
+      "bytes": 7625
+    },
+    "offline-verification.json": {
+      "sha256": "c5a192c11f7002b2106e2e664d190002c881691d39843defc38e4870b749fa7f",
+      "bytes": 8675
+    },
+    "quality-observations.json": {
+      "sha256": "88de15155f412b8c4f6857d9f65e12fea94c45a8541c5556f2dab427962e154d",
+      "bytes": 1006
+    },
+    "safe-result.json": {
+      "sha256": "6dbaa65932fedb05bf2ba676f16c6834c9523dfb7708a921c715f14c9f5304a3",
+      "bytes": 6318
+    },
+    "verification.json": {
+      "sha256": "ba57016f92078b852bb64f70e267f45593806d7f56138c0d735fd495fcf3f391",
+      "bytes": 2601
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "buildScript": "assets/app.a92002e6c070.js",
+  "scriptSri": "qSAC5sBwqB1RUnO7xcVy93nICVBoIPy6YzbruzAtQfc=",
+  "limits": "Synthetic auth/DB/models/ASR/RTC. Native Chromium AudioWorklet and WASM. Tone PCM; no real microphone, model, speech fidelity or physical acoustics proven.",
+  "results": [
+    {
+      "case": "policy-ACK and authored-only startup",
+      "passed": true
+    },
+    {
+      "case": "empty ASR resumes exact cursor without generation",
+      "passed": true
+    },
+    {
+      "case": "ASR failure explicit same-buffer resume",
+      "passed": true
+    },
+    {
+      "case": "accepted speech cancellation, raw ACK and transient provider pruning",
+      "passed": true
+    },
+    {
+      "case": "page lifecycle cannot revive old playback or microphone",
+      "passed": true
+    },
+    {
+      "case": "real SDK cross-tab signout closes owned audio before reload",
+      "passed": true
+    },
+    {
+      "case": "bad PCM rejected before playback and authority refresh",
+      "passed": true
+    },
+    {
+      "case": "native output timestamp permits strong report",
+      "passed": true
+    },
+    {
+      "case": "missing output timestamp never reports strong completion",
+      "passed": true
+    }
+  ]
+}

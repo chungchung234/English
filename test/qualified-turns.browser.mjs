@@ -123,7 +123,7 @@ async function buildProductionFixture() {
   await cp(path.join(root, 'package.json'), path.join(directory, 'package.json'));
   await symlink(path.join(root, 'node_modules'), path.join(directory, 'node_modules'), 'dir');
   execFileSync('npm', ['run', 'build', '--', '--require-config'], { cwd: directory, stdio: 'pipe', env: {
-    ...process.env, PUBLIC_SUPABASE_URL: project, PUBLIC_SUPABASE_KEY: 'sb_publishable_fixture',
+    ...process.env, BUILD_SITE_URL: base+'/built/', PUBLIC_SUPABASE_URL: project, PUBLIC_SUPABASE_KEY: 'sb_publishable_fixture',
     GITHUB_SHA: '', CI_COMMIT_SHA: '', VERCEL_GIT_COMMIT_SHA: '', BUILD_SOURCEVERSION: ''
   } });
   const html = await readFile(path.join(directory, 'dist/index.html'), 'utf8');

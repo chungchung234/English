@@ -1,0 +1,26 @@
+{
+  "baseline_release": "a4f712e808145742239855edf1add136d6824edf",
+  "runtime_modules": {
+    "index.ts": "c3bf03bfaf2f21d12293d16f2d3be378a5c3df2ee592b3d2a59bd926d56626d6",
+    "core.ts": "6ce6bc74c46e2dc61222e733a3976c36ec834d5f744761a14ee68ba085d9d1fc",
+    "policy.ts": "20f93aa80dc28e74761f6c2e1f4e9c598d2517737a76b0b92732f6dd853e6e6c",
+    "enhancements.ts": "509b52d86da5e7f343005e5d909129fe37b70eb3ade931164b34e12255ecb8cf",
+    "weekly.ts": "b39e9ce35dcf7225fa345bd6606c3c9658c1bc085828b2fdb084d91fdd03ce74",
+    "temporal-context.ts": "8da033dda6df6904bac26e4a38f3f9d58e82a194ef31b74ad7bfadc6d737583c",
+    "conversation-memory.ts": "a25247a9ade1a43542dc56a2357ac8b1f859191ad772917b22e04e39e68cffe8",
+    "background.ts": "c54f63fd3ea22528da4bdd347cd92415eadf2077bfa1dce0a18889225bafcfc2",
+    "review-learning.ts": "0a9f4e5722f92a245e9027954e717262813bc632bddd1121368bfdf252123990",
+    "opening-policy.ts": "667d897f985b2a23388ad19e78806c21d72f3357a6bb1348de48ad672ad96959",
+    "live-context.ts": "f977c81d3a9f30577ea232f882908c0cb0e95af08478b47015f8034b06cb85e5",
+    "character-viewpoints.ts": "e71c8cd5f50382d3af12340db594379a2e7311ad5e919a4366d70bf56b1ed900",
+    "shared-exchanges.ts": "e02a40a6714fbfd619f3b36e569bd2997b0d75bc43da31655b5b1c15aeb077ea",
+    "authored-dialogue.ts": "5daa42d61a076655728a332df3713540f02a611af1a87ce932cd62abff1c54ea",
+    "dialogue-continuity.ts": "cd6fb09bc77156f73921ba38ca8c810f7093e583caeeeffdc2a18cd6893ca85e",
+    "verified-speech.ts": "8f433d387785022eb042a0d8f63394c528d47f517d8cd11659c4a90288e7345f"
+  },
+  "runtime_tree_sha256": "9080f39f63615fd7ec6a913cc737199fe83f953eb28c6f29eec851cd5cfc336a",
+  "migration_sha256": "1eb83b05228c62d4b4f0c12b47726011ba4bf381a6379a2cbb0db3a48622d296",
+  "verification_scope": "Frozen candidate source; exact production artifact/configuration needs separate post-deployment evidence.",
+  "reasoning_persisted_or_replayed": false,
+  "default_capability_enabled": false
+}

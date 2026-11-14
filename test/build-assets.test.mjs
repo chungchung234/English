@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 
 test('phone build caches content-hashed application and AI assets with verified CSP and subpath URLs',async()=>{
- execFileSync(process.execPath,['scripts/build-web.mjs','--require-config'],{cwd:new URL('../',import.meta.url),env:{...process.env,PUBLIC_SUPABASE_URL:'https://test-project.supabase.co',PUBLIC_SUPABASE_KEY:'sb_publishable_test'}});
+ execFileSync(process.execPath,['scripts/build-web.mjs','--require-config'],{cwd:new URL('../',import.meta.url),env:{...process.env,BUILD_SITE_URL:'https://example.com/English/',PUBLIC_SUPABASE_URL:'https://test-project.supabase.co',PUBLIC_SUPABASE_KEY:'sb_publishable_test'}});
  const html=await readFile(new URL('../dist/index.html',import.meta.url),'utf8');
  assert(Buffer.byteLength(html)<300_000,'primary HTML must stay below 300 kB; application code and character art stay separately cached');
  assert(!html.includes('data:image/png;base64,'));
@@ -22,6 +22,12 @@ test('phone build caches content-hashed application and AI assets with verified 
  const scriptTag=html.match(/<script type="module" src="(assets\/app\.[a-f0-9]{12}\.js)" integrity="sha256-([^"]+)" crossorigin="anonymous"><\/script>/);assert(scriptTag);
  const script=await readFile(new URL('../dist/'+scriptTag[1],import.meta.url),'utf8');
  const digest=createHash('sha256').update(script).digest('base64');assert.equal(scriptTag[2],digest);assert(html.includes(`script-src 'sha256-${digest}'`));
+ const worklet=JSON.parse(script.match(/globalThis\.LOOP_PCM_WORKLET_ASSET=Object\.freeze\((\{[^\n]+\})\);/)[1]);
+ const workletFile=`assets/verified-pcm-worklet.${worklet.sha256.slice(0,12)}.js`;
+ assert.equal(worklet.url,'https://example.com/English/'+workletFile);
+ assert.equal(createHash('sha256').update(await readFile(new URL('../dist/'+workletFile,import.meta.url))).digest('hex'),worklet.sha256);
+ const scriptPolicy=html.match(/script-src ([^;]+);/)[1].split(' ');
+ assert.deepEqual(scriptPolicy,[`'sha256-${digest}'`,"'wasm-unsafe-eval'",worklet.url],'only the pinned Worklet path joins the application hash');
  assert(html.includes("'wasm-unsafe-eval'"),'the embedded local VAD can instantiate WebAssembly under production CSP');
  assert(!html.includes("'unsafe-eval'")&&!html.includes("'unsafe-inline'"),'WASM permission does not allow arbitrary JavaScript evaluation');
  assert(scriptTag[1].includes(createHash('sha256').update(script).digest('hex').slice(0,12)));

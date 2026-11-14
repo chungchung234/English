@@ -1,0 +1,41 @@
+{
+  "base_commit": "a4f712e808145742239855edf1add136d6824edf",
+  "status": "uncommitted candidate, not production verification",
+  "captured_at": "2026-11-14T10:42:59.867779+00:00",
+  "source_sha256": {
+    "web/app.js": "077c3846927afcb31b4a736a99365972905516319ecb747823a37f04270d41c5",
+    "web/authored-dialogue.js": "2ef44f6d1d7becc7b58578dbe41c88f8c56a80d3e8d2612a052cdc97d3d02d2a",
+    "web/qualified-turn-controls.js": "6745a16f5cfe9f682113efe2b3d45c27905170bfcf4390b164a5d3b58cbe1f06",
+    "web/verified-pcm-playback.js": "c3126463f6f179a33d6ba9da18e2048e0525aeff121ff6e99c996c88bc2bbab8",
+    "web/verified-pcm-worklet.js": "a87ca26fa53befc218beca27d85ae4afaef6b528abcc9713013c241d0f65fb44",
+    "web/index.html": "643792b3ccadfdeb3288b6af8dd76cb23f592723f14d5d938c3764d7bddd5241",
+    "web/style.css": "107188dab75da478036ef88dbb27c2baf6cbdcca9ed2efe226c4837bd6a775e2",
+    "scripts/build-web.mjs": "1979cb3788574177fcf3224fa1b143962261a998ccb8a307f4c615f469ba7f82",
+    "scripts/bundle-web.mjs": "d1a4f4c7e9e5d0cfa49515cf5dbe63a6b5ce47263044c8ad6c184e2386fc7bf3",
+    "test/authored-dialogue.browser.mjs": "e5a722c3b772e4fdf331f9fa27ceecf49727c9a8632c11381efa6d48a44f0b7e",
+    "test/authored-dialogue.test.mjs": "1b1d537ab975629a096b8bd57bf46022690dada448ea4f7a574c930b491d96e4",
+    "test/qualified-turn-controls.test.mjs": "dcb141accb9871704ac4047fe3857f5df0600fa123a84247c05d90870c3f7091"
+  },
+  "artifacts_sha256": {
+    "README.md": "476f7867f3d683d0ca5e6ee3701411a1a5ffec5bf7f745cb53906f3478bc3f9a",
+    "authored-dialogue-layout.json": "c0b504addb2d43720bbb128ac4fa55e5273d45ef06bf30950fa4648b1cfa97cf",
+    "authored-dialogue-results.json": "3b312174a27f0f3555eef113b21c9f1eaee72f699be094504bde1ce3779e0e5f",
+    "authored-resume-320.png": "9670eae2c008b82d2b6d6c9baf6415ed6a5470679094153cd317b9da49e8272e",
+    "authored-resume-390.png": "433f867f83f218e09c8a344b0c7260ac93362acafdd1b1b0b046baf95d5460d3",
+    "authored-resume-scroll-320.png": "df60cabe7e8acdb338edfeebeb92a1e58276d1dfdf9679ccac55bce344ebf668",
+    "browser-check.txt": "6ff6fd69f1181f54b30b197ed83626ac1d4351e78fdf696734675648a406b13e",
+    "client-unit-check.txt": "b46fa6fe113a7e98502b0e4986f750fdd90d2de9c465fdd4e18b1625bc07788f",
+    "legacy-qualified-browser-check.txt": "87150a7697fbe1236f90ed26dba533f0d6d16613c50369a638c73cca165537fe"
+  },
+  "browser": "native Chromium /usr/bin/chromium, isolated actual production-style build and real HTTP asset server",
+  "fixtures": "synthetic auth, database, writer, synthesis, ASR and RTC; tone PCM not speech",
+  "gates": {
+    "client_units": 75,
+    "browser_cases": 9,
+    "actual_microphone": false,
+    "actual_provider": false,
+    "physical_acoustics": false,
+    "human_hearing": false,
+    "Edge_binary": false
+  }
+}

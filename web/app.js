@@ -6,7 +6,7 @@ import { createLearningReview } from '../src/learning-review.mjs';
 import { createCallCompletion } from './call-completion.js';
 import { createCallCues } from './call-cues.js';
 import { createRequestSignal } from './request-signal.js';
-import { createConnectionAttempt } from './connection-attempt.js';
+import { createConnectionAttempt, finishConnectionSession } from './connection-attempt.js';
 import { createCallPlayback } from './call-playback.js';
 import { createAIPresence } from './ai-presence.js';
 import { createSpeechSpeed, validSpeed, formatSpeed, SPEED } from './speech-speed.js';
@@ -721,9 +721,7 @@ function disposeConnection(attempt) {
   if(current){current.connectedTelemetry?.stop();current.requests?.dispose();current.speed?.dispose();current.floor?.dispose();clearCallClock(current);disposeCallAudio(current);current.pc.close();}
 }
 async function finishCancelledConnection(attempt) {
-  if(!attempt.sessionId||attempt.sessionClosed||scope!==attempt.scope)return;
-  attempt.sessionClosed=true;
-  try{await rpc('finish_session',{p_session_id:attempt.sessionId});}catch{attempt.sessionClosed=false;}
+  return finishConnectionSession(attempt,{isCurrent:()=>scope===attempt.scope,finish:sessionId=>rpc('finish_session',{p_session_id:sessionId})});
 }
 function cancelConnection() {
   const attempt=connectionAttempt;

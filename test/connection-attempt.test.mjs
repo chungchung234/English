@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createConnectionAttempt, CALL_CONNECT_TIMEOUT_MS } from '../web/connection-attempt.js';
+import { createConnectionAttempt, finishConnectionSession, CALL_CONNECT_TIMEOUT_MS } from '../web/connection-attempt.js';
 
 const pending = () => new Promise(() => {});
 function clock() {
@@ -33,4 +33,22 @@ test('explicit cancellation and disposal cannot resolve readiness later', async 
     const ready = attempt.waitUntilConnected(); cancel(controller, attempt);
     await assert.rejects(ready, { name: 'AbortError' }); assert.equal(attempt.connected(), false); assert.equal(timer.tasks.size, 0);
   }
+});
+
+test('late creation waits for an unacknowledged close and retries after its pre-insert rejection',async()=>{
+ const attempt={sessionId:'owned-session'},calls=[];let rejectFirst;
+ const finish=async id=>{calls.push(id);if(calls.length===1)return new Promise((_,reject)=>{rejectFirst=reject;});};
+ const first=finishConnectionSession(attempt,{finish});await Promise.resolve();
+ assert.notEqual(attempt.sessionClosed,true,'sending is not a close receipt');
+ const late=finishConnectionSession(attempt,{finish});assert.equal(calls.length,1);
+ rejectFirst(Error('Session not found before insert committed'));
+ assert.equal(await first,false);assert.equal(await late,true);assert.equal(attempt.sessionClosed,true);
+ assert.deepEqual(calls,['owned-session','owned-session']);await finishConnectionSession(attempt,{finish});assert.equal(calls.length,2);
+});
+
+test('a close queued behind a failed request cannot send under a different account scope',async()=>{
+ const attempt={sessionId:'old-session'};let current=true,rejectFirst,calls=0;
+ const options={isCurrent:()=>current,finish:()=>{calls++;return new Promise((_,reject)=>{rejectFirst=reject;});}};
+ const first=finishConnectionSession(attempt,options);await Promise.resolve();const late=finishConnectionSession(attempt,options);
+ current=false;rejectFirst(Error('offline'));await first;assert.equal(await late,false);assert.equal(calls,1);assert.notEqual(attempt.sessionClosed,true);
 });

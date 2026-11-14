@@ -46,3 +46,21 @@ export function createConnectionAttempt({ controller, timeoutMs = CALL_CONNECT_T
     },
   };
 }
+
+// A pending close is not a server receipt. A late successful creation must wait
+// for an earlier close attempt, then retry if that attempt preceded the insert.
+export async function finishConnectionSession(attempt,{isCurrent=()=>true,finish}={}) {
+  if(!attempt?.sessionId||attempt.sessionClosed||!isCurrent())return Boolean(attempt?.sessionClosed);
+  if(attempt.sessionClosing){
+    try{await attempt.sessionClosing;}catch{/* Retry only for this waiting creation/cancellation owner. */}
+    return finishConnectionSession(attempt,{isCurrent,finish});
+  }
+  const closing=Promise.resolve().then(()=>{
+    if(!isCurrent())throw Object.assign(Error('Connection scope changed.'),{name:'AbortError'});
+    return finish(attempt.sessionId);
+  });
+  attempt.sessionClosing=closing;
+  try{await closing;attempt.sessionClosed=true;return true;}
+  catch{return false;}
+  finally{if(attempt.sessionClosing===closing)attempt.sessionClosing=null;}
+}

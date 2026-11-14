@@ -32,6 +32,7 @@ const conversationContext = { ...isolatedOpeningBase, memory: { ...isolatedOpeni
 const baseInstructions = safeInstructions + '\nUNTRUSTED_CONTEXT_JSON:\n' + JSON.stringify(conversationContext);
 const checkpointInstructions = safeInstructions + '\nUNTRUSTED_CONTEXT_JSON:\n' + JSON.stringify({
   ...conversationContext, checkpoint: { summary: 'The caller shared a dinner with their sister; continue the same exchange.' } });
+const memoryFreeInstructions = safeInstructions + '\nUNTRUSTED_CONTEXT_JSON:\n' + JSON.stringify(isolatedOpeningBase);
 const openingInstructions = safeInstructions + '\nUNTRUSTED_CONTEXT_JSON:\n' + JSON.stringify(isolatedOpeningBase) +
   '\nUNTRUSTED_OPENING_CONTEXT_JSON:\n' + JSON.stringify(selectedOpeningContext) +
   '\nCURRENT_RESPONSE_PURPOSE:\nNo current caller utterance is available. The selected background is optional conversation context, not a task or a live request. Speak in your own companion voice and leave room for the caller. Do not claim to have just heard past speech, execute an old request, or answer prior openings as current messages.';
@@ -60,7 +61,57 @@ const eventually = async (check, label, timeout = 15000) => {
   assert.fail(label);
 };
 const results = [];
+const recoveryScreens = [];
 let productionBuild = null;
+
+async function captureRecoveryLayout(page, state) {
+  const originalViewport = page.viewportSize();
+  await page.evaluate(() => {
+    window.fixture.captureFonts = [...document.querySelectorAll('#live-call h1,#live-call h2,#live-call h3,#live-call p,#live-call button,#live-call span,#live-call small,#live-call label')]
+      .map(node => ({ node, fontSize: node.style.fontSize }));
+  });
+  try {
+    for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+      await page.setViewportSize(viewport);
+      await page.evaluate(() => {
+        for (const { node, fontSize } of window.fixture.captureFonts) node.style.fontSize = fontSize;
+        // Explicitly scale fixed-pixel call text as well as inherited text.
+        // This is a 125% text-layout check, not an emulated OS accessibility setting.
+        const sizes = window.fixture.captureFonts.map(({ node }) => ({ node, size: parseFloat(getComputedStyle(node).fontSize) }));
+        for (const { node, size } of sizes) node.style.fontSize = size * 1.25 + 'px';
+      });
+      const screenshot = `test-results/context-recovery-${state}-${viewport.width}.png`;
+      await page.screenshot({ path: screenshot, fullPage: true });
+      const layout = await page.evaluate(() => {
+        const box = selector => {
+          const node = document.querySelector(selector), bounds = node.getBoundingClientRect();
+          return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height, bottom: bounds.bottom,
+            text: node.textContent, fontSize: getComputedStyle(node).fontSize, visible: !!node.getClientRects().length };
+        };
+        const reply = document.querySelector('#manual-reply'), bounds = reply.getBoundingClientRect();
+        const hit = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+        return { horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+          status: box('#call-status'), help: box('#voice-input-help'), reply: box('#manual-reply'),
+          end: box('#end-call'), callViewportBottom: document.querySelector('#live-call').getBoundingClientRect().bottom,
+          replyHit: !!hit && (hit === reply || reply.contains(hit)) };
+      });
+      recoveryScreens.push({ state, ...viewport, textScale: 1.25, screenshot, ...layout });
+      await writeFile('test-results/context-recovery-layout.json', JSON.stringify(recoveryScreens, null, 2));
+      assert.equal(layout.horizontalOverflow, false, `${state} recovery must fit ${viewport.width}px without horizontal scrolling`);
+      assert(layout.reply.visible && layout.reply.y >= 0 && layout.reply.bottom <= viewport.height && layout.replyHit,
+        `${state} recovery action must remain visible and unobstructed at ${viewport.width}px with large text`);
+      if (state === 'failed') assert.equal(layout.help.visible, false, 'recovery status and action should not repeat a clipped instruction paragraph');
+      assert((!layout.help.visible || layout.help.bottom <= Math.min(layout.end.y, layout.callViewportBottom)) && layout.reply.bottom <= layout.end.y,
+        `${state} visible help and recovery action must remain above hangup at ${viewport.width}px with large text`);
+    }
+  } finally {
+    await page.evaluate(() => {
+      for (const { node, fontSize } of window.fixture.captureFonts) node.style.fontSize = fontSize;
+      delete window.fixture.captureFonts;
+    });
+    await page.setViewportSize(originalViewport);
+  }
+}
 
 async function buildProductionFixture() {
   // Other tests also build dist/. Use the exact production build in a source
@@ -85,7 +136,8 @@ async function buildProductionFixture() {
   return productionBuild;
 }
 
-async function setup({ manual = true, startupNoise = false, detectorFailure = false, nativeGraph = false, built = false } = {}) {
+async function setup({ manual = true, startupNoise = false, detectorFailure = false, nativeGraph = false, built = false, holdRawAck = false,
+  checkpointError = null, voiceContextFailures = 0 } = {}) {
   const context = await browser.newContext({ permissions: ['microphone'], viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   await context.addInitScript(({ pcm, waveRate, manual, startupNoise, detectorFailure, nativeGraph }) => {
     window.fixture = { manual, startupNoise, detectorFailure, nativeGraph, nativeContexts: [] };
@@ -162,7 +214,11 @@ async function setup({ manual = true, startupNoise = false, detectorFailure = fa
     };
   }, { pcm, waveRate, manual, startupNoise, detectorFailure, nativeGraph });
   const page = await context.newPage(); page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(30000);
-  const sessions = [], saved = new Map(), diagnostics = [], errors = [], routeErrors = [], voiceRequests = [], checkpointRequests = [];
+  const sessions = [], saved = new Map(), diagnostics = [], errors = [], routeErrors = [], voiceRequests = [], checkpointRequests = [], playbackReceipts = [];
+  const recovery = { checkpointError, checkpointFailures: checkpointError ? 1 : 0, voiceContextFailures, refreshRequests: [], memoryRevision: 0 };
+  let releaseRawAck;
+  const rawAck = new Promise(resolve => { releaseRawAck = resolve; });
+  if (!holdRawAck) releaseRawAck();
   let checkpoints = 0;
   page.on('pageerror', error => errors.push(error.message));
   if (built) await page.route(base + '/production-built/**', async route => {
@@ -188,8 +244,26 @@ async function setup({ manual = true, startupNoise = false, detectorFailure = fa
       else if (url.pathname.endsWith('/coach/voice')) {
         voiceRequests.push(body); data = { sdp: 'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n', audio_policy: {
           microphone_mode: 'unknown', expected_noise_reduction: 'far_field', turn_control: manual ? 'manual_turns_v1' : 'provider_vad', turn_detection: manual ? manualPolicy : legacyPolicy },
-          ...(manual ? { voice_instructions: baseInstructions, opening_instructions: openingInstructions } : {}) };
-      } else if (url.pathname.endsWith('/coach/checkpoint')) { checkpoints++; checkpointRequests.push(body); data = { instructions: checkpointInstructions }; }
+          ...(manual ? { voice_instructions: baseInstructions, opening_instructions: openingInstructions, memory_revision: 0, voice_policy_version: 'fixture-companion-v1' } : {}) };
+      } else if (url.pathname.endsWith('/coach/checkpoint')) {
+        checkpoints++; checkpointRequests.push(body);
+        for (const id of body.qualifiedEventIds || []) assert(saved.has(id), 'checkpoint sources must already be stored by the backend');
+        if (recovery.checkpointFailures > 0) {
+          recovery.checkpointFailures--; recovery.memoryRevision = 1;
+          return route.fulfill({ status: 409, json: { error: { code: recovery.checkpointError, message: 'Fixture source revision changed.' } } });
+        }
+        data = { instructions: body.omitLearningContext ? memoryFreeInstructions : checkpointInstructions,
+          memory_revision: body.omitLearningContext ? null : 0, voice_policy_version: 'fixture-companion-v1' };
+      } else if (url.pathname.endsWith('/coach/voice-context')) {
+        assert.equal(body.omitLearningContext, true); assert.equal(body.sessionId, sessions[0].id);
+        recovery.refreshRequests.push(structuredClone(body));
+        if (recovery.voiceContextFailures > 0) {
+          recovery.voiceContextFailures--;
+          return route.fulfill({ status: 503, json: { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'Fixture context refresh unavailable.' } } });
+        }
+        data = { instructions: memoryFreeInstructions, memory_mode: 'omitted', memory_revision: null, voice_policy_version: 'fixture-companion-v1',
+          memory_context: { status: 'suppressed', memory_count: 0, fact_count: 0, last_session_created_at: null, has_undated_memory: false } };
+      }
       else if (url.pathname.endsWith('/coach/review')) return route.fulfill({ status: 503, json: { error: { code: 'UPSTREAM_UNAVAILABLE', message: 'No model output in fixture.' } } });
       else if (url.pathname.endsWith('/rpc/record_call_diagnostics')) {
         diagnostics.push(...(body.p_events || [])); data = { event_ids: (body.p_events || []).map(row => row.event_id) };
@@ -200,6 +274,17 @@ async function setup({ manual = true, startupNoise = false, detectorFailure = fa
       else if (url.pathname.endsWith('/rpc/append_events')) {
         for (const event of body.p_events) saved.set(event.id, { ...event, session_id: body.p_session_id });
         data = { inserted: body.p_events.length, event_ids: body.p_events.map(event => event.id) };
+        await rawAck;
+      } else if (url.pathname.endsWith('/rpc/record_conversation_playback')) {
+        assert.deepEqual(Object.keys(body).sort(), ['p_session_id', 'p_event_ids', 'p_receipt_id', 'p_qualified_user_ids', 'p_expected_memory_revision'].sort());
+        assert.equal(body.p_expected_memory_revision, 0);
+        assert.equal(body.p_event_ids.length, 1); assert.equal(body.p_qualified_user_ids.length, 1);
+        for (const id of body.p_event_ids) { assert.equal(saved.get(id)?.speaker, 'assistant'); assert.equal(saved.get(id)?.session_id, body.p_session_id); }
+        for (const id of body.p_qualified_user_ids) { assert.equal(saved.get(id)?.speaker, 'user'); assert.equal(saved.get(id)?.session_id, body.p_session_id); }
+        playbackReceipts.push(structuredClone(body));
+        data = recovery.memoryRevision === body.p_expected_memory_revision ?
+          { session_id: body.p_session_id, acknowledged_ids: body.p_event_ids, discarded_ids: [], reason: null } :
+          { session_id: body.p_session_id, acknowledged_ids: [], discarded_ids: body.p_event_ids, reason: 'stale_revision' };
       } else if (url.pathname.endsWith('/rpc/finish_session')) {
         data = sessions.find(session => session.id === body.p_session_id); data.status = 'ended'; data.ended_at = new Date().toISOString();
       } else if (url.pathname === '/rest/v1/sessions') {
@@ -246,14 +331,14 @@ async function setup({ manual = true, startupNoise = false, detectorFailure = fa
   await page.evaluate(baseInstructions => { window.fixture.baseInstructions = baseInstructions; }, baseInstructions);
   await page.locator('#start-call').click();
   await eventually(() => page.evaluate(() => document.body.dataset.callPhase === 'connected'), 'manual fixture should connect');
-  return { context, page, sessions, saved, diagnostics, voiceRequests, checkpointRequests, emit, messages, creates, micLive, begin, complete, input, stopAck, end,
-    checkpointCount: () => checkpoints };
+  return { context, page, sessions, saved, diagnostics, voiceRequests, checkpointRequests, playbackReceipts, recovery, emit, messages, creates, micLive, begin, complete, input, stopAck, end,
+    releaseRawAck, checkpointCount: () => checkpoints };
 }
 
 try {
   await mkdir('test-results', { recursive: true });
   await buildProductionFixture();
-  const primary = await setup();
+  const primary = await setup({ holdRawAck: true });
   const { page, emit, creates, messages, micLive, begin, complete, input, stopAck } = primary;
   assert.equal(primary.voiceRequests[0].turnControl, 'manual_turns_v1');
   const csp = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
@@ -325,12 +410,17 @@ try {
   assert(hint.response.instructions.startsWith(baseInstructions)); await begin(hint, 'hint-response');
   for (let i = 0; i < 10; i++) await emit({ type: 'conversation.item.created', item: { id: 'old-context-' + i } });
   await complete(hint, 'hint-response', 19000);
+  assert.equal(primary.playbackReceipts.length, 0, 'completed playback cannot bypass the held raw transcript server ACK');
+  primary.releaseRawAck();
   await eventually(() => Promise.resolve(primary.checkpointCount() === 1), 'manual response completion should preserve context-pressure compaction');
   await eventually(async () => (await messages('conversation.item.delete')).length > 0 && await micLive(), 'checkpoint/deletion receipts should restore input');
   assert.equal((await creates()).length, 3, 'checkpoint settings ACK must never manufacture another response');
   const rawEvents = [...primary.saved.values()];
   const acceptedRawIds = rawEvents.filter(event => ['user:qualified-user:0', 'assistant:assistant-item-hint-response:0'].includes(event.event_key)).map(event => event.id).sort();
   assert.equal(acceptedRawIds.length, 2);
+  await eventually(() => Promise.resolve(primary.playbackReceipts.length === 1), 'the played assistant and qualified caller should gain one optional continuity receipt after raw ACK');
+  assert.deepEqual(primary.playbackReceipts[0].p_event_ids, [rawEvents.find(event => event.event_key === 'assistant:assistant-item-hint-response:0').id]);
+  assert.deepEqual(primary.playbackReceipts[0].p_qualified_user_ids, [rawEvents.find(event => event.event_key === 'user:qualified-user:0').id]);
   assert.equal(rawEvents.find(event => event.event_key === 'user:qualified-user:0').text, sharedUtterance,
     'later continuity and post-call review must retain the original sharing verbatim');
   assert((await messages('session.update')).some(event => event.session?.instructions === checkpointInstructions),
@@ -348,10 +438,82 @@ try {
   await eventually(() => Promise.resolve(primary.checkpointCount() === 2), 'a later checkpoint should retain accepted evidence after provider item deletion');
   await eventually(micLive, 'recovery checkpoint acknowledgement should restore input');
   assert.deepEqual([...primary.checkpointRequests[1].qualifiedEventIds].sort(), acceptedRawIds);
+  assert.equal(primary.playbackReceipts.length, 1, 'compaction and deleted provider items must not duplicate playback receipts');
   assert.equal((await creates()).length, 3);
   await page.screenshot({ path: 'test-results/qualified-turns-listening.png', fullPage: true });
-  await primary.end(); results.push({ case: 'real-wasm-qualified-turn-ownership', generated: 3, checkpoint: primary.checkpointCount(), ended: true });
+  await primary.end(); results.push({ case: 'real-wasm-qualified-turn-ownership', generated: 3, checkpoint: primary.checkpointCount(), playbackReceiptAfterRawAck: true, ended: true });
   await primary.context.close();
+
+  // A known privacy/source revocation retires model references, but raw speech
+  // and playback evidence remain available for truthful history and receipt ACKs.
+  for (const failsFirst of [false, true]) {
+    const revoked = await setup({ detectorFailure: true, checkpointError: 'MEMORY_CHANGED', voiceContextFailures: failsFirst ? 1 : 0 });
+    await eventually(async () => (await revoked.creates()).length === 1, 'revocation fixture should start one owned greeting');
+    const oldGreeting = (await revoked.creates())[0]; await revoked.begin(oldGreeting, 'before-revocation-greeting'); await revoked.complete(oldGreeting, 'before-revocation-greeting');
+    await revoked.emit({ type: 'input_audio_buffer.speech_started', item_id: 'before-revocation-user' });
+    await revoked.input('before-revocation-user', 'This synthetic older detail must stay in the raw history.');
+    await eventually(() => revoked.page.locator('#manual-reply').isEnabled(), 'explicit fallback should approve the current caller source');
+    await revoked.page.locator('#manual-reply').click();
+    await eventually(async () => (await revoked.creates()).length === 2, 'the explicitly approved old caller should receive one reply');
+    const oldReply = (await revoked.creates())[1]; await revoked.begin(oldReply, 'before-revocation-reply'); await revoked.complete(oldReply, 'before-revocation-reply', 19000);
+    await eventually(() => Promise.resolve(revoked.recovery.refreshRequests.length === 1), 'source revocation should request one direct memory-free context');
+    if (failsFirst) {
+      await eventually(async () => (await revoked.page.locator('#manual-reply').textContent()) === '대화 다시 연결' && await revoked.page.locator('#manual-reply').isEnabled(), 'failed refresh should expose one explicit bounded retry');
+      assert.equal(await revoked.micLive(), false, 'revoked instructions cannot resume microphone input after refresh failure');
+      assert.equal(await revoked.page.locator('#mute-call').isEnabled(), false, 'mute controls cannot reenable input while approved context is unavailable');
+      const forcedMuteStates = await revoked.page.evaluate(() => {
+        const button = document.querySelector('#mute-call'), states = [];
+        for (let i = 0; i < 2; i++) {
+          button.onclick();
+          states.push(window.testPeer.tracks.some(track => track.enabled));
+        }
+        return states;
+      });
+      assert.deepEqual(forcedMuteStates, [false, false], 'calling the mute handler directly cannot bypass context-recovery input blocking');
+      assert.equal(await revoked.page.locator('#hint-call').isEnabled(), false, 'a hint cannot reuse revoked authority');
+      await revoked.page.evaluate(() => {
+        window.testPeer.connectionState = 'disconnected'; window.testPeer.onconnectionstatechange();
+        window.testPeer.connectionState = 'connected'; window.testPeer.onconnectionstatechange();
+      });
+      assert.equal(await revoked.micLive(), false, 'RTC reconnection cannot resume input before matched memory-free context ACK');
+      assert.equal(await revoked.page.locator('#mute-call').isEnabled(), false);
+      assert.equal(await revoked.page.locator('#hint-call').isEnabled(), false, 'RTC reconnection cannot restore a hint from revoked authority');
+      assert.equal((await revoked.creates()).length, 2, 'RTC reconnection cannot generate another greeting or reply while context recovery is pending');
+      await revoked.emit({ type: 'session.updated', session: { instructions: baseInstructions, audio: { input: { turn_detection: manualPolicy } } } });
+      assert.equal((await revoked.creates()).length, 2, 'a late old echo cannot manufacture a reply or restore revoked instructions');
+      assert.equal(await revoked.page.locator('#hint-call').isEnabled(), false);
+      await captureRecoveryLayout(revoked.page, 'failed');
+      await revoked.page.locator('#manual-reply').click();
+      await eventually(() => Promise.resolve(revoked.recovery.refreshRequests.length === 2), 'the recovery control should retry the memory-free endpoint');
+    }
+    await eventually(revoked.micLive, 'a matched memory-free ACK should restore recording without ending the call');
+    assert((await revoked.messages('session.update')).some(event => event.session?.instructions === memoryFreeInstructions));
+    const retiredIds = [...revoked.saved.values()].map(event => event.id);
+    await revoked.emit({ type: 'input_audio_buffer.speech_started', item_id: 'after-revocation-user' });
+    await revoked.input('after-revocation-user', 'This is my new current idea.');
+    await eventually(() => revoked.page.locator('#manual-reply').isEnabled(), 'the new caller can request an ordinary reply after recovery');
+    assert.equal(await revoked.page.locator('#manual-reply').textContent(), '답변 요청');
+    await revoked.page.locator('#manual-reply').click();
+    await eventually(async () => (await revoked.creates()).length === 3, 'the fresh caller should receive exactly one recovered reply');
+    const newReply = (await revoked.creates())[2];
+    assert.equal(newReply.response.instructions, memoryFreeInstructions);
+    assert.deepEqual(newReply.response.input, [{ type: 'item_reference', id: 'after-revocation-user' }], 'retired user and assistant items cannot re-enter a recovered response');
+    await revoked.begin(newReply, 'after-revocation-reply'); await revoked.complete(newReply, 'after-revocation-reply', 19000);
+    await revoked.emit({ type: 'response.done', response: { id: 'post-recovery-context-limit-fixture', status: 'failed',
+      status_details: { type: 'failed', error: { code: 'context_length_exceeded' } }, output: [] } });
+    await eventually(() => Promise.resolve(revoked.checkpointCount() === 2), 'later maintenance should cover the fresh context only');
+    await eventually(revoked.micLive, 'the fresh checkpoint should settle');
+    const freshSources = [...revoked.saved.values()].filter(event => ['user:after-revocation-user:0', 'assistant:assistant-item-after-revocation-reply:0'].includes(event.event_key)).map(event => event.id).sort();
+    assert.equal(freshSources.length, 2);
+    assert.equal(revoked.checkpointRequests[1].omitLearningContext, true);
+    assert.deepEqual([...revoked.checkpointRequests[1].qualifiedEventIds].sort(), freshSources, 'a later checkpoint cannot reconstruct privacy-retired facts');
+    assert(retiredIds.every(id => revoked.saved.has(id)), 'context retirement must not edit or delete truthful raw history');
+    assert.equal((await revoked.creates()).length, 3);
+    if (failsFirst) await captureRecoveryLayout(revoked.page, 'restored');
+    await revoked.end();
+    results.push({ case: failsFirst ? 'revoked-context-explicit-retry' : 'revoked-context-memory-free-recovery', generated: 3, rawHistoryPreserved: true, retiredContextExcluded: true, ended: true });
+    await revoked.context.close();
+  }
 
   const noiseStartup = await setup({ startupNoise: true });
   await eventually(async () => (await noiseStartup.creates()).length === 1, 'unqualified startup noise must not permanently suppress the greeting');
@@ -419,7 +581,8 @@ try {
   await legacy.end(); results.push({ case: 'legacy-capability-compatibility', generated: 1, ended: true }); await legacy.context.close();
   await writeFile('test-results/qualified-turns-result.json', JSON.stringify({ fixture: true, actualWasm: true,
     productionHashCspVerified: true, conversationalQualityVerified: false, acousticEffectivenessVerified: false, cases: results }, null, 2));
-  console.log('PASS: owned startup input[], typed historical opening context, real WASM-qualified interruption/replies, noise-safe startup, duplicate/reconnect/hint/checkpoint ownership, explicit stop/reply fallback and legacy compatibility; the actual production build also runs native WebAudio/WASM under verified hash CSP and SRI without JavaScript unsafe-eval. Provider speech, model conversational quality and acoustic quality remain unverified.');
+  await writeFile('test-results/context-recovery-layout.json', JSON.stringify(recoveryScreens, null, 2));
+  console.log('PASS: owned startup input[], typed historical opening context, real WASM-qualified interruption/replies, noise-safe startup, duplicate/reconnect/hint/checkpoint ownership, playback receipts after raw ACK, privacy-retired context recovery and explicit retry, explicit stop/reply fallback and legacy compatibility; the actual production build also runs native WebAudio/WASM under verified hash CSP and SRI without JavaScript unsafe-eval. Provider speech, model conversational quality and acoustic quality remain unverified.');
 } finally {
   await browser.close(); server.kill('SIGTERM');
   if (productionBuild?.directory) await rm(productionBuild.directory, { recursive: true, force: true });

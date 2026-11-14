@@ -1,0 +1,202 @@
+[
+  {
+    "state": "failed",
+    "width": 390,
+    "height": 844,
+    "textScale": 1.25,
+    "screenshot": "test-results/context-recovery-failed-390.png",
+    "horizontalOverflow": false,
+    "status": {
+      "x": 83,
+      "y": 230.421875,
+      "width": 224,
+      "height": 26.25,
+      "bottom": 256.671875,
+      "text": "대화 연결을 확인하지 못했어요",
+      "fontSize": "17.5px",
+      "visible": true
+    },
+    "help": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "bottom": 0,
+      "text": "응답이 없으면 말을 마친 뒤 답변 요청을 눌러 주세요.",
+      "fontSize": "15px",
+      "visible": false
+    },
+    "reply": {
+      "x": 124.796875,
+      "y": 432.046875,
+      "width": 140.40625,
+      "height": 44.25,
+      "bottom": 476.296875,
+      "text": "대화 다시 연결",
+      "fontSize": "17.5px",
+      "visible": true
+    },
+    "end": {
+      "x": 159,
+      "y": 755,
+      "width": 72,
+      "height": 72,
+      "bottom": 827,
+      "text": "통화 종료",
+      "fontSize": "22.5px",
+      "visible": true
+    },
+    "callViewportBottom": 844,
+    "replyHit": true
+  },
+  {
+    "state": "failed",
+    "width": 320,
+    "height": 568,
+    "textScale": 1.25,
+    "screenshot": "test-results/context-recovery-failed-320.png",
+    "horizontalOverflow": false,
+    "status": {
+      "x": 48,
+      "y": 166.625,
+      "width": 224,
+      "height": 26.25,
+      "bottom": 192.875,
+      "text": "대화 연결을 확인하지 못했어요",
+      "fontSize": "17.5px",
+      "visible": true
+    },
+    "help": {
+      "x": 0,
+      "y": 0,
+      "width": 0,
+      "height": 0,
+      "bottom": 0,
+      "text": "응답이 없으면 말을 마친 뒤 답변 요청을 눌러 주세요.",
+      "fontSize": "15px",
+      "visible": false
+    },
+    "reply": {
+      "x": 89.796875,
+      "y": 355.125,
+      "width": 140.40625,
+      "height": 44.25,
+      "bottom": 399.375,
+      "text": "대화 다시 연결",
+      "fontSize": "17.5px",
+      "visible": true
+    },
+    "end": {
+      "x": 124,
+      "y": 479,
+      "width": 72,
+      "height": 72,
+      "bottom": 551,
+      "text": "통화 종료",
+      "fontSize": "22.5px",
+      "visible": true
+    },
+    "callViewportBottom": 463,
+    "replyHit": true
+  },
+  {
+    "state": "restored",
+    "width": 390,
+    "height": 844,
+    "textScale": 1.25,
+    "screenshot": "test-results/context-recovery-restored-390.png",
+    "horizontalOverflow": false,
+    "status": {
+      "x": 76.125,
+      "y": 230.421875,
+      "width": 237.75,
+      "height": 26.25,
+      "bottom": 256.671875,
+      "text": "듣고 있어요 · 편하게 말씀하세요",
+      "fontSize": "17.5px",
+      "visible": true
+    },
+    "help": {
+      "x": 50,
+      "y": 484.296875,
+      "width": 290,
+      "height": 48,
+      "bottom": 532.296875,
+      "text": "응답이 없으면 말을 마친 뒤 답변 요청을 눌러 주세요.",
+      "fontSize": "15px",
+      "visible": true
+    },
+    "reply": {
+      "x": 143.34375,
+      "y": 432.046875,
+      "width": 103.3125,
+      "height": 44.25,
+      "bottom": 476.296875,
+      "text": "답변 요청",
+      "fontSize": "17.5px",
+      "visible": true
+    },
+    "end": {
+      "x": 159,
+      "y": 755,
+      "width": 72,
+      "height": 72,
+      "bottom": 827,
+      "text": "통화 종료",
+      "fontSize": "22.5px",
+      "visible": true
+    },
+    "callViewportBottom": 844,
+    "replyHit": true
+  },
+  {
+    "state": "restored",
+    "width": 320,
+    "height": 568,
+    "textScale": 1.25,
+    "screenshot": "test-results/context-recovery-restored-320.png",
+    "horizontalOverflow": false,
+    "status": {
+      "x": 41.125,
+      "y": 166.625,
+      "width": 237.75,
+      "height": 26.25,
+      "bottom": 192.875,
+      "text": "듣고 있어요 · 편하게 말씀하세요",
+      "fontSize": "17.5px",
+      "visible": true
+    },
+    "help": {
+      "x": 20,
+      "y": 407.375,
+      "width": 280,
+      "height": 48,
+      "bottom": 455.375,
+      "text": "응답이 없으면 말을 마친 뒤 답변 요청을 눌러 주세요.",
+      "fontSize": "15px",
+      "visible": true
+    },
+    "reply": {
+      "x": 108.34375,
+      "y": 355.125,
+      "width": 103.3125,
+      "height": 44.25,
+      "bottom": 399.375,
+      "text": "답변 요청",
+      "fontSize": "17.5px",
+      "visible": true
+    },
+    "end": {
+      "x": 124,
+      "y": 479,
+      "width": 72,
+      "height": 72,
+      "bottom": 551,
+      "text": "통화 종료",
+      "fontSize": "22.5px",
+      "visible": true
+    },
+    "callViewportBottom": 463,
+    "replyHit": true
+  }
+]

@@ -367,6 +367,9 @@ dialog.usage-guide::backdrop{background:transparent}
   body[data-call-state=live] .live-actions{margin-top:12px}
   body[data-call-state=live] .call-timer{margin-top:4px;font-size:29px}
 }
+@media(max-height:600px) and (max-width:390px){
+  body[data-call-state=live] .ai-presence-live{width:100px;height:100px}
+}
 @media(min-width:700px){.app-shell{padding-top:20px}.app-header{height:76px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 @media(prefers-reduced-transparency:reduce),(prefers-contrast:more){

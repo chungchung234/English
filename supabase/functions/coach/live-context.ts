@@ -3,6 +3,7 @@
 // revision, source-hold and clock checks through boundVoiceContext.
 import { AppError, type CompanionId, uuidPattern } from './core.ts';
 import { memoryFact, sourceInstant, sourceTimeZone } from './temporal-context.ts';
+import { projectSharedExchanges, type SharedExchange } from './shared-exchanges.ts';
 
 type Data = Record<string, unknown>;
 const record = (value: unknown): value is Data => Boolean(value && typeof value === 'object' && !Array.isArray(value));
@@ -38,7 +39,7 @@ type Conversation = { session_id: string; session_created_at: string; session_en
   mode: 'handoff' | 'excerpt_fallback'; summary: null; threads: Thread[]; turns: ConversationTurn[] };
 type QuoteMemory = { session_id: string; session_created_at: string | null; session_ended_at: string | null; session_time_zone: string | null; evidence: Quote[] };
 export type LiveConversationContext = { companionId: CompanionId | null; scenario: string | null;
-  memory: { facts: Data[]; recent_conversation: Conversation | null; conversation_memories: Conversation[]; memories: QuoteMemory[]; suppress_memory: boolean };
+  memory: { facts: Data[]; recent_conversation: Conversation | null; conversation_memories: Conversation[]; memories: QuoteMemory[]; suppress_memory: boolean; shared_exchanges?: SharedExchange[] };
   checkpoint: ConversationCheckpoint | null };
 
 function quotes(value: unknown, start: string | null, end: string | null, maximum: number): Quote[] {
@@ -92,7 +93,7 @@ function checkpoint(value: unknown): ConversationCheckpoint | null {
 }
 
 /** A pure allowlist projection of an already-bound context; no source writes. */
-export function projectLiveConversationContext(input: unknown): LiveConversationContext {
+export function projectLiveConversationContext(input: unknown, clock?: { server_now_utc: string }): LiveConversationContext {
   const data = record(input) ? input : {}, memory = record(data.memory) ? data.memory : {};
   const companionId = typeof data.companionId === 'string' && ['alex', 'mia', 'juno'].includes(data.companionId) ? data.companionId as CompanionId : null;
   const sameCompanion = Boolean(companionId) && (memory.companionId === undefined || memory.companionId === companionId);
@@ -123,6 +124,8 @@ export function projectLiveConversationContext(input: unknown): LiveConversation
       if (memories.length === 12) break;
     }
   }
+  const shared = projectSharedExchanges(memory.shared_exchanges, { companionId, revision: memory.revision, now: clock?.server_now_utc, suppressed: suppress,
+    facts: Array.isArray(memory.facts) ? memory.facts : [] });
   return { companionId, scenario, memory: { facts, recent_conversation: recent, conversation_memories: conversationMemories,
-    memories, suppress_memory: suppress }, checkpoint: sameCompanion ? checkpoint(data.checkpoint) : null };
+    memories, suppress_memory: suppress, ...(shared.length ? { shared_exchanges: shared } : {}) }, checkpoint: sameCompanion ? checkpoint(data.checkpoint) : null };
 }

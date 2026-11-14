@@ -1,5 +1,6 @@
 import { bytes, uuidPattern } from './core.ts';
 import { recentConversation, sourceInstant, sourceTimeZone, type CallClock } from './temporal-context.ts';
+import { projectSharedExchanges, type SharedExchange } from './shared-exchanges.ts';
 
 // Engineering bounds, not validated conversational/learning optima. Seven days
 // bounds unsolicited callbacks by source speech time; three openings in fourteen
@@ -62,6 +63,7 @@ export type OpeningContext = {
   context_kind: 'user_chosen_topic' | 'recent_conversation' | 'none';
   prepared_topic: null | { text: string; source: 'current_session_user_prepared'; role: 'optional_topic_not_spoken_utterance' };
   continuity: OpeningContinuity | null;
+  shared_exchange?: SharedExchange;
   recent_openings: { session_id: string; occurred_at: string; text: string; role: 'style_only' }[];
   reason: 'prepared_topic' | 'eligible_continuity' | 'suppressed' | 'forgotten_fact' | 'invalid_clock' | 'no_recent_handoff' | 'stale_source' | 'no_suitable_thread';
 };
@@ -130,7 +132,7 @@ function planTiming(state: string, when: string | null, spokenAt: string, source
  * The result describes optional context, never a task for the character to
  * perform. It prescribes no direction, turn shape, greeting or length quota.
  */
-export function buildOpeningContext({ context, clock, recentOpenings = [] }: { context: unknown; clock: CallClock; recentOpenings?: unknown }): OpeningContext {
+export function buildOpeningContext({ context, clock, recentOpenings = [], exchangeRevision }: { context: unknown; clock: CallClock; recentOpenings?: unknown; exchangeRevision?: number }): OpeningContext {
   const data = record(context) ? context : {}, memory = record(data.memory) ? data.memory : {};
   const prepared = preparedTopic(data), instant = sourceInstant(clock?.server_now_utc), now = instant ? Date.parse(instant) : NaN;
   const suppressed = memory.suppress_memory === true;
@@ -182,6 +184,15 @@ export function buildOpeningContext({ context, clock, recentOpenings = [] }: { c
   // It is still optional context, not a command to speak a particular line or
   // perform a teaching/conversation task.
   if (prepared) result.continuity = null;
+  if (result.continuity) {
+    const companionId = ['alex', 'mia', 'juno'].includes(String(data.companionId)) ? data.companionId as 'alex' | 'mia' | 'juno' : null;
+    const pairs = projectSharedExchanges(memory.shared_exchanges, { companionId, revision: exchangeRevision, now: instant,
+      facts: Array.isArray(memory.facts) ? memory.facts : [] });
+    const pair = pairs.find(item => item.source_session_id === result.continuity!.session_id && item.caller.id === result.continuity!.evidence_id &&
+      item.caller.quote.includes(result.continuity!.quote) && !unsafe(item.companion.quote));
+    if (pair) result.shared_exchange = pair;
+  }
   while (bytes(JSON.stringify(result)) > OPENING_BOUNDS.maxBytes && result.recent_openings.length) result.recent_openings.pop();
+  if (bytes(JSON.stringify(result)) > OPENING_BOUNDS.maxBytes) delete result.shared_exchange;
   return result;
 }

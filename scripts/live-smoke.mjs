@@ -64,7 +64,7 @@ export function installRealtimeSmokeObserver({ base, session }) {
     effectivePolicy: false, startupSent: 0, startupAcknowledged: 0, startupCompleted: 0,
     replySent: 0, replyAcknowledged: 0, replyCompleted: 0, userBeforeStartup: false, invalidRequests: 0, unexpectedResponses: 0, failedResponses: 0, providerErrors: 0 };
   const observed = globalThis.__liveSmoke = { userTurns: 0, userCommits: 0, assistantTurns: 0, assistantAfterUser: 0, voices: [], connectionState: 'new', manual };
-  let voiceInstructions = null, openingInstructions = null, liveInstructionsValid = () => false;
+  let voiceInstructions = null, openingInstructions = null, pendingVoiceInstructions = null, liveInstructionsValid = () => false;
   const requests = new Map(), responses = new Map(), items = new Set(), transcribedUsers = new Set();
   const empty = value => Array.isArray(value) && value.length === 0;
   const policyIsManual = policy => policy?.type === 'semantic_vad' && policy.eagerness === 'low' && policy.create_response === false && policy.interrupt_response === false;
@@ -93,9 +93,23 @@ export function installRealtimeSmokeObserver({ base, session }) {
         const keysOnly = (value, keys) => record(value) && Object.keys(value).every(key => keys.includes(key));
         const keysExactly = (value, keys) => keysOnly(value, keys) && Object.keys(value).length === keys.length;
         const text = value => typeof value === 'string' && Boolean(value.trim());
+        const bytes = value => Array.from(value).reduce((count, character) => count + (character.codePointAt(0) <= 0x7f ? 1 : character.codePointAt(0) <= 0x7ff ? 2 : character.codePointAt(0) <= 0xffff ? 3 : 4), 0);
         const uuid = value => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
         const instant = value => typeof value === 'string' && Number.isFinite(Date.parse(value));
         const zone = value => { try { return typeof value === 'string' && Boolean(new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone); } catch { return false; } };
+        const validExchange = (value, companionId) => {
+          if (!keysExactly(value, ['version', 'source_session_id', 'companion_id', 'memory_revision', 'session_created_at', 'session_ended_at', 'session_time_zone', 'admission', 'caller', 'companion']) ||
+            value.version !== 'conversation-exchange-v1' || value.admission !== 'client_reported_playback_completed' || value.companion_id !== companionId ||
+            !uuid(value.source_session_id) || !Number.isSafeInteger(value.memory_revision) || value.memory_revision < 0 ||
+            !instant(value.session_created_at) || !instant(value.session_ended_at) || Date.parse(value.session_created_at) > Date.parse(value.session_ended_at) ||
+            !(value.session_time_zone === null || zone(value.session_time_zone))) return false;
+          const quote = (item, speaker) => keysExactly(item, ['id', 'speaker', 'quote', 'timestamp', 'truncated']) && uuid(item.id) && item.speaker === speaker &&
+            text(item.quote) && item.quote.length <= 600 && bytes(item.quote) <= 480 && typeof item.truncated === 'boolean' && instant(item.timestamp) &&
+            Date.parse(item.timestamp) >= Date.parse(value.session_created_at) && Date.parse(item.timestamp) <= Date.parse(value.session_ended_at);
+          return quote(value.caller, 'user') && quote(value.companion, 'assistant') && value.caller.id !== value.companion.id &&
+            Date.parse(value.caller.timestamp) <= Date.parse(value.companion.timestamp);
+        };
+        const memoryKeys = ['facts', 'recent_conversation', 'conversation_memories', 'memories', 'suppress_memory'];
         const validQuote = value => keysExactly(value, ['id', 'text', 'timestamp']) && uuid(value.id) && text(value.text) && instant(value.timestamp);
         const validConversation = value => {
           if (!keysExactly(value, ['session_id', 'session_created_at', 'session_ended_at', 'session_time_zone', 'mode', 'summary', 'threads', 'turns']) ||
@@ -108,11 +122,11 @@ export function installRealtimeSmokeObserver({ base, session }) {
             ['stated', 'planned', 'resolved', 'unknown'].includes(thread.state) && (thread.when === null || text(thread.when)) && thread.follow_up === null &&
             Array.isArray(thread.evidence_ids) && thread.evidence_ids.length === 1 && ids.has(thread.evidence_ids[0]));
         };
-        const validLiveContext = value => {
+        const validLiveContext = (value, revision, mode) => {
           if (!keysExactly(value, ['companionId', 'scenario', 'memory', 'checkpoint']) || !['alex', 'mia', 'juno'].includes(value.companionId) ||
             !(value.scenario === null || value.scenario === 'Natural English conversation about everyday life' ||
               typeof value.scenario === 'string' && value.scenario.startsWith('User-prepared conversation: ') && text(value.scenario.slice('User-prepared conversation: '.length))) ||
-            !keysExactly(value.memory, ['facts', 'recent_conversation', 'conversation_memories', 'memories', 'suppress_memory'])) return false;
+            !keysExactly(value.memory, [...memoryKeys, ...(Object.hasOwn(value.memory ?? {}, 'shared_exchanges') ? ['shared_exchanges'] : [])])) return false;
           const memory = value.memory;
           return typeof memory.suppress_memory === 'boolean' && Array.isArray(memory.facts) && memory.facts.every(fact =>
             keysOnly(fact, ['key', 'value', 'forgotten', 'manual', 'updated_at', 'spoken_at', 'session_id', 'quote', 'evidence_ids']) &&
@@ -122,42 +136,66 @@ export function installRealtimeSmokeObserver({ base, session }) {
             Array.isArray(memory.memories) && memory.memories.every(item => keysExactly(item, ['session_id', 'session_created_at', 'session_ended_at', 'session_time_zone', 'evidence']) &&
               uuid(item.session_id) && (item.session_created_at === null || instant(item.session_created_at)) && (item.session_ended_at === null || instant(item.session_ended_at)) &&
               (item.session_time_zone === null || zone(item.session_time_zone)) && Array.isArray(item.evidence) && item.evidence.length > 0 && item.evidence.every(validQuote)) &&
+            (!Object.hasOwn(memory, 'shared_exchanges') || Array.isArray(memory.shared_exchanges) && memory.shared_exchanges.length <= 4 &&
+              memory.shared_exchanges.every(item => validExchange(item, value.companionId)) &&
+              bytes(JSON.stringify(memory.shared_exchanges)) <= 4200 &&
+              (memory.shared_exchanges.length === 0 || Number.isSafeInteger(revision) && revision >= 0 && mode === 'included' && memory.shared_exchanges.every(item => item.memory_revision === revision)) &&
+              new Set(memory.shared_exchanges.map(item => item.source_session_id)).size <= 2 &&
+              new Set(memory.shared_exchanges.map(item => item.companion.id)).size === memory.shared_exchanges.length &&
+              new Set(memory.shared_exchanges.map(item => item.memory_revision)).size <= 1 &&
+              (!memory.suppress_memory || memory.shared_exchanges.length === 0)) &&
             (value.checkpoint === null || keysExactly(value.checkpoint, ['summary']) && text(value.checkpoint.summary));
         };
         // Delivery-shape checks distinguish conversation evidence from review
         // fields. They do not certify a quotation's truth or conversational use.
-        liveInstructionsValid = instructions => { try { return validLiveContext(block(instructions, 'UNTRUSTED_CONTEXT_JSON')); } catch { return false; } };
+        liveInstructionsValid = (instructions, revision = data?.memory_revision, mode = data?.memory_mode) => {
+          try { return validLiveContext(block(instructions, 'UNTRUSTED_CONTEXT_JSON'), revision, mode); } catch { return false; }
+        };
         manual.liveContextValid = liveInstructionsValid(voiceInstructions) && liveInstructionsValid(openingInstructions);
         manual.openingBaseIsolated = manual.liveContextValid && context.scenario === 'Natural English conversation about everyday life' &&
-          empty(memory.facts) && empty(memory.memories) && empty(memory.conversation_memories) && memory.recent_conversation === null && memory.suppress_memory === true && context.checkpoint === null;
+          empty(memory.facts) && empty(memory.memories) && empty(memory.conversation_memories) &&
+          (!Object.hasOwn(memory, 'shared_exchanges') || empty(memory.shared_exchanges)) && memory.recent_conversation === null && memory.suppress_memory === true && context.checkpoint === null;
         const prepared = opening?.prepared_topic, continuity = opening?.continuity, history = opening?.recent_openings;
         const day = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) &&
           Number.isFinite(Date.parse(value + 'T00:00:00Z')) && new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) === value;
         const timing = continuity?.plan_timing;
-        const validTiming = continuity === null || timing === null || record(timing) && continuity?.state === 'planned' && day(timing.local_date) &&
+        const validTiming = continuity === null || timing === null || keysExactly(timing, ['local_date', 'time_zone', 'relation']) && continuity?.state === 'planned' && day(timing.local_date) &&
           zone(timing.time_zone) && timing.time_zone === continuity.source_time_zone && ['upcoming', 'today', 'past'].includes(timing.relation);
-        const validPrepared = prepared === null || record(prepared) && text(prepared.text) && prepared.text.length <= 300 &&
+        const validPrepared = prepared === null || keysExactly(prepared, ['text', 'source', ...(Object.hasOwn(prepared ?? {}, 'role') ? ['role'] : [])]) && text(prepared.text) && prepared.text.length <= 300 &&
           prepared.source === 'current_session_user_prepared' && (prepared.role === undefined || prepared.role === 'optional_topic_not_spoken_utterance');
-        const validContinuity = continuity === null || record(continuity) && uuid(continuity.session_id) && uuid(continuity.evidence_id) &&
+        const validContinuity = continuity === null || keysExactly(continuity, ['session_id', 'evidence_id', 'source_started_at', 'source_ended_at', 'source_spoken_at', 'source_time_zone', 'plan_timing', 'note', 'quote', 'state', 'when', 'must_not_infer_outcome', ...(Object.hasOwn(continuity ?? {}, 'role') ? ['role'] : [])]) && uuid(continuity.session_id) && uuid(continuity.evidence_id) &&
           ['source_started_at', 'source_ended_at', 'source_spoken_at'].every(key => instant(continuity[key])) && text(continuity.note) && text(continuity.quote) &&
           (continuity.source_time_zone === null || zone(continuity.source_time_zone)) &&
           ['stated', 'planned', 'resolved'].includes(continuity.state) && (continuity.when === null || text(continuity.when)) &&
           (continuity.role === undefined || continuity.role === 'historical_background') &&
           Object.hasOwn(continuity, 'plan_timing') && validTiming && continuity.must_not_infer_outcome === true;
-        const validHistory = Array.isArray(history) && history.length <= 3 && history.every(item => record(item) && uuid(item.session_id) &&
+        const validHistory = Array.isArray(history) && history.length <= 3 && history.every(item => keysExactly(item, ['session_id', 'occurred_at', 'text', 'role']) && uuid(item.session_id) &&
           instant(item.occurred_at) && text(item.text) && item.text.length <= 240 && item.role === 'style_only');
         const validKind = opening?.context_kind === 'user_chosen_topic' ? prepared !== null && continuity === null :
           opening?.context_kind === 'recent_conversation' ? prepared === null && continuity !== null :
             opening?.context_kind === 'none' && prepared === null && continuity === null;
         const keys = ['version', 'purpose', 'current_utterance', 'context_kind', 'role', 'prepared_topic', 'continuity', 'recent_openings', 'reason'];
+        const validOpeningExchange = !Object.hasOwn(opening ?? {}, 'shared_exchange') || validExchange(opening.shared_exchange, context.companionId) &&
+          Number.isSafeInteger(data?.memory_revision) && data.memory_revision >= 0 && data.memory_mode === 'included' && opening.shared_exchange.memory_revision === data.memory_revision &&
+          continuity !== null && opening.shared_exchange.source_session_id === continuity.session_id && opening.shared_exchange.caller.id === continuity.evidence_id &&
+          opening.shared_exchange.caller.quote.includes(continuity.quote) && opening.shared_exchange.caller.timestamp === continuity.source_spoken_at &&
+          opening.shared_exchange.session_created_at === continuity.source_started_at && opening.shared_exchange.session_ended_at === continuity.source_ended_at &&
+          opening.shared_exchange.session_time_zone === continuity.source_time_zone;
         manual.currentInputNone = record(opening) && Object.hasOwn(opening, 'current_utterance') && opening.current_utterance === null;
         manual.historicalContextPresent = Boolean(continuity || Array.isArray(history) && history.length);
         manual.preparedTopicPresent = Boolean(prepared);
-        manual.openingContextValid = Boolean(purpose?.trim()) && keysExactly(opening, keys) && opening.version === 'opening-context-v2' &&
+        manual.openingContextValid = Boolean(purpose?.trim()) && keysExactly(opening, [...keys, ...(Object.hasOwn(opening ?? {}, 'shared_exchange') ? ['shared_exchange'] : [])]) && opening.version === 'opening-context-v2' &&
           opening.purpose === 'call_opening' && opening.role === 'optional_conversation_context' && manual.currentInputNone &&
-          validPrepared && validContinuity && validHistory && validKind &&
+          validPrepared && validContinuity && validHistory && validKind && validOpeningExchange &&
           ['prepared_topic', 'eligible_continuity', 'suppressed', 'forgotten_fact', 'invalid_clock', 'no_recent_handoff', 'stale_source', 'no_suitable_thread'].includes(opening.reason);
       } catch { manual.openingContextValid = false; }
+    }
+    if (url.endsWith('/checkpoint') || url.endsWith('/voice-context')) {
+      const data = await result.clone().json().catch(() => null);
+      // Only an approved backend update is eligible for a later provider ACK.
+      // Default, stale and speed-only echoes cannot become instruction authority.
+      pendingVoiceInstructions = typeof data?.instructions === 'string' && liveInstructionsValid(data.instructions, data.memory_revision, data.memory_mode) ? data.instructions : null;
+      if (!pendingVoiceInstructions) manual.liveContextValid = false;
     }
     return result;
   };
@@ -203,10 +241,9 @@ export function installRealtimeSmokeObserver({ base, session }) {
         const voice = event.session?.audio?.output?.voice || event.session?.voice;
         if (typeof voice === 'string' && !observed.voices.includes(voice)) observed.voices.push(voice);
         if (policyIsManual(event.session?.audio?.input?.turn_detection)) manual.effectivePolicy = true;
-        if (manual.requested && typeof event.session?.instructions === 'string') {
-          const valid = liveInstructionsValid(event.session.instructions);
-          manual.liveContextValid = manual.liveContextValid && valid;
-          if (valid && event.type === 'session.updated') voiceInstructions = event.session.instructions;
+        if (manual.requested && event.type === 'session.updated' && pendingVoiceInstructions !== null && event.session?.instructions === pendingVoiceInstructions) {
+          voiceInstructions = pendingVoiceInstructions;
+          pendingVoiceInstructions = null;
         }
       }
       if (!manual.requested) return; // Preserve observations for legacy clients.
@@ -312,6 +349,7 @@ async function main() {
         for (const [endpoint, body] of [
           ['/rest/v1/sessions', {scenario:'Must be denied'}],
           ['/rest/v1/rpc/append_events', {p_session_id:randomUUID(),p_events:[]}],
+          ['/rest/v1/rpc/record_conversation_playback', {p_session_id:randomUUID(),p_event_ids:[randomUUID()],p_receipt_id:randomUUID(),p_qualified_user_ids:[],p_expected_memory_revision:0}],
           ['/rest/v1/rpc/finish_session', {p_session_id:randomUUID()}],
           ['/rest/v1/rpc/restore_history', {p_backup:{sessions:[],events:[]}}],
           ['/rest/v1/rpc/review_journal', {}],
@@ -343,6 +381,7 @@ async function main() {
           ['/functions/v1/coach/memory-manage', {companionId:'alex',action:'setFact',key:'goal',value:'Must be denied'}],
           ['/functions/v1/coach/memory-index', {companionId:'alex'}],
           ['/functions/v1/coach/checkpoint', {sessionId:randomUUID()}],
+          ['/functions/v1/coach/voice-context', {sessionId:randomUUID(),omitLearningContext:true}],
           ['/rest/v1/rpc/memory_context', {p_user_id:user.user.id,p_companion_id:'alex'}],
           ['/functions/v1/coach/voice', {sessionId:randomUUID(),sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n'}],
         ]) {

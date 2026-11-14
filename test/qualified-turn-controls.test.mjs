@@ -145,6 +145,80 @@ test('normal context includes only qualified users and completed, played assista
   assert.equal(ids.includes('u1'), false); assert.ok(ids.includes('u2')); assert.ok(ids.includes('r1-item'));
 });
 
+test('history-free context retires consumed references while pending new speech and playback evidence survive', t => {
+  const f = fixture(t); f.utter('old-user'); f.control.start(); f.ack('old-response'); f.done('old-response');
+  f.control.request(true); f.utter('new-user');
+  const evidence = f.control.acceptedItemIds();
+  assert.deepEqual(evidence, ['old-user', 'old-response-item', 'new-user']);
+  assert.equal(f.control.retireContext(), true);
+  assert.deepEqual(f.control.acceptedItemIds(), evidence, 'retirement cannot erase source/playback evidence');
+  assert.deepEqual(f.control.contextItemIds(), ['new-user'], 'checkpoint context excludes retired speech and preserves pending current speech');
+  assert.equal(f.creates().length, 1, 'retiring context cannot restart an opening or create speech');
+  f.control.request(false);
+  assert.deepEqual(f.creates().at(-1).response.input, [{ type: 'item_reference', id: 'new-user' }]);
+  assert.equal(f.creates().at(-1).response.metadata.purpose, 'reply');
+});
+
+test('retiring context preserves an unfinished new input through final ASR and commit', t => {
+  const f = fixture(t); f.utter('old'); f.control.start(); f.ack(); f.done();
+  f.emit({ type: 'input_audio_buffer.speech_started', item_id: 'unfinished' }); f.voice();
+  f.control.retireContext();
+  f.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'unfinished' });
+  f.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'unfinished', transcript: 'This is my current question.' });
+  assert.equal(f.creates().length, 1);
+  f.emit({ type: 'input_audio_buffer.committed', item_id: 'unfinished' });
+  assert.deepEqual(f.creates().at(-1).response.input, [{ type: 'item_reference', id: 'unfinished' }]);
+});
+
+test('retired completed speech cannot re-enter a later checkpoint while its playback evidence survives', t => {
+  const f = fixture(t); f.utter('old-user'); f.control.start(); f.ack('old-response'); f.done('old-response');
+  const accepted = ['old-user', 'old-response-item'];
+  assert.deepEqual(f.control.contextItemIds(), accepted);
+  f.emit({ type: 'conversation.item.deleted', item_id: 'old-user' });
+  f.emit({ type: 'conversation.item.deleted', item_id: 'old-response-item' });
+  assert.deepEqual(f.control.contextItemIds(), accepted, 'normal provider-buffer deletion does not discard still-authorized rolling checkpoint coverage');
+  f.control.retireContext();
+  assert.deepEqual(f.control.contextItemIds(), []);
+  assert.deepEqual(f.control.acceptedItemIds(), accepted);
+  f.utter('new-user');
+  assert.deepEqual(f.control.contextItemIds(), ['new-user']);
+  assert.deepEqual(f.control.acceptedItemIds(), [...accepted, 'new-user']);
+});
+
+test('matched output clear releases the floor without claiming completed playback, even after a late stopped event', t => {
+  const f = fixture(t); f.utter('caller'); f.control.start(); f.ack('cleared-response');
+  f.done('cleared-response', { stop: false });
+  assert.deepEqual(f.control.acceptedItemIds(), ['caller'], 'generation completion alone is not playback completion');
+  f.emit({ type: 'output_audio_buffer.cleared', response_id: 'cleared-response' });
+  assert.deepEqual(f.control.acceptedItemIds(), ['caller']);
+  assert.deepEqual(f.control.contextItemIds(), ['caller']);
+  assert.equal(f.control.state.phase, 'listening', 'cleared audio must release lifecycle ownership');
+  f.emit({ type: 'output_audio_buffer.stopped', response_id: 'cleared-response' });
+  assert.deepEqual(f.control.acceptedItemIds(), ['caller'], 'a late stopped event cannot promote cleared audio');
+  f.utter('fresh-caller');
+  const next = f.creates().at(-1);
+  assert(!next.response.input.some(item => item.id === 'cleared-response-item'));
+  f.ack('played-response'); f.done('played-response');
+  assert(f.control.acceptedItemIds().includes('played-response-item'), 'ordinary stopped playback still admits evidence');
+});
+
+test('late items from an old response remain evidence but never restore retired model context', t => {
+  const f = fixture(t); f.utter('old'); f.control.start(); f.ack('old-response');
+  f.emit({ type: 'output_audio_buffer.started', response_id: 'old-response' });
+  f.control.retireContext();
+  f.done('old-response'); f.utter('new');
+  assert.deepEqual(f.creates().at(-1).response.input, [{ type: 'item_reference', id: 'new' }]);
+  assert.ok(f.control.acceptedItemIds().includes('old-response-item'));
+  assert(!f.control.contextItemIds().includes('old-response-item'), 'late output items cannot restore retired checkpoint context');
+});
+
+test('explicit retry can reapprove its own retired input without restoring other old context', t => {
+  const f = fixture(t); f.utter('retry-user'); f.control.start(); f.ack(); f.control.retireContext();
+  f.done('r1', { status: 'failed', audio: false });
+  assert.equal(f.control.state.needsManualReply, true); assert.equal(f.control.forceReply(), true);
+  assert.deepEqual(f.creates().at(-1).response.input, [{ type: 'item_reference', id: 'retry-user' }]);
+});
+
 test('explicit stop stops only the current AI and lets the next user speech receive a reply', t => {
   const f = fixture(t); f.control.start(); f.ack(); f.emit({ type: 'output_audio_buffer.started', response_id: 'r1' });
   assert.equal(f.control.stop(), true); assert.equal(f.control.state.desiredHold, false);

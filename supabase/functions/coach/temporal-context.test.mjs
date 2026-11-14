@@ -39,7 +39,11 @@ test('fact provenance stays bounded and manual edits and forgotten values cannot
   const fact = { key: 'interest', value: 'Walking', session_id: oldSid, spoken_at: '2026-11-09T14:03:00Z', quote: 'I enjoy walking.', evidence_ids: [eid], extra: 'not passed' };
   const result = memoryFact(fact);
   assert.equal(result.spoken_at, '2026-11-09T14:03:00.000Z'); assert.equal(result.quote, fact.quote); assert.deepEqual(result.evidence_ids, [eid]); assert(!Object.hasOwn(result, 'extra'));
-  assert.deepEqual(memoryFact({ ...fact, value: '', forgotten: true }), { key: 'interest', value: '', forgotten: true });
+  assert.deepEqual(memoryFact({ ...fact, value: '', forgotten: true }), { key: 'interest', value: '', forgotten: true, spoken_at: '2026-11-09T14:03:00.000Z' });
+  assert.deepEqual(memoryFact({ ...fact, value: '', forgotten: true, spoken_at: 'invalid', updated_at: '2026-11-10T00:00:00Z' }),
+    { key: 'interest', value: '', forgotten: true, updated_at: '2026-11-10T00:00:00.000Z' });
+  assert.deepEqual(memoryFact({ ...fact, value: '', forgotten: true, updated_at: '2026-11-10T00:00:00Z' }),
+    { key: 'interest', value: '', forgotten: true, spoken_at: '2026-11-09T14:03:00.000Z' });
   assert.deepEqual(memoryFact({ ...fact, manual: true, updated_at: '2026-11-10T00:00:00Z' }), { key: 'interest', value: 'Walking', forgotten: false, manual: true, updated_at: '2026-11-10T00:00:00.000Z' });
   assert.equal(memoryFact({ key: 'secret', value: 'x' }), null);
   assert.equal(memoryFact({ key: 'goal', value: 'x'.repeat(241) }), null);
@@ -77,7 +81,7 @@ const json = (value, count = Array.isArray(value) ? value.length : null) => new 
 const config = { ACCESS_MODE: 'invite', ALLOWED_EMAILS: 'owner@example.com', ALLOWED_ORIGINS: 'https://example.com', SUPABASE_URL: 'https://project.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'fixture-service', OPENAI_API_KEY: 'fixture-openai' };
 const req = (endpoint, body) => new Request(`https://project.supabase.co/functions/v1/coach/${endpoint}`, { method: 'POST', headers: { Origin: 'https://example.com', Authorization: 'Bearer fixture-user', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 
-test('voice sends dated grounding and isolated clock then returns only a context receipt, never private memory text', async () => {
+test('voice returns its approved dated instructions to the owning client while persistent receipts omit private memory text', async () => {
   const original = globalThis.fetch, previousDeno = globalThis.Deno;
   globalThis.Deno = { env: { get: name => config[name] } };
   const queries = []; let sent, modelSnapshot,withRecent=false,persisted;
@@ -110,7 +114,9 @@ test('voice sends dated grounding and isolated clock then returns only a context
     assert.deepEqual(output.memory_context, { status: 'ready', memory_count: 1, fact_count: 1, last_session_created_at: '2026-11-09T14:00:00.000Z', has_undated_memory: false });
     assert(Date.parse(output.clock.server_now_utc) >= Date.parse(modelSnapshot.server_now_utc));
     assert.equal(output.clock.session_created_at, '2026-11-11T00:00:00.000Z'); assert.equal(output.clock.time_zone, 'Asia/Seoul');
-    assert(!JSON.stringify(output).includes('planning a walk')); assert(!JSON.stringify(output).includes('I enjoy walking'));
+    const {voice_instructions,...publicReceipt}=output;
+    assert.equal(JSON.parse(voice_instructions.split('UNTRUSTED_CONTEXT_JSON:\n')[1]).memory.facts[0].quote,'I enjoy walking.');
+    assert(!JSON.stringify(publicReceipt).includes('planning a walk')); assert(!JSON.stringify(publicReceipt).includes('I enjoy walking'));
     withRecent=true;
     const second=await handler(req('voice',{sessionId:sid,sdp}));assert.equal(second.status,200);
     const receipt=(await second.json()).memory_context;

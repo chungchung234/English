@@ -49,14 +49,30 @@ async function audioFor(reply) {
     transcriptVerification: { status: 'matched', policyVersion: 'word-match-fixture-v1', approvedTextSha256: reply.textSha256 }
   } };
 }
+function streamedReply(reply, audioPromise = audioFor(reply), onCancel = () => {}) {
+  let cancelled = false;
+  const encode = value => new TextEncoder().encode(JSON.stringify(value) + '\n');
+  return new Response(new ReadableStream({
+    start(controller) {
+      controller.enqueue(encode({ type: 'text', result: reply }));
+      void Promise.resolve(audioPromise).then(audio => {
+        if (cancelled) return;
+        controller.enqueue(encode({ type: 'audio', result: audio }));
+        controller.enqueue(encode({ type: 'done', timings: { totalMs: 2, authorMs: 1, synthesisMs: 1 } }));
+        controller.close();
+      }).catch(error => { if (!cancelled) controller.error(error); });
+    },
+    cancel() { cancelled = true; onCancel(); },
+  }), { headers: { 'Content-Type': 'application/x-ndjson' } });
+}
 function fixture(t, options = {}) {
   const player = options.player || playerFixture(), requests = [], replies = [], transcripts = [], lifecycle = [], states = [], failures = [], queued = [], speed = [];
   let current = true, textCounter = 0;
   const delivery = options.delivery || { pending: async () => [], queue: value => { queued.push(clone(value)); return Promise.resolve(); }, flush: async () => ({ delivered: 0 }) };
   const edge = async (route, body, settings = {}) => {
     requests.push({ route, body: clone(body), signal: settings.signal });
-    if (options.edge) return options.edge(route, body, settings, baseEdge);
-    return baseEdge(route, body);
+    const result = await (options.edge ? options.edge(route, body, settings, baseEdge) : baseEdge(route, body));
+    return typeof settings.readResponse === 'function' ? settings.readResponse(result, settings.signal) : result;
   };
   async function baseEdge(route, body) {
     if (route === 'dialogue-context') return clone(body.omitLearningContext ? { ...initialAuthority, authorityGeneration: 8, memoryRevision: null, memoryMode: 'omitted' } : initialAuthority);
@@ -69,10 +85,11 @@ function fixture(t, options = {}) {
       replies.push(clone(value)); return value;
     }
     if (route === 'dialogue-synthesis') return audioFor(replies.find(reply => reply.owner.turnId === body.owner.turnId));
+    if (route === 'dialogue-response') return streamedReply(await baseEdge('dialogue-turn', body));
     if (route === 'dialogue-cancel') return cancelAck(body);
     throw Error('Unknown local fixture route');
   }
-  const dialogue = createAuthoredDialogue({ scope, sessionId, companionId, callEpoch, player, playbackDelivery: delivery, edge,
+  const dialogue = createAuthoredDialogue({ scope, sessionId, companionId, callEpoch, player, playbackDelivery: delivery, edge, streamed: options.streamed === true,
     savedInputs: options.savedInputs || (async () => clone(inputIds)), isCurrent: () => current, subtle: options.subtle || webcrypto.subtle,
     onTranscript: (row, owner) => transcripts.push({ row: clone(row), owner: clone(owner) }), onLifecycle: event => lifecycle.push(clone(event)),
     onState: state => states.push(clone(state)), onFailure: error => failures.push(clone(error)), onSpeed: value => speed.push(clone(value)) });
@@ -97,6 +114,51 @@ test('saved caller ACK gates content requests; exact canonical text is retained 
   assert.equal(f.dialogue.state.pending, true); assert.equal(f.queued.length, 0);
   synthesis.resolve(await audioFor(reply)); await until(() => f.player.calls.play.length === 1);
   assert.equal(f.player.calls.prepare[0][1], reply.textSha256); assert.equal(f.queued.length, 0);
+});
+
+test('one streamed request acknowledges canonical text before held audio without releasing unverified playback', async t => {
+  const saved = deferred(), audio = deferred();
+  const f = fixture(t, { streamed: true, savedInputs: () => saved.promise, edge: async (route, body, _settings, base) => {
+    if (route === 'dialogue-response') return streamedReply(await base('dialogue-turn', body), audio.promise);
+    return base(route, body);
+  } });
+  await f.dialogue.initialize(); f.dialogue.create(turnRequest(1)); await settle();
+  assert.equal(f.count('dialogue-response'), 0, 'current source ACK still gates the combined request');
+  saved.resolve(clone(inputIds)); await until(() => f.transcripts.length === 1);
+  const reply = f.replies[0]; assert.equal(f.count('dialogue-response'), 1); assert.equal(f.count('dialogue-turn'), 0); assert.equal(f.count('dialogue-synthesis'), 0);
+  assert.equal(f.lifecycle.filter(event => event.kind === 'text_ready').length, 1); assert.equal(f.transcripts[0].row.text, reply.text);
+  assert.equal(f.dialogue.state.pending, true); assert.equal(f.player.calls.prepare.length, 0); assert.equal(f.player.calls.play.length, 0); assert.equal(f.queued.length, 0);
+  audio.resolve(await audioFor(reply)); await until(() => f.player.calls.play.length === 1);
+  assert.equal(f.player.calls.prepare[0][1], reply.textSha256); assert.equal(f.count('dialogue-response'), 1); assert.equal(f.lifecycle.filter(event => event.kind === 'text_ready').length, 1); assert.equal(f.queued.length, 0);
+});
+
+test('stream cancellation after early text cancels the reader and cannot play late audio or fall back', async t => {
+  const audio = deferred(), cancelled = deferred(); let readerCancels = 0;
+  const f = fixture(t, { streamed: true, edge: async (route, body, _settings, base) => {
+    if (route === 'dialogue-response') return streamedReply(await base('dialogue-turn', body), audio.promise, () => { readerCancels++; });
+    if (route === 'dialogue-cancel') return cancelled.promise;
+    return base(route, body);
+  } });
+  await f.dialogue.initialize(); f.dialogue.create(turnRequest(1)); await until(() => f.transcripts.length === 1);
+  const reply = f.replies[0], stop = f.dialogue.cancel({ turnNonce: reply.owner.turnNonce, reason: 'explicit_stop' });
+  assert.equal(f.player.calls.cancel.length, 1); await until(() => readerCancels === 1);
+  audio.resolve(await audioFor(reply)); await settle(); assert.equal(f.player.calls.prepare.length, 0); assert.equal(f.player.calls.play.length, 0);
+  cancelled.resolve(cancelAck(f.requests.find(value => value.route === 'dialogue-cancel').body)); assert.equal(await stop, true);
+  assert.equal(f.count('dialogue-response'), 1); assert.equal(f.count('dialogue-turn'), 0); assert.equal(f.count('dialogue-synthesis'), 0); assert.equal(f.queued.length, 0); assert.deepEqual(f.failures, []);
+});
+
+test('a structured stream budget failure is terminal and never retries through the split endpoints', async t => {
+  const f = fixture(t, { streamed: true, edge: async (route, body, _settings, base) => {
+    if (route === 'dialogue-response') {
+      const reply = await base('dialogue-turn', body);
+      return new Response(JSON.stringify({ type: 'text', result: reply }) + '\n' + JSON.stringify({ type: 'error', error: { code: 'COST_BUDGET_EXCEEDED', message: 'Synthetic budget boundary.' } }) + '\n', { headers: { 'Content-Type': 'application/x-ndjson' } });
+    }
+    return base(route, body);
+  } });
+  await f.dialogue.initialize(); f.dialogue.create(turnRequest(1)); await until(() => f.failures.length === 1);
+  assert.deepEqual(f.failures, [{ code: 'COST_BUDGET_EXCEEDED', recoveryNeeded: true }]);
+  assert.equal(f.transcripts.length, 1); assert.equal(f.player.calls.prepare.length, 0); assert.equal(f.player.calls.play.length, 0); assert.equal(f.queued.length, 0);
+  assert.equal(f.count('dialogue-response'), 1); assert.equal(f.count('dialogue-turn'), 0); assert.equal(f.count('dialogue-synthesis'), 0);
 });
 
 test('failed or missing saved caller input never issues a reply request or fabricates speech', async t => {

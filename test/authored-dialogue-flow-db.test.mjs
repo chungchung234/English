@@ -6,7 +6,7 @@ import {randomUUID} from 'node:crypto';
 import {readFile,readdir} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
-import {handleAuthoredDialogue} from '../supabase/functions/coach/authored-dialogue.ts';
+import {handleAuthoredDialogue,authoredDialogueStream} from '../supabase/functions/coach/authored-dialogue.ts';
 import {renderVoiceInstructions,renderOpeningInstructions} from '../supabase/functions/coach/index.ts';
 import {companionProfile} from '../supabase/functions/coach/core.ts';
 import {buildOpeningContext} from '../supabase/functions/coach/opening-policy.ts';
@@ -69,6 +69,24 @@ async function fixture(db,options={}){
 
 test('actual authored handler and canonical SQL enforce the complete two-stage lifecycle',async t=>{
  const db=await setup(t);
+ await t.test('combined stream publishes the same owned text and whole clip through the real SQL lifecycle',async()=>{
+  const f=await fixture(db),original=f.deps.synthesize;let prepared=0,disposed=0;
+  f.deps.prepareSynthesis=binding=>{prepared++;assert.equal(f.calls.at(-1).name,'authored_dialogue_dispatch');assert.equal(f.calls.at(-1).body.p_stage,'dialogue');assert.equal(Object.hasOwn(binding,'text'),false);return{ready:Promise.resolve(),generate:request=>{assert.equal(f.calls.at(-1).name,'authored_dialogue_dispatch');assert.equal(f.calls.at(-1).body.p_stage,'dialogue_synthesis');return original(request);},dispose:async()=>{disposed++;}};};
+  const response=new Response(authoredDialogueStream(user,{protocol,...f.body(f.context)},f.deps));const frames=(await response.text()).trimEnd().split('\n').map(JSON.parse);
+  assert.deepEqual(frames.map(frame=>frame.type),['text','audio','done']);assert.equal(prepared,1);assert(disposed>=1);assert.equal(f.authors.length,1);assert.equal(f.readers.length,1);assert.deepEqual(frames[1].result.manifest.owner,frames[0].result.owner);
+  assert.equal((await db.query('select status from public.authored_dialogue_turns where id=$1',[frames[0].result.owner.turnId])).rows[0].status,'published');
+ });
+ await t.test('source edit while request-owned setup is pending prevents audio dispatch and publication',async()=>{
+  const f=await fixture(db);let releaseReady,readyEntered=false,generated=0,disposed=0;const ready=new Promise(resolve=>{releaseReady=resolve;});
+  f.deps.prepareSynthesis=()=>({get ready(){readyEntered=true;return ready;},generate:async()=>{generated++;throw Error('must not generate');},dispose:async()=>{disposed++;}});
+  const caller=await f.addUser('A saved source before reader setup.');const reader=authoredDialogueStream(user,{protocol,...f.body(f.context,{purpose:'reply',currentUserEventIds:[caller.id]})},f.deps).getReader();
+  const text=JSON.parse(new TextDecoder().decode((await reader.read()).value));assert.equal(text.type,'text');
+  const deadline=Date.now()+2000;while(!readyEntered&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,1));assert(readyEntered);
+  await db.query('update public.transcript_events set text=$1 where id=$2',['Source changed while setup was pending.',caller.id]);releaseReady();
+  let output='';while(true){const chunk=await reader.read();if(chunk.done)break;output+=new TextDecoder().decode(chunk.value);}
+  const frames=output.trimEnd().split('\n').map(JSON.parse);assert.deepEqual(frames.map(frame=>frame.type),['error']);assert.equal(generated,0);assert.equal(f.readers.length,0);assert(disposed>=1);
+  assert.equal(f.calls.filter(call=>call.name==='authored_dialogue_publish').length,0);assert(!output.includes('Source changed while setup'));
+ });
  await t.test('startup, batch playback, raw reply, cancellation and already-omitted reset preserve authority',async()=>{
   const f=await fixture(db),start=await f.invoke('dialogue-turn',f.body(f.context));
   assert.equal(start.generation,1);assert.equal(start.assistantEvent.storage,'server');assert.equal(f.authors[0].input.length,1);assert(f.authors[0].input[0].content[0].text.includes('Current caller utterance: null'));

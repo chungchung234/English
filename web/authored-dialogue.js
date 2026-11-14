@@ -1,5 +1,6 @@
 import { createLearningOutbox } from '../src/learning-outbox.js';
 import { validSpeed } from './speech-speed.js';
+import { readAuthoredResponse } from './authored-response.js';
 
 export const AUTHORED_DIALOGUE_PROTOCOL = 'authored_dialogue_v1';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -95,7 +96,7 @@ export function createAuthoredPlaybackDelivery({ getScope, send, storage, maxReq
   };
 }
 
-export function createAuthoredDialogue({ scope, sessionId, companionId, callEpoch, edge, player, playbackDelivery,
+export function createAuthoredDialogue({ scope, sessionId, companionId, callEpoch, edge, streamed = false, player, playbackDelivery,
   isCurrent = () => true, savedInputs, onTranscript = () => {}, onLifecycle = () => {}, onState = () => {}, onFailure = () => {},
   initialSpeed = .85, onSpeed = () => {}, subtle = globalThis.crypto?.subtle } = {}) {
   if (typeof scope !== 'string' || !UUID.test(sessionId) || !['alex', 'mia', 'juno'].includes(companionId) || !integer(callEpoch) ||
@@ -145,18 +146,29 @@ export function createAuthoredDialogue({ scope, sessionId, companionId, callEpoc
           currentUserEventIds: source.currentUserEventIds, acceptedHistoryEventIds: source.acceptedHistoryEventIds,
           expectedMemoryRevision: record.authority.memoryRevision, omitLearningContext: record.authority.memoryMode === 'omitted', speechSpeed: record.speed,
           ...(request.purpose === 'hint' ? { hint: 'next_sentence' } : {}), ...(pendingPlaybackReports.length ? { pendingPlaybackReports } : {}) };
-        const result = await edge('dialogue-turn', body, { signal: record.controller.signal });
-        if (!active(record)) return;
-        const owner = result?.owner, raw = result?.assistantEvent;
-        if (result?.protocol !== protocol || !ownerValid(owner) || owner.scope !== scope || owner.sessionId !== sessionId || owner.companionId !== companionId || owner.callEpoch !== callEpoch ||
-          owner.turnNonce !== record.turnNonce || owner.authorityGeneration !== record.authority.authorityGeneration || owner.expectedMemoryRevision !== record.authority.memoryRevision || owner.playbackEpoch !== record.playbackEpoch ||
-          !integer(result.generation) || result.generation <= record.authority.generation || typeof result.text !== 'string' || !result.text.trim() || result.text.length > 20000 || !SHA.test(result.textSha256) ||
-          !raw || raw.id !== owner.assistantEventId || raw.session_id !== sessionId || raw.speaker !== 'assistant' || raw.text !== result.text || raw.storage !== 'server' || typeof raw.event_key !== 'string' || !Number.isFinite(Date.parse(raw.occurred_at))) throw Error('Dialogue text owner was not confirmed.');
-        if (await authoredTextSha256(result.text, subtle) !== result.textSha256 || !active(record)) return failure(record, Error('Dialogue text digest mismatch.'));
-        record.owner = Object.freeze({ ...owner }); record.generation = result.generation; record.textSha256 = result.textSha256;
-        authority.generation = result.generation;
-        onTranscript({ ...raw }, record.owner); emit(record, 'text_ready', { turnId: owner.turnId, itemId: raw.id });
-        const audio = await edge('dialogue-synthesis', { protocol, owner: record.owner, generation: record.generation }, { signal: record.controller.signal });
+        const acceptText = async result => {
+          if (!active(record)) throw new DOMException('Dialogue output was stopped.', 'AbortError');
+          const owner = result?.owner, raw = result?.assistantEvent;
+          if (result?.protocol !== protocol || !ownerValid(owner) || owner.scope !== scope || owner.sessionId !== sessionId || owner.companionId !== companionId || owner.callEpoch !== callEpoch ||
+            owner.turnNonce !== record.turnNonce || owner.authorityGeneration !== record.authority.authorityGeneration || owner.expectedMemoryRevision !== record.authority.memoryRevision || owner.playbackEpoch !== record.playbackEpoch ||
+            !integer(result.generation) || result.generation <= record.authority.generation || typeof result.text !== 'string' || !result.text.trim() || result.text.length > 20000 || !SHA.test(result.textSha256) ||
+            !raw || raw.id !== owner.assistantEventId || raw.session_id !== sessionId || raw.speaker !== 'assistant' || raw.text !== result.text || raw.storage !== 'server' || typeof raw.event_key !== 'string' || !Number.isFinite(Date.parse(raw.occurred_at))) throw Error('Dialogue text owner was not confirmed.');
+          if (await authoredTextSha256(result.text, subtle) !== result.textSha256) throw Error('Dialogue text digest mismatch.');
+          if (!active(record)) throw new DOMException('Dialogue output was stopped.', 'AbortError');
+          record.owner = Object.freeze({ ...owner }); record.generation = result.generation; record.textSha256 = result.textSha256;
+          authority.generation = result.generation;
+          onTranscript({ ...raw }, record.owner); emit(record, 'text_ready', { turnId: owner.turnId, itemId: raw.id });
+        };
+        let audio;
+        if (streamed) {
+          const result = await edge('dialogue-response', body, { signal: record.controller.signal, timeoutMs: 110000,
+            readResponse: (response, signal) => readAuthoredResponse(response, { onText: acceptText, signal: signal || record.controller.signal }) });
+          audio = result.audio;
+        } else {
+          await acceptText(await edge('dialogue-turn', body, { signal: record.controller.signal }));
+          if (!active(record)) return;
+          audio = await edge('dialogue-synthesis', { protocol, owner: record.owner, generation: record.generation }, { signal: record.controller.signal });
+        }
         if (!active(record)) return;
         if (typeof audio?.pcmBase64 !== 'string' || audio.pcmBase64.length > 22369628 || !same(audio.manifest?.owner, record.owner) || audio.manifest.synthesisSpeed !== record.speed) throw Error('Dialogue audio owner was not confirmed.');
         const binary = atob(audio.pcmBase64), bytes = new Uint8Array(binary.length); for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);

@@ -7,6 +7,13 @@ const text = (tag, value, className) => {
 };
 const keyOf = row => row.event_key || row.id;
 const ordered = rows => [...rows].sort((a, b) => String(a.occurred_at || a.timestamp || '').localeCompare(String(b.occurred_at || b.timestamp || '')) || String(a.id).localeCompare(String(b.id)));
+const acknowledgedRow = (row, event) => {
+  const at = row?.occurred_at ?? row?.timestamp;
+  return row && typeof event.id === 'string' && event.id && row.id === event.id &&
+    typeof event.event_key === 'string' && event.event_key && row.event_key === event.event_key &&
+    ['user', 'assistant'].includes(event.speaker) && row.speaker === event.speaker && typeof event.text === 'string' && row.text === event.text &&
+    typeof at === 'string' && Number.isFinite(Date.parse(at)) && at === (event.occurred_at ?? event.timestamp);
+};
 
 // This view is independent of feedback generation. Received text, durable device
 // storage and acknowledged server storage are deliberately distinct states.
@@ -208,7 +215,7 @@ export function createPostCallTranscript({ context, allRows, pendingRows }) {
     confirm(scope, sessionId, events) {
       if (!valid(state) || state.scope !== scope || state.sessionId !== sessionId) return;
       const rows = state.current?.transcript || state.rows;
-      for (const event of events) { const existing = rows.get(keyOf(event)); if (existing) existing.storage = 'server'; }
+      for (const event of events) { const existing = rows.get(keyOf(event)); if (acknowledgedRow(existing, event)) existing.storage = 'server'; }
       render();
     }
   };

@@ -3,6 +3,9 @@ import { CONVERSATION_CHECKPOINT_VERSION, validateConversationCheckpoint } from 
 
 export const DIALOGUE_RAW_WINDOW_BYTES = 24_000;
 export const DIALOGUE_CHECKPOINT_CHUNK_BYTES = 48_000;
+export function qualifiedHistoryNeedsCheckpoint(events: TranscriptEvent[], rawBytes = DIALOGUE_RAW_WINDOW_BYTES): boolean {
+  return events.length > 1 && bytes(JSON.stringify(events)) > rawBytes;
+}
 export type QualifiedCheckpoint = { version: typeof CONVERSATION_CHECKPOINT_VERSION; summary: string; covered_ids: string[]; policy_fingerprint: string; source_digest?: unknown };
 type JobRow = { request_key: string; result: Record<string, any> };
 const samePrefix = (ids: string[], events: TranscriptEvent[]) => ids.length <= events.length && ids.every((id, index) => id.toLowerCase() === events[index].id.toLowerCase());
@@ -45,7 +48,7 @@ export async function compactQualifiedHistory(events: TranscriptEvent[], previou
   // A single saved turn can be larger than the normal rolling target. Retain it
   // whole; never manufacture a shorter source quote or end a call for crossing
   // the soft rolling-window target.
-  while (bytes(JSON.stringify(events.slice(offset))) > rawBytes && events.length - offset > 1) {
+  while (qualifiedHistoryNeedsCheckpoint(events.slice(offset), rawBytes)) {
     const remaining = events.slice(offset); let take = 0, chunk: TranscriptEvent[] = [];
     while (take < remaining.length - 1 && bytes(JSON.stringify([...chunk, remaining[take]])) <= DIALOGUE_CHECKPOINT_CHUNK_BYTES) {
       chunk.push(remaining[take++]);

@@ -46,5 +46,7 @@
     "account or operational records",
     "raw text or audio",
     "private generated server bundles"
-  ]
+  ],
+  "original_ci_proof_sha256": "ac94cdeff20e1dbf1d76f0b3677700ad80be91dc5b821f903d3d23f62b388aad",
+  "published_ci_omits_head_commit_author_and_committer_email": true
 }

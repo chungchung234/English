@@ -35,7 +35,7 @@
 
 [운영 소스·DB 검수](writer-release/production-inspect.json),
 [공개 파일 재빌드 대조](writer-release/public-exact.json),
-[CI 원결과](writer-release/ci-success.json),
+[CI 결과·작성자 이메일 제외](writer-release/ci-success.json),
 [공개 모의 흐름 12개](writer-release/public-fixture/public-results.json),
 [검수 범위와 캡처](writer-release/verification-scope.json)를 보존한다.
 실제 승인 계정의 PC Chrome·Edge 마이크 발화 종료부터 첫 소리까지는 측정하지

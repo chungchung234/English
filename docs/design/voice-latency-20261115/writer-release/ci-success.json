@@ -27,16 +27,14 @@
   "check_suite_url": "https://api.github.com/repos/chungchung234/English/check-suites/118197008783",
   "conclusion": "success",
   "created_at": "2026-11-14T23:44:49Z",
-  "display_title": "Reuse stable voice-writer instructions and overlap guarded context re\u2026",
+  "display_title": "Reuse stable voice-writer instructions and overlap guarded context re…",
   "event": "push",
   "head_branch": "main",
   "head_commit": {
     "author": {
-      "email": "a8207637@naver.com",
-      "name": "\uc774\ucda9\ud604"
+      "name": "이충현"
     },
     "committer": {
-      "email": "noreply@github.com",
       "name": "GitHub"
     },
     "id": "e3d34994ddde31b6a9a05545c1f20a9c31f2df1b",
@@ -254,7 +252,7 @@
         }
       ],
       "url": "https://api.github.com/repos/chungchung234/English/actions/jobs/132630748170",
-      "workflow_name": "Publish \uc2dc\uc2dc\ucf5c\ucf5c website"
+      "workflow_name": "Publish 시시콜콜 website"
     },
     {
       "check_run_url": "https://api.github.com/repos/chungchung234/English/check-runs/132632798168",
@@ -370,12 +368,12 @@
         }
       ],
       "url": "https://api.github.com/repos/chungchung234/English/actions/jobs/132632798168",
-      "workflow_name": "Publish \uc2dc\uc2dc\ucf5c\ucf5c website"
+      "workflow_name": "Publish 시시콜콜 website"
     }
   ],
   "jobs_url": "https://api.github.com/repos/chungchung234/English/actions/runs/43654760072/jobs",
   "logs_url": "https://api.github.com/repos/chungchung234/English/actions/runs/43654760072/logs",
-  "name": "Publish \uc2dc\uc2dc\ucf5c\ucf5c website",
+  "name": "Publish 시시콜콜 website",
   "node_id": "WFR_kwLOVnQD588AAAAKKgbGiA",
   "path": ".github/workflows/pages.yml",
   "previous_attempt_url": null,

@@ -3,9 +3,43 @@
 이 기록은 2026-11-15(Asia/Seoul) 응답 지연 작업의 측정 범위를 구분한다.
 **문장별 재생 실험은 속도 채택 기준을 통과하지 못했으므로 운영에서 활성화하지 않는다.**
 그 구현은 [검토용 PR #29](https://github.com/chungchung234/English/pull/29)에 따로 보존한다.
-후속 운영 후보는 기존 전체 음성 경로의 작성기 캐시 경계와 독립 조회의 대기만 바꾼다.
+후속 운영 배포는 기존 전체 음성 경로의 작성기 캐시 경계와 독립 조회의 대기만 바꾼다.
 실제 승인 계정의 발화 종료부터 물리적 스피커 출력까지 측정한 자료는 아직 없다.
 모델 생성, 네이티브 WebAudio, 모의 앱 흐름을 서로 다른 증거로 취급한다.
+
+## 운영 반영 및 최종 검수
+
+[PR #30](https://github.com/chungchung234/English/pull/30)의 운영 릴리스는
+`e3d34994ddde31b6a9a05545c1f20a9c31f2df1b`다.
+[CI 43654760072](https://github.com/chungchung234/English/actions/runs/43654760072)의
+빌드·서버 배포·Pages 배포가 모두 성공했다. 아래 문서와 증거만 추가하는 후속
+커밋은 이 실행 코드의 릴리스 식별자와 구분한다.
+
+읽기 전용 운영 검수에서 서버 검사 108개와 DB 검사 49개가 통과했다. 실제 배포
+아카이브의 원본 TypeScript 16개와 실행 JavaScript의 전체 토큰을 릴리스 소스에
+대조했다. 공개 HTML·앱·Worklet은 해당 소스를 다시 빌드한 결과와 바이트 단위로
+일치했고 SRI·CSP와 공개 설정의 대상 프로젝트도 확인했다. 기능 설정은 조회하거나
+바꾸지 않았고 문장별 재생 실험은 병합하지 않았다.
+
+공개 CDN 원본 파일을 교체하지 않고 실행한 Chromium 모의 통화 흐름 12개가 모두
+통과했다. 저장 ACK, 잡음 기각 뒤 같은 위치에서 이어 듣기, 새 발화 취소, 로그아웃,
+복구, 이용 한도와 강한 재생 완료 조건을 확인했다. WebAudio·Worklet·VAD WASM은
+실제로 실행했지만 인증·DB·작성·합성·RTC·ASR는 합성 fixture로 처리했고 실제 서비스
+요청은 0회다. 브라우저에서 Worklet 응답 본문은 관찰하지 못했으므로 native load의
+정확한 URL과 별도 공개 GET의 바이트 대조를 구분한다. 이 흐름의 capability=true는
+모의 값이며 운영 기능 설정의 증거가 아니다. 서버 소스 검증은 별도 결과다.
+
+320×568·390×844와 글자 125%에서 이어 듣기·이용 한도·복구 실패·복구 완료의
+캡처 네 장을 직접 열었다. 해당 종료·재연결·이어 듣기 조작과 안내가 보이고 가로
+넘침이 없었다. 추가 캡처는 자동 검수 자료로만 보존했다.
+
+[운영 소스·DB 검수](writer-release/production-inspect.json),
+[공개 파일 재빌드 대조](writer-release/public-exact.json),
+[CI 원결과](writer-release/ci-success.json),
+[공개 모의 흐름 12개](writer-release/public-fixture/public-results.json),
+[검수 범위와 캡처](writer-release/verification-scope.json)를 보존한다.
+실제 승인 계정의 PC Chrome·Edge 마이크 발화 종료부터 첫 소리까지는 측정하지
+못했다. 따라서 배포·동작 검증 완료와 체감 지연 해결은 같은 결론으로 보고하지 않는다.
 
 ## 지연을 만드는 구조
 

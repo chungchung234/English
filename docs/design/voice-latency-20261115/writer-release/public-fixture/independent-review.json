@@ -1,0 +1,53 @@
+{
+  "verdict": "CLEAR",
+  "review_scope": "Independent read-only preparation review; only this new review record is written. No permission to execute a public check is implied.",
+  "reviewed_at_utc": "2026-11-14T23:38:20.690569+00:00",
+  "manifest_sha256": "5513b48f210887445e53f8a191338bcb975d7f33f50c05c88000c5b8fce9c937",
+  "runner_sha256": "461c45ebf87be7f927fee18de24bd92d85f3ba4453903618a0ef5d479896ae56",
+  "public_support_sha256": "b78db1b1274f61671d1e6a8436244344a98795642017f6adaad3594833db27d2",
+  "candidate_commit": "584c60db8e57fff816c05a20ca2f1447904bb26d",
+  "runtime_freeze_sha256": "3ba13703efb034122d2f0018eb2a2706f0edd07f2caec09bb4495423a1f85fe1",
+  "runtime_tree_sha256": "80e3478cbecb5d88fbffa1c8681e1607f834484ef6517b3483b1648ba59a8c0d",
+  "binding_sha256": "8f6cdfc3c1413d287867e044ae82cacd787305350ad787ef80ba34480d4cc838",
+  "pinned_fixture_sha256": "f7d4151320c72e2b680d7760b6462d6c297ed970585381bb38c07c89a0041afa",
+  "case_body_sha256": "6f1e43e6c9e71422403887a25bed89373a043668a5bf5c3162274c9c191796a1",
+  "independently_verified": {
+    "all_15_manifest_artifact_hashes_match": true,
+    "candidate_git_runtime_inventory_exactly_16_modules": true,
+    "candidate_git_server_bytes_match_frozen_map": true,
+    "runtime_freeze_file_map_and_sorted_compact_tree_digest_match": true,
+    "only_authored_dialogue_and_index_differ_from_baseline": true,
+    "baseline_16_module_hashes_match_git_610e": true,
+    "all_four_client_sources_and_f7_fixture_unchanged_in_candidate_git": true,
+    "whole_12_case_body_byte_equal_after_declared_evidence_hooks_only": true,
+    "source_assertion_sites": 102,
+    "adapted_assertion_sites": 105,
+    "held_old_session_ack_current_raw_ack_and_no_split_fallback_preserved": true,
+    "exact_release_successful_ci_deploy_source_rebuild_and_frozen_sources_gate_before_get": true,
+    "original_public_html_main_worklet_get_continue_only_no_asset_replacement": true,
+    "actual_project_origin_fixed_known_service_mocks_only_unknown_http_and_all_ws_denied": true,
+    "exclusive_private_result_claim_and_safe_failure_reporting": true,
+    "preparation_has_no_results_directory": true,
+    "historical_phase1_manifest_runner_and_reviewed_segment_support_unchanged": true
+  },
+  "existing_preparation_proofs_reviewed_not_rerun": {
+    "static_verification_sha256": "171447effeba487caeaba66607c7e342ae7656ce4f6958e228edbcfc83a91227",
+    "offline_verification_sha256": "ee0c4b03e6b309f5361b5cb4621a36271736d77719989c8aea39987943d5d032",
+    "both_proofs_match_final_manifest": true,
+    "author_reported_syntax_default_dry_static_pass": true,
+    "fully_intercepted_guard_modes_pass": 25,
+    "independent_mock_or_compile_reruns": 0
+  },
+  "actual_actions": {
+    "public_requests": 0,
+    "browser_runs": 0,
+    "backend_calls": 0,
+    "provider_requests": 0,
+    "db_reads_or_writes": 0,
+    "product_or_manifest_edits": 0
+  },
+  "limits": [
+    "Future execution still requires root authorization for the exact merged deployed release and successful CI/source rebuild proofs.",
+    "Local frozen source and synthetic browser fixtures do not verify the deployed backend, runtime flags, cache hits, conversation quality, physical acoustics, or human-call latency."
+  ]
+}

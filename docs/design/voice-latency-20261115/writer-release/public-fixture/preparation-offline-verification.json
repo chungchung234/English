@@ -1,0 +1,236 @@
+{
+  "passed": true,
+  "manifest_sha256": "5513b48f210887445e53f8a191338bcb975d7f33f50c05c88000c5b8fce9c937",
+  "mode_count": 25,
+  "actual_public_fetches": 0,
+  "actual_browser_runs": 0,
+  "actual_provider_requests": 0,
+  "source_or_manifest_changed": false,
+  "modes": [
+    {
+      "mode": "dry_run",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 0,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "bad_release",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 0,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "ci_pending",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 0,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "ci_head_mismatch",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 0,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "pages_pending",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 0,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "fixture_mismatch",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 1,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "source_missing",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 0,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "source_head_mismatch",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 0,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "source_failed",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 0,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "source_bad_shape",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 0,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "source_html_mismatch",
+      "passed": true,
+      "mocked_public_GETs": 1,
+      "mocked_git_reads": 22,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "source_main_mismatch",
+      "passed": true,
+      "mocked_public_GETs": 2,
+      "mocked_git_reads": 22,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "source_worklet_mismatch",
+      "passed": true,
+      "mocked_public_GETs": 2,
+      "mocked_git_reads": 22,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "original_assets_success",
+      "passed": true,
+      "mocked_public_GETs": 3,
+      "mocked_git_reads": 22,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "public_redirect",
+      "passed": true,
+      "mocked_public_GETs": 1,
+      "mocked_git_reads": 22,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "bad_sri",
+      "passed": true,
+      "mocked_public_GETs": 2,
+      "mocked_git_reads": 22,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "stale_build",
+      "passed": true,
+      "mocked_public_GETs": 2,
+      "mocked_git_reads": 22,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "bad_worklet_hash",
+      "passed": true,
+      "mocked_public_GETs": 3,
+      "mocked_git_reads": 22,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "server_pending",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 1,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "server_inventory_bad",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 1,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "server_changed_scope_bad",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 2,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "server_module_mismatch",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 7,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "client_source_mismatch",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 3,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "server_bad_identity",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 1,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    },
+    {
+      "mode": "server_extra_module",
+      "passed": true,
+      "mocked_public_GETs": 0,
+      "mocked_git_reads": 2,
+      "actual_network_requests": 0,
+      "actual_browser_runs": 0,
+      "actual_provider_requests": 0
+    }
+  ]
+}

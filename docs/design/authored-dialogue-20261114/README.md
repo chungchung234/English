@@ -1,5 +1,10 @@
 # 작성 대화·버퍼 음성 배포 검증
 
+이 문서는 2026-11-14 작성 대화 경로의 초기 활성화와 당시 복구 UI 수정 기록이다.
+후속 지연 개선과 채택하지 않은 실험은
+[2026-11-15 응답 지연 기록](../voice-latency-20261115/README.md)을 참고한다.
+아래 배포 식별자를 현재 운영 버전으로 해석하지 않는다.
+
 최종 웹 릴리스는
 [`8d3f2a27dac84c1edd75631e5b8cef34ffadbb83`](https://github.com/chungchung234/English/commit/8d3f2a27dac84c1edd75631e5b8cef34ffadbb83)이며,
 [CI·Pages 게시 43594165637](https://github.com/chungchung234/English/actions/runs/43594165637)가 성공했다.

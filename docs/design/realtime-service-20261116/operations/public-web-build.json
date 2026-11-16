@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-11-16T15:29:00.349268+00:00",
+  "site_url": "https://chungchung234.github.io/English/",
+  "html_sha256": "c5e96bfe9ab9582fc732098f79fcbee3ff114e8ff1645d5a240d03b6fb98e7d2",
+  "builds": [
+    {
+      "asset": "assets/app.2796968efa82.js",
+      "client_build": "git:e3d34994ddde31b6a9a05545c1f20a9c31f2df1b",
+      "sha256": "2796968efa82b2c0eecb5c7073fb233cb8479f6ad4c932905a356c09260c42d2"
+    }
+  ],
+  "expected_release": "ec7626246f3e8ee25edd4565fa3f517fc4297f27"
+}

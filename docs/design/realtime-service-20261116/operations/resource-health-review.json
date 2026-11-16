@@ -1,0 +1,114 @@
+{
+  "scope": "Independent read-only resource and control-plane diagnostics; no production modification",
+  "observed_at_utc": "2026-11-16T15:30:48.149653+00:00",
+  "production_mutations": 0,
+  "database_queries": 0,
+  "bounded_management_GETs_by_this_agent": 3,
+  "observations": [
+    {
+      "source": "prior root disk attributes GET",
+      "result": {
+        "volume_type": "gp3",
+        "size_gb": 2,
+        "configured_iops": 3000,
+        "configured_throughput_mibps": 125
+      },
+      "interpretation": "Configured capacity, not current usage, delivered IOPS, CPU, or burst-credit balance."
+    },
+    {
+      "source": "prior root disk utilization GET",
+      "http": 500,
+      "interpretation": "No filesystem size/available/used-byte metrics were returned. 500 is the HTTP failure status, not utilization."
+    },
+    {
+      "source": "prior root postgres config GET",
+      "http": 200,
+      "response_object_fields": 0,
+      "interpretation": "An empty object supplies no evidence about live Postgres settings or process state."
+    },
+    {
+      "name": "resource-metrics",
+      "http": 521,
+      "bytes": 16,
+      "observed_at_utc": "2026-11-16T15:28:11.827580+00:00"
+    },
+    {
+      "name": "billing-compute",
+      "http": 200,
+      "bytes": 9771,
+      "observed_at_utc": "2026-11-16T15:28:12.668025+00:00",
+      "selected_compute": []
+    },
+    {
+      "endpoint": "GET /readonly",
+      "observed_at_utc": "2026-11-16T15:29:46.755316+00:00",
+      "mutation": false,
+      "http": 400,
+      "error_class": "ECONNREFUSED_database_port_5432"
+    }
+  ],
+  "diagnostic_findings": [
+    {
+      "status": "observed",
+      "finding": "The readonly status endpoint also fails with a database TCP connection refused at port 5432. It does not return a read-only-mode boolean."
+    },
+    {
+      "status": "observed",
+      "finding": "The metrics scrape is unavailable (HTTP 521), so this investigation has no current CPU, memory, Disk IO, or credit-balance measurements."
+    },
+    {
+      "status": "observed",
+      "finding": "The addons endpoint succeeds but has no selected addons or selected compute entry. An exact active instance size cannot be derived from this response."
+    },
+    {
+      "status": "schema_evidence",
+      "finding": "The management schema exposes disk capacity, filesystem utilization and a current Prometheus scrape. It has no dedicated OOM, CPU-credit, historical resource series, or compute burst-credit balance endpoint."
+    },
+    {
+      "status": "schema_evidence",
+      "finding": "Available compute options contain baseline_disk_io_mbs and max_disk_io_mbs separately from volume IOPS/throughput. A configured gp3 volume does not establish remaining compute-level IO budget."
+    },
+    {
+      "status": "not_established",
+      "finding": "Disk full, out-of-memory kill, exhausted burst credits and the current CPU/IO level remain unconfirmed."
+    },
+    {
+      "status": "root_report_not_requeried",
+      "finding": "Prior root application DB size was approximately 31.7 MB. This excludes filesystem-level WAL, logs, temporary files and system overhead, so it cannot rule out filesystem exhaustion."
+    },
+    {
+      "status": "root_report_not_requeried",
+      "finding": "The root found no 53100/53200/25006, no-space, could-not-write, or OOM matches, but recent database logs stop before the current outage. The missing log interval prevents treating zero matches as proof of absence."
+    }
+  ],
+  "recommended_next_evidence": [
+    "When the host metrics path becomes reachable, read current filesystem available bytes, memory/oom indicators and resource metrics once; use two timestamped samples only if calculating a CPU or IO rate.",
+    "Obtain provider-side instance lifecycle, kernel/OOM or volume-health/credit evidence through existing operator access if available; API schemas and the current failed metrics GET cannot replace these measurements.",
+    "Avoid additional SQL polling while the database port refuses connections. Any historical logs query should target a bounded interval around the last DB log and startup/crash/no-space/OOM messages, coordinated with root."
+  ],
+  "prohibited_actions_not_performed": [
+    "database ALTER or writes",
+    "service restart or pause",
+    "compute or disk upgrade",
+    "backup restore",
+    "configuration mutation",
+    "provider or user messaging"
+  ],
+  "private_evidence_sha256": {
+    "current-config-disk.private.json": "9a3657ebf59f5dd2f86dc44559f525441f0fbf3d8e71fe6384645b80b924e665",
+    "current-config-disk-util.private.json": "95f9efff66e801ff50e08e29c98ff58417cd0b9bd7f7a59388578e9c7e9175b7",
+    "current-config-database-postgres.private.json": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "resource-metrics.private": "4558ae09802e147610ebdb88e4472fe625c897af9a18b04d47dfcdb6b563a138",
+    "billing-compute.private": "3f7361f79735878bf0cb26f29ef2445faaf29a2ec1c707e00912befef13166b7",
+    "current-readonly-status.private.json": "6cc86332f4c24f526cb12ed56a9297e781170cca58e83ae6ea7d1d98813caae7",
+    "recent-db-infrastructure-logs.private.json": "63c49671e4c0faf619ee397c992e45e4c411dce55a4ef9410067b01fc9c93a0f",
+    "management-openapi.json": "bfc8559c22722d08a6bcd2312c5d176c6c9a54e8e7a166cba3b95a507237415d"
+  },
+  "sensitive_values_omitted": [
+    "authorization headers",
+    "raw configuration payloads",
+    "database connection address",
+    "account identifiers",
+    "raw metrics labels"
+  ]
+}

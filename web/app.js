@@ -21,6 +21,7 @@ import { AUTHORED_DIALOGUE_PROTOCOL, createAuthoredDialogue, createAuthoredPlayb
 import { createVerifiedPcmPlayback } from './verified-pcm-playback.js';
 import { createCallDiagnostics } from '../src/call-diagnostics.mjs';
 import { createCallAudioObserver } from './call-audio.js';
+import { createRealtimeLatency } from './realtime-latency.js';
 import { createConversationClock, deviceTimeZone, formatInstant, recordTimeLabel, sessionTimeLabel, sessionTimeZone } from './conversation-time.js';
 import { createOutbox, flushOutbox, flushOutboxSession } from '../src/outbox.js';
 import { validatePublicConfig } from '../src/public-config.mjs';
@@ -28,7 +29,7 @@ import { mountEmailLogin } from '../src/email-login.mjs';
 import { createAuthSession, LoginFlowError } from '../src/auth-session.mjs';
 import { clientBuild, telemetryMetadata, createConnectedTelemetry, createTelemetryDiagnostics } from '../src/learning-telemetry.mjs';
 const $ = id => document.getElementById(id);
-$('privacy-dialog').querySelector('.privacy-copy').append(' 복습한 내용과 선택도 함께 저장돼요. 통화 문제를 확인하기 위한 오류 코드·연결 상태·마이크 처리 설정도 저장해요.');
+$('privacy-dialog').querySelector('.privacy-copy').append(' 복습한 내용과 선택도 함께 저장돼요. 통화 문제를 확인하기 위한 오류 코드·연결 상태·마이크 처리 설정·응답 대기 시간도 저장해요.');
 const outbox = createOutbox();
 const presence = createAIPresence();
 const config = globalThis.LOOP_PUBLIC_CONFIG ? validatePublicConfig(globalThis.LOOP_PUBLIC_CONFIG.url,globalThis.LOOP_PUBLIC_CONFIG.key) : null;
@@ -60,7 +61,7 @@ const authoredPlaybackDelivery=createAuthoredPlaybackDelivery({getScope:()=>auth
 const companions = {mia:{name:'Mia',trait:'다정하고 사려 깊은 대화'},alex:{name:'Alex',trait:'차분하고 명료한 대화'},juno:{name:'Juno',trait:'경쾌하고 호기심 많은 대화'}};
 let connectionAttempt = null;
 let companionId = 'alex', callStarting = false, callEnding = false, selectedReviewSessionId = null, practiceMemory = null;
-let voiceCapabilities={manual_turns_v1:false,authored_dialogue_v1:false};
+let voiceCapabilities={manual_turns_v1:false,realtime_streaming_v1:false,authored_dialogue_v1:false};
 let currentView = 'contacts', viewEpoch = 0, historyFilter = null;
 let callDetailEpoch=0, weeklyCompanions=new Set(), weeklyRequest=null;
 const transcriptReview=createPostCallTranscript({
@@ -345,6 +346,7 @@ function disposeCallAudio(current) {
   current.instructionState?.dispose();
   current.localVoice?.dispose();
   current.audioObserver?.dispose();
+  current.latency?.dispose();
   current.playback?.dispose();
   current.authored?.dispose();
   current.pcm?.dispose();
@@ -458,6 +460,7 @@ function sendRealtime(current,event) {
   current.sentRequests.set(message.event_id,message.type);
   if(current.sentRequests.size>256)current.sentRequests.delete(current.sentRequests.keys().next().value);
   current.dc.send(JSON.stringify(message));
+  current.latency?.sent(message);
   current.audioObserver?.sent(message,current.ending?'client_end':current.floor?.state.desiredHold?'client_hold':'client_other');
 }
 const contextLimitError=code=>/context.*(length|limit)|too_many_tokens/i.test(code||'');
@@ -715,6 +718,7 @@ function userMessage(error) {
   if(!error)return '';
   if(['UNAUTHENTICATED','ACCOUNT_NOT_ALLOWED'].includes(error.code)||error.status===401)return '다시 로그인한 뒤 이용해 주세요.';
   if(['BUDGET_EXCEEDED','COST_BUDGET_EXCEEDED'].includes(error.code))return '오늘 이용 한도에 도달했어요. 한도가 초기화된 뒤 다시 시도해 주세요.';
+  if(error.status===503)return '서비스에 연결하지 못했어요. 잠시 후 다시 시도해 주세요.';
   if(['AbortError','TimeoutError'].includes(error.name))return '응답이 늦어지고 있어요. 잠시 뒤 다시 시도해 주세요.';
   const message=typeof error==='string'?error:error.message||'';
   return /[가-힣]/.test(message)?message:'요청을 완료하지 못했어요. 연결을 확인한 뒤 다시 시도해 주세요.';
@@ -830,6 +834,7 @@ async function appendSavedEvents(accountScope,sessionId,events,expectedCall=null
       const row=call.transcript.get(event.event_key||event.id);
       if(row&&row.id===event.id&&row.event_key===event.event_key&&row.speaker===event.speaker&&row.text===event.text&&row.occurred_at===(event.occurred_at??event.timestamp))row.storage='server';
     }
+    call.latency?.saved(events.filter(event=>event.speaker==='user').map(event=>call.transcriptProviderItems.get(event.id)).filter(Boolean));
     captureConversationPlayback(call);pruneAuthoredAsr(call);
   }
   transcriptReview.confirm(accountScope,sessionId,events);
@@ -986,10 +991,13 @@ async function startCall() {
   $('call-status').textContent=companionName()+'와 연결하고 있어요';presence.setState('connecting');setCallPhase('connecting');
   const cues=createCallCues();attempt.cues=cues;callCues=cues;cues.startConnecting();
   const callScope=scope, callUserId=auth.user.id, selectedCompanion=companionId;
-  const authoredRequested=voiceCapabilities.authored_dialogue_v1===true;
+  const authoredRequested=!voiceCapabilities.realtime_streaming_v1&&voiceCapabilities.authored_dialogue_v1===true;
   const manualRequested=authoredRequested||voiceCapabilities.manual_turns_v1===true;
   let stream,current,failureHelp=false;
   try {
+    // This deadline owns the entire connection attempt, including learning
+    // preflight. A slow optional screen refresh must not strand the call UI.
+    attempt.deadline=createConnectionAttempt({controller:attempt.controller});
     if(authoredRequested){
       attempt.authoredStream=voiceCapabilities.authored_dialogue_stream_v1===true;
       const asset=globalThis.LOOP_PCM_WORKLET_ASSET;
@@ -1005,18 +1013,22 @@ async function startCall() {
       attempt.localVoiceState='starting';
       attempt.localVoice=createLocalVoiceActivity({
         onVoice:time=>{if(call===current&&current?.ready&&current.turnControl==='manual_turns_v1'&&!current.ending&&!current.budgetExhausted&&!current.muted&&!current.compacting&&!current.inputBlocked){current.floor.voice(time);updateCallControls();}},
+        onReferenceAudio:()=>{if(call===current&&scope===current?.scope&&current?.ready&&!current.ending&&!current.authored&&current.aiSpeaking&&!$('remote-audio').muted&&!$('remote-audio').paused&&!current.playback?.blocked)current.latency?.audioObserved({basis:'remote_stream_samples'});},
         onState:state=>{attempt.localVoiceState=state.status;if(call===current&&current&&!current.ending){current.localVoiceState=state.status;recordCallIssue(current,{kind:'audio_configuration',code:'LOCAL_VOICE_'+state.status.toUpperCase(),request_type:'unknown',audio_context:{output_state:current.aiSpeaking?'playing':current.responding?'generating':'idle'}});renderFloor(current);}}
       });
     }
-    if(authoredRequested)void sync().catch(()=>{if(scope===callScope)void updatePending().catch(()=>{});});
-    else await sync();
+    // Previous calls' uploads are independent of this call's live audio setup.
+    // Their immutable outbox and ACK checks continue in the background.
+    void sync().catch(()=>{if(scope===callScope)void updatePending().catch(()=>{});});
     checkAttempt();
-    await learning.load();checkAttempt();await learning.flush();checkAttempt();
+    await waitForAttempt(learning.load());await waitForAttempt(learning.flush());
     const omitLearningContext=learning.hasPendingExclusions();
     $('call-status').textContent='마이크 사용을 허용해 주세요';
-    stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}});
-    attempt.stream=stream;checkAttempt();
-    attempt.deadline=createConnectionAttempt({controller:attempt.controller});
+    stream=await waitForAttempt(navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(value=>{
+      // Permission can resolve after cancellation; never leak that late mic.
+      try{checkAttempt();}catch(error){value.getTracks().forEach(track=>track.stop());throw error;}
+      attempt.stream=value;return value;
+    }));
     attempt.localVoice?.attach(stream);
     $('call-status').textContent=companionName()+'에게 전화 거는 중';
     if(!callStarting||scope!==callScope||companionId!==selectedCompanion)throw Error('통화 연결이 취소되었습니다.');
@@ -1034,6 +1046,7 @@ async function startCall() {
     current.transcript=new Map();current.transcriptProviderItems=new Map();current.itemTimes=new Map();current.sentRequests=new Map();call=current;
     if(manualRequested&&!authoredRequested)try{current.conversationPlayback=createConversationPlaybackCollector({scope:callScope,sessionId:current.id,companionId:selectedCompanion,outbox:conversationPlaybackOutbox});}catch{/* Optional playback evidence never blocks a voice connection. */}
     current.audioObserver=createCallAudioObserver({emit:issue=>recordCallIssue(current,issue),outputState:()=>current.aiSpeaking?'playing':current.responding?'generating':'idle'});
+    if(!authoredRequested)current.latency=createRealtimeLatency({emit:issue=>recordCallIssue(current,issue),isCurrent:()=>call===current&&!current.ending&&scope===current.scope});
     current.captureAudioSettings=()=>{if(call===current&&!current.ending)current.audioObserver.capture(current.stream);};
     current.captureAudioSettings();navigator.mediaDevices.addEventListener?.('devicechange',current.captureAudioSettings);
     if(manualRequested&&['ready','unavailable','suspended'].includes(current.localVoiceState))recordCallIssue(current,{kind:'audio_configuration',code:'LOCAL_VOICE_'+current.localVoiceState.toUpperCase(),request_type:'unknown',audio_context:{output_state:'idle'}});
@@ -1065,6 +1078,7 @@ async function startCall() {
     dc.onmessage=e=>{
       if(call!==current || (current.ending&&!current.acceptingFinalEvents))return;
       let event;try{event=JSON.parse(e.data);}catch{return;}
+      current.latency?.event(event);
       current.audioObserver.event(event);
       if(current.turnControl!=='manual_turns_v1'&&['input_audio_buffer.speech_started','input_audio_buffer.committed','response.created'].includes(event.type))current.greeted=true;
       const requestResult=current.requests.event(event);
@@ -1160,7 +1174,7 @@ async function startCall() {
     void finishCancelledConnection(attempt);
     if(attempt.cancelled||scope!==attempt.scope)return;
     if(!current||call===current){call=null;presence.detachAudio();$('remote-audio').srcObject=null;}
-    const help=microphoneHelp(e)||(e.code==='CALL_CONNECT_TIMEOUT'?['연결을 완료하지 못했어요','연결이 오래 걸려 중단했어요. 네트워크를 확인한 뒤 다시 시도해 주세요.']:['BUDGET_EXCEEDED','COST_BUDGET_EXCEEDED'].includes(e.code)?['오늘 이용 한도에 도달했어요','한도가 초기화된 뒤 다시 통화해 주세요.']:e.code==='VOICE_POLICY_UNCONFIRMED'?['음성 설정을 확인하지 못했어요','새로고침한 뒤 다시 연결해 주세요.']:e.code==='ACCOUNT_NOT_ALLOWED'?['이 계정으로 통화할 수 없어요','초대받은 계정인지 확인해 주세요. 내 계정에서 로그아웃한 뒤 다른 계정으로 로그인할 수 있어요.']:['연결하지 못했어요','네트워크 연결을 확인한 뒤 다시 시도해 주세요.']);
+    const help=microphoneHelp(e)||(e.code==='CALL_CONNECT_TIMEOUT'?['연결을 완료하지 못했어요','연결이 오래 걸려 중단했어요. 네트워크를 확인한 뒤 다시 시도해 주세요.']:['BUDGET_EXCEEDED','COST_BUDGET_EXCEEDED'].includes(e.code)?['오늘 이용 한도에 도달했어요','한도가 초기화된 뒤 다시 통화해 주세요.']:e.code==='VOICE_POLICY_UNCONFIRMED'?['음성 설정을 확인하지 못했어요','새로고침한 뒤 다시 연결해 주세요.']:e.status===503?['서비스에 연결하지 못했어요','서비스가 일시적으로 응답하지 않아요. 잠시 후 다시 연결해 주세요.']:e.code==='ACCOUNT_NOT_ALLOWED'?['이 계정으로 통화할 수 없어요','초대받은 계정인지 확인해 주세요. 내 계정에서 로그아웃한 뒤 다른 계정으로 로그인할 수 있어요.']:['연결하지 못했어요','네트워크 연결을 확인한 뒤 다시 시도해 주세요.']);
     $('call-help-title').textContent=help[0];$('call-help-copy').textContent=help[1];$('call-help').hidden=false;failureHelp=true;
   } finally {
     if(!attempt.cancelled&&(connectionAttempt===attempt||call===current)){
@@ -1181,7 +1195,7 @@ function endCall() {
   // Reserve the end synchronously before any transcription/network awaits.
   current.durationMs=Math.min(CALL_DURATION,callElapsed(current));current.ending=true;current.connectedTelemetry?.stop();current.acceptingFinalEvents=true;callEnding=true;clearCallClock(current);navigationControls();updateCallControls();$('end-call').disabled=true;
   current.requests?.dispose();current.speed?.dispose();current.floor?.dispose();current.instructionState?.dispose();current.playback?.dispose();closeDialog('speed-dialog');
-  current.localVoice?.dispose();current.authored?.dispose();current.pcm?.dispose();
+  current.localVoice?.dispose();current.latency?.dispose();current.authored?.dispose();current.pcm?.dispose();
   navigator.mediaDevices?.removeEventListener?.('devicechange',current.captureAudioSettings);
   current.stream.getTracks().forEach(track=>track.stop());
   presence.detachAudio();$('remote-audio').pause();$('remote-audio').srcObject=null;
@@ -1537,7 +1551,7 @@ async function ready(){
   }
   if(epoch!==readyEpoch)return;
   auth.user=user;
-  voiceCapabilities={manual_turns_v1:data?.capabilities?.manual_turns_v1===true,authored_dialogue_v1:data?.capabilities?.authored_dialogue_v1===true,
+  voiceCapabilities={manual_turns_v1:data?.capabilities?.manual_turns_v1===true,realtime_streaming_v1:data?.voice_transport==='realtime_webrtc_v1'||data?.capabilities?.realtime_streaming_v1===true,authored_dialogue_v1:data?.capabilities?.authored_dialogue_v1===true,
     authored_dialogue_stream_v1:data?.capabilities?.authored_dialogue_stream_v1===true};
   scope=config.url+'|'+user.id;firstUse.bind();
   renderAuthControls();$('auth-reset').hidden=true;

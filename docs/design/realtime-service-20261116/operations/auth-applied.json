@@ -1,0 +1,29 @@
+{
+  "status": "incomplete",
+  "apply": true,
+  "complete": false,
+  "steps": [
+    {
+      "field": "external_anonymous_users_enabled",
+      "before": true,
+      "target": false,
+      "status": "verified",
+      "patch_status": "accepted",
+      "http_status": 200,
+      "after": false
+    },
+    {
+      "field": "password_hibp_enabled",
+      "before": false,
+      "target": true,
+      "status": "patch_rejected",
+      "patch_status": "http_rejected",
+      "http_status": 402,
+      "after": false
+    }
+  ],
+  "observed": {
+    "external_anonymous_users_enabled": false,
+    "password_hibp_enabled": false
+  }
+}

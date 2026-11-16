@@ -122,25 +122,59 @@ function completeAcknowledgement(result, value) {
 }
 
 /** Best-effort delivery is independent of raw transcript/finish-session ACKs. */
-export function createConversationPlaybackDelivery({ outbox, getScope, send, maxRequests = 50 } = {}) {
+export function createConversationPlaybackDelivery({ outbox, getScope, send, maxRequests = 50, now = Date.now,
+  retryBaseMs = 10_000, retryMaxMs = 300_000 } = {}) {
   if (!outbox?.list || !outbox?.remove || typeof getScope !== 'function' || typeof send !== 'function' ||
-    !Number.isSafeInteger(maxRequests) || maxRequests < 1) throw new TypeError('Invalid playback delivery');
-  const flights = new Map();
+    !Number.isSafeInteger(maxRequests) || maxRequests < 1 || typeof now !== 'function' ||
+    !Number.isFinite(retryBaseMs) || retryBaseMs <= 0 || !Number.isFinite(retryMaxMs) || retryMaxMs < retryBaseMs) throw new TypeError('Invalid playback delivery');
+  const flights = new Map(), retries = new Map(), accountRetries = new Map();
+  const defer = (states, key) => {
+    const attempt = Math.min((states.get(key)?.attempt || 0) + 1, 30);
+    const delay = Math.min(retryMaxMs, retryBaseMs * 2 ** Math.min(attempt - 1, 20));
+    states.set(key, { attempt, due: now() + delay });
+  };
   return {
     flush() {
       const scope = getScope(); if (!scope) return Promise.resolve({ delivered: 0 });
       if (flights.has(scope)) return flights.get(scope);
+      if ((accountRetries.get(scope)?.due ?? -Infinity) > now()) return Promise.resolve({ delivered: 0 });
       const work = (async () => {
         let delivered = 0;
         try {
-          const pending = (await outbox.list(scope)).slice(0, maxRequests);
-          for (const value of pending) {
+          const pending = await outbox.list(scope), states = retries.get(scope) || new Map();
+          retries.set(scope, states);
+          const retained = new Set(pending.map(value => value.id));
+          for (const id of states.keys()) if (!retained.has(id)) states.delete(id);
+          // One deleted or changed source must not indefinitely starve later
+          // completed exchanges. A cooldown never discards or rewrites evidence.
+          const eligible = pending.filter(value => (states.get(value.id)?.due ?? -Infinity) <= now()).slice(0, maxRequests);
+          let failures = 0;
+          for (const value of eligible) {
             if (getScope() !== scope) break;
-            const normalized = receipt(value), result = await send(payload(normalized), scope);
-            if (getScope() !== scope || !completeAcknowledgement(result, normalized)) break;
-            await outbox.remove(scope, normalized.id); delivered++;
+            const normalized = receipt(value);
+            try {
+              const result = await send(payload(normalized), scope);
+              if (getScope() !== scope) break;
+              if (!completeAcknowledgement(result, normalized)) {
+                defer(states, normalized.id);
+                if (++failures >= 2) break;
+                continue;
+              }
+              await outbox.remove(scope, normalized.id); states.delete(normalized.id); accountRetries.delete(scope); delivered++;
+            } catch (error) {
+              if (getScope() !== scope) break;
+              defer(states, normalized.id);
+              const status = error?.status;
+              // Transport/authentication/rate-limit failures affect the whole
+              // account, not the source. Do not fan one outage into many sends.
+              if (!Number.isInteger(status) || status === 401 || status === 429 || status >= 500 ||
+                ['UNAUTHENTICATED', 'ACCOUNT_NOT_ALLOWED', 'PGRST301', 'PGRST302', 'PGRST303'].includes(error?.code)) {
+                defer(accountRetries, scope); break;
+              }
+              if (++failures >= 2) break;
+            }
           }
-        } catch { /* Offline, malformed ACK and local-storage failure retain exact receipts. */ }
+        } catch { defer(accountRetries, scope); /* Exact receipts survive local-storage failure. */ }
         return { delivered };
       })().finally(() => { flights.delete(scope); });
       flights.set(scope, work); return work;

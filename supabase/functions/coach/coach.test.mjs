@@ -270,7 +270,7 @@ test('voice uses server multipart exchange and persists no SDP or secret', async
       assert.equal(Object.hasOwn(data, 'opening_instructions'), false, 'legacy turn mode does not receive a manual-only opening');
     }
     const {memory_context,context_sources,context_fingerprint,context_bytes,...metadata}=completed.p_result;
-    assert.deepEqual(metadata, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',voice_max_output_tokens:1024,policy_version:'2026-11-10-v2',voice_policy_version:'2026-11-14-companion-phone-v5',
+    assert.deepEqual(metadata, { connected: true,voice_model:'gpt-realtime-2.1-mini',transcription_model:'gpt-realtime-whisper',reasoning:'low',voice_max_output_tokens:1024,policy_version:'2026-11-10-v2',voice_policy_version:'2026-11-16-realtime-companion-v6',
       character_viewpoints_version:'character-viewpoints-v1',memory_revision:0,memory_mode:'included',
       audio_policy_version:'2026-11-12-qualified-turns-v3',turn_control:'provider_vad',requested_microphone_mode:'unknown',requested_noise_reduction:'far_field',expected_noise_reduction:'far_field',audio_policy_fallback:null,usage_preparation:'ready' });
     assert(context_bytes>0);assert.equal(memory_context.status,'empty');assert.deepEqual(context_sources,{memory_session_ids:[],recent_session_id:null,conversation_session_ids:[]});assert.match(context_fingerprint,/^[a-f0-9]{64}$/);
@@ -404,7 +404,7 @@ test('manual turns disable provider generation and interruption from the initial
     assert.match(purpose, /Speak directly to the person in your character's everyday voice/);
     assert.doesNotMatch(purpose, /one short English greeting|at most one|callbacks for later|greeting only/i);
     const metadata = state.completed[0].p_result;
-    assert.equal(metadata.turn_control, 'manual_turns_v1'); assert.equal(metadata.voice_policy_version, '2026-11-14-companion-phone-v5');
+    assert.equal(metadata.turn_control, 'manual_turns_v1'); assert.equal(metadata.voice_policy_version, '2026-11-16-realtime-companion-v6');
     assert.equal(metadata.opening_policy_version, 'opening-context-v2'); assert.equal(metadata.opening_context_kind, 'none'); assert.equal(metadata.opening_source_count, 0);
     assert.equal(Object.hasOwn(metadata, 'voice_instructions'), false); assert.equal(Object.hasOwn(metadata, 'opening_instructions'), false);
     assert.doesNotMatch(JSON.stringify(metadata), /CURRENT_RESPONSE_PURPOSE|ROLE_AND_SAFETY|test-openai|test-service|v=0/);
@@ -878,11 +878,45 @@ test('config exposes exactly the three companion profiles and their voices', asy
     const result = await handler(new Request('https://project.supabase.co/functions/v1/coach/config', { headers: { Origin: 'https://example.com', Authorization: 'Bearer test-user' } }));
     assert.equal(result.status, 200);
     const data = await result.json();
-    assert.deepEqual(data.capabilities, { manual_turns_v1: true, authored_dialogue_v1: false, authored_dialogue_stream_v1: false });
+    assert.equal(data.voice_transport, 'realtime_webrtc_v1');
+    assert.deepEqual(data.capabilities, { manual_turns_v1: true, realtime_streaming_v1: true, authored_dialogue_v1: false, authored_dialogue_stream_v1: false });
     assert.deepEqual(data.companions.map(({ id, voice }) => [id, voice]), [['mia', 'marin'], ['alex', 'cedar'], ['juno', 'verse']]);
     assert.equal(data.models.voice, 'gpt-realtime-2.1-mini');
     assert.equal(JSON.stringify(data).includes('test-service'), false);
   } finally { globalThis.fetch = original; }
+});
+
+test('live configuration preserves direct realtime when old buffered voice flags remain enabled', async () => {
+  const original = globalThis.fetch, enabled = config.AUTHORED_DIALOGUE_ENABLED, verified = config.AUTHORED_DIALOGUE_FIDELITY_VERIFIED;
+  config.AUTHORED_DIALOGUE_ENABLED = 'true'; config.AUTHORED_DIALOGUE_FIDELITY_VERIFIED = 'true';
+  globalThis.fetch = async () => response(authUser);
+  try {
+    const result = await handler(request('config', {}));
+    assert.equal(result.status, 200);
+    const data = await result.json();
+    assert.equal(data.voice_transport, 'realtime_webrtc_v1');
+    assert.equal(data.capabilities.realtime_streaming_v1, true);
+    assert.equal(data.capabilities.authored_dialogue_v1, false);
+    assert.equal(data.capabilities.authored_dialogue_stream_v1, false);
+  } finally {
+    globalThis.fetch = original;
+    if (enabled === undefined) delete config.AUTHORED_DIALOGUE_ENABLED; else config.AUTHORED_DIALOGUE_ENABLED = enabled;
+    if (verified === undefined) delete config.AUTHORED_DIALOGUE_FIDELITY_VERIFIED; else config.AUTHORED_DIALOGUE_FIDELITY_VERIFIED = verified;
+  }
+});
+
+test('database failures emit only a safe REST code and resource, never query or account details', async () => {
+  const original = globalThis.fetch, warn = console.warn, logs = [];
+  console.warn = value => logs.push(JSON.parse(value));
+  globalThis.fetch = async url => new URL(url).pathname === '/auth/v1/user' ? response(authUser) :
+    new Response(JSON.stringify({ code: 'PGRST002', message: 'PRIVATE SQL account content', details: 'secret query' }), { status: 503 });
+  try {
+    const result = await handler(request('voice', { sessionId, sdp }));
+    assert.equal(result.status, 503);
+    assert.equal((await result.json()).error.code, 'DATABASE_UNAVAILABLE');
+    assert.deepEqual(logs, [{ kind: 'database_request_failed', resource: 'sessions', status: 503, code: 'PGRST002' }]);
+    assert.doesNotMatch(JSON.stringify(logs), /PRIVATE|secret|owner@example|test-service|test-openai/);
+  } finally { globalThis.fetch = original; console.warn = warn; }
 });
 
 test('each stored companion controls its voice, persona, and isolated conversation quotes while feedback stays out of the call', async () => {

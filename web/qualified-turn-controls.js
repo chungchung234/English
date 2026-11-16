@@ -5,6 +5,11 @@ const clone = value => value == null ? value : JSON.parse(JSON.stringify(value))
 const validPolicy = value => value && ['semantic_vad', 'server_vad'].includes(value.type);
 const manualPolicy = value => validPolicy(value) && value.create_response === false && value.interrupt_response === false;
 const nonempty = value => typeof value === 'string' && Boolean(value.trim());
+// Local VAD already needs several voiced frames. While a real-time reply is
+// playing, require continuing evidence from this server candidate too: one
+// transient local detection must not destroy an otherwise healthy RTC stream.
+// This affects interruption only, never the ordinary reply/startup schedule.
+const INTERRUPTION_VOICE_SPAN_MS = 100, INTERRUPTION_VOICE_GAP_MS = 180;
 
 export function createQualifiedTurnControls({ send, instructions = () => '', openingInstructions = () => '',
   hasRecentVoice = () => false, now = () => performance.now(), changed = () => {}, blockOutput = () => {},
@@ -65,7 +70,8 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
     if (typeof id !== 'string' || !id) return null;
     if (!inputs.has(id)) {
       const item = { id, order: sequence++, startedAt: now(), sawSpeech: false, speaking: false,
-        awaitingCommit: false, committed: false, final: false, nonempty: false, qualified: false, timedOut: false, retryRequired: false, consumed: false, deleted: false, timer: null };
+        awaitingCommit: false, committed: false, final: false, nonempty: false, qualified: false, timedOut: false, retryRequired: false, consumed: false, deleted: false, timer: null,
+        interruptionVoiceStart: null, interruptionVoiceEnd: null, interruptionResponse: null };
       inputs.set(id, item); history.set(id, { id, role: 'user', order: item.order });
     }
     return inputs.get(id);
@@ -95,9 +101,18 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
     startupResolved = true; clearTimeout(startupTimer); startupTimer = null;
     if (item.speaking && current && !current.cancelled) {
       if (authored) pauseCurrent(item);
-      else cancelCurrent();
+      else item.interruptionResponse ??= current.nonce;
     }
     return true;
+  }
+  function observeInterruptionVoice(item, voiceTime) {
+    if (authored || !current || current.cancelled || !item?.speaking || !item.qualified || item.interruptionResponse !== current.nonce ||
+        voiceTime < item.startedAt || voiceTime <= (item.interruptionVoiceEnd ?? -Infinity)) return;
+    // Do not join isolated detections across silence, different candidates, or
+    // replayed/stale callback timestamps. The analyzer emits at most once per 100ms.
+    if (item.interruptionVoiceStart === null || voiceTime - item.interruptionVoiceEnd > INTERRUPTION_VOICE_GAP_MS) item.interruptionVoiceStart = voiceTime;
+    item.interruptionVoiceEnd = voiceTime;
+    if (voiceTime - item.interruptionVoiceStart >= INTERRUPTION_VOICE_SPAN_MS) cancelCurrent('accepted_voice');
   }
   function pauseCurrent(item) {
     const response = current;
@@ -243,7 +258,8 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
     voice(time = now()) {
       if (disposed || !Number.isFinite(time) || time < born || time > now() + 100) return;
       lastVoice = Math.max(lastVoice, time);
-      const item = inputs.get(activeInputId); if (item?.speaking) qualify(item, time);
+      const item = inputs.get(activeInputId);
+      if (item?.speaking && qualify(item, time)) observeInterruptionVoice(item, time);
       pump();
     },
     stop() {
@@ -382,6 +398,7 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
         if (item && !item.speaking && !item.consumed && !item.deleted && !item.final) {
           activeInputId = item.id;
           item.startedAt = now(); item.sawSpeech = true; item.speaking = true; item.awaitingCommit = false;
+          item.interruptionVoiceStart = item.interruptionVoiceEnd = null;
           armInput(item); qualify(item);
         }
       }
@@ -401,6 +418,10 @@ export function createQualifiedTurnControls({ send, instructions = () => '', ope
         if (item && !item.final) {
           item.final = true; item.nonempty = nonempty(event.transcript); item.speaking = false; item.awaitingCommit = false; clearTimeout(item.timer);
           resolvePause(item, item.nonempty ? 'accepted_turn' : 'rejected_noise');
+          // A brief genuine utterance need not last long enough for continuing
+          // local voice evidence. Its final nonempty ASR plus local qualification
+          // may still interrupt; ASR alone or an empty candidate never does.
+          if (!authored && item.nonempty && item.qualified && current && !current.cancelled && item.interruptionResponse === current.nonce) cancelCurrent('accepted_turn');
           if (authored && !item.nonempty && !authoredRequested && !pendingUsers().length) startupResolved = false;
         }
       }

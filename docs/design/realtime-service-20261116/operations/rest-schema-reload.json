@@ -1,0 +1,6 @@
+{
+  "operation": "notify_pgrst_reload_schema",
+  "http": 201,
+  "application_data_changed": false,
+  "at": "2026-11-16T14:24:49.279615+00:00"
+}

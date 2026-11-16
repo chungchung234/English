@@ -158,6 +158,25 @@ test('suspended contexts supply no recency, then require fresh evidence when run
   assert.deepEqual(states, ['ready', 'suspended', 'ready']); activity.dispose();
 });
 
+test('remote sample observations report timestamps only, require an attached live reference, and never control capture', async () => {
+  const fake = fakeAudio(), observed = [], states = []; let time = 100;
+  const activity = createLocalVoiceActivity({ AudioContextConstructor: fake.Context, now: () => time,
+    onReferenceAudio: (...values) => { observed.push(values); throw Error('observational failure'); },
+    onState: value => states.push(value.status) });
+  activity.attach(fake.stream); await activity.ready;
+  const context = fake.contexts[0], quiet = new Float32Array(1024), signal = new Float32Array(1024).fill(.01);
+  process(context, quiet, signal); assert.equal(observed.length, 0, 'an unattached reference is not an output observation');
+  activity.attachReference(fake.referenceStream);
+  process(context, quiet, quiet); assert.equal(observed.length, 0, 'zero samples are not decoded output');
+  process(context, quiet, signal); assert.deepEqual(observed, [[100]], 'raw PCM and stream identifiers never reach observers');
+  time += 25; process(context, quiet, signal); assert.deepEqual(observed, [[100], [125]]);
+  assert.deepEqual(states, ['ready'], 'throwing observation cannot invalidate local analysis');
+  context.setState('suspended'); process(context, quiet, signal); assert.equal(observed.length, 2);
+  context.setState('running'); activity.attachReference(null); process(context, quiet, signal); assert.equal(observed.length, 2);
+  activity.dispose(); assert.equal(context.processor.onaudioprocess, null); assert.equal(observed.length, 2);
+  assert.equal(fake.track.stopped, 0); assert.equal(fake.referenceTrack.stopped, 0);
+});
+
 test('constructor/resume failures and disposal before late initialization never revive local evidence or stop tracks', async () => {
   const failedStates = [], unsupported = createLocalVoiceActivity({ AudioContextConstructor: class { constructor() { throw Error('disabled'); } }, onState: value => failedStates.push(value.status) });
   assert.equal(await unsupported.ready, false); assert.deepEqual(failedStates, ['unavailable']); unsupported.dispose();

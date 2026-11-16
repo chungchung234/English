@@ -17,7 +17,7 @@ test('memory-free recovery verifies active ownership and current DB authorizatio
   throw Error('Unexpected history or provider access: '+url.pathname);
  };
  try{const result=await handler(request({sessionId:sid,omitLearningContext:true}));assert.equal(result.status,200);const data=await result.json();
-  assert.equal(data.memory_revision,null);assert.equal(data.memory_mode,'omitted');assert.equal(data.voice_policy_version,'2026-11-14-companion-phone-v5');
+  assert.equal(data.memory_revision,null);assert.equal(data.memory_mode,'omitted');assert.equal(data.voice_policy_version,'2026-11-16-realtime-companion-v6');
   const context=JSON.parse(data.instructions.split('UNTRUSTED_CONTEXT_JSON:\n')[1]);assert.deepEqual(context.memory.facts,[]);assert.deepEqual(context.memory.memories,[]);assert.equal(context.memory.recent_conversation,null);assert.equal(context.memory.suppress_memory,true);assert.equal(context.checkpoint,null);
   assert(!data.instructions.includes('Historical data that must not be restored.'));assert(data.instructions.includes('CHARACTER_POINT_OF_VIEW:'));assert(data.instructions.includes('Your character is Mia.'));
   assert.deepEqual(calls,['/auth/v1/user','/rest/v1/sessions','/rest/v1/rpc/conversation_context_authorized']);

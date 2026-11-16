@@ -145,8 +145,8 @@ test('local write failure retries exact receipt IDs and revision without affecti
 
 test('delivery preserves exact payload after offline failure and rejects ambiguous or foreign ACKs', async () => {
   const f = fixture(); f.row(20, 'user', 'u'); f.row(21, 'assistant', 'a'); f.observe(['u', 'a']); await f.capture();
-  let attempt = 0, first;
-  const delivery = createConversationPlaybackDelivery({ outbox: f.outbox, getScope: () => scope, send: async body => {
+  let attempt = 0, first, time = 0;
+  const delivery = createConversationPlaybackDelivery({ outbox: f.outbox, getScope: () => scope, now: () => time, send: async body => {
     first ??= structuredClone(body); assert.deepEqual(body, first); attempt++;
     if (attempt === 1) throw Error('offline');
     if (attempt === 2) return { ...validAck(body), session_id: uid(999) };
@@ -155,8 +155,59 @@ test('delivery preserves exact payload after offline failure and rejects ambiguo
     if (attempt === 5) return { ...validAck(body), acknowledged_ids: [], discarded_ids: body.p_event_ids, reason: 'unrecognized' };
     return validAck(body);
   } });
-  for (let n = 0; n < 5; n++) { assert.equal((await delivery.flush()).delivered, 0); assert.equal((await f.pending()).length, 1); }
+  for (let n = 0; n < 5; n++) {
+    assert.equal((await delivery.flush()).delivered, 0); assert.equal((await f.pending()).length, 1); time += 300_000;
+  }
   assert.equal((await delivery.flush()).delivered, 1); assert.equal((await f.pending()).length, 0);
+});
+
+test('an orphaned source backs off without blocking later completed exchanges or changing its receipt', async () => {
+  const f = fixture(), entry = n => ({ id: uid(n), session_id: uid(n + 100), companion_id: 'alex',
+    created_at: '2026-11-14T00:00:00.000Z', event_ids: [uid(n)], qualified_user_ids: [uid(n + 1)], expected_memory_revision: 4 });
+  const orphan = entry(30), valid = entry(40), calls = []; let time = 0;
+  await f.outbox.put(scope, orphan); await f.outbox.put(scope, valid);
+  const delivery = createConversationPlaybackDelivery({ outbox: f.outbox, getScope: () => scope, now: () => time,
+    send: async body => {
+      calls.push(structuredClone(body));
+      if (body.p_session_id === orphan.session_id) throw Object.assign(Error('Source unavailable'), { status: 403, code: '42501' });
+      return validAck(body);
+    } });
+  assert.equal((await delivery.flush()).delivered, 1);
+  assert.deepEqual(await f.pending(), [orphan]);
+  assert.equal(calls.length, 2);
+  time = 5000; await delivery.flush(); assert.equal(calls.length, 2, 'periodic sync cannot hammer the same source');
+  time = 10000; await delivery.flush(); assert.equal(calls.length, 3);
+  assert.deepEqual(calls[0], calls[2], 'retry preserves the original IDs, owner, sources and revision');
+  time = 15000; await delivery.flush(); assert.equal(calls.length, 3);
+  time = 29999; await delivery.flush(); assert.equal(calls.length, 3);
+  time = 30000; await delivery.flush(); assert.equal(calls.length, 4, 'the second delay doubles');
+  assert.deepEqual(await f.pending(), [orphan], 'a cooldown never silently discards optional evidence');
+});
+
+test('multiple bad ACKs are bounded per flush and cannot permanently starve another source', async () => {
+  const f = fixture(), calls = [];
+  for (const n of [30, 40, 50]) await f.outbox.put(scope, { id: uid(n), session_id: session, companion_id: 'alex',
+    created_at: '2026-11-14T00:00:00.000Z', event_ids: [uid(n)], qualified_user_ids: [uid(n + 1)], expected_memory_revision: 4 });
+  const delivery = createConversationPlaybackDelivery({ outbox: f.outbox, getScope: () => scope, now: () => 0, send: async body => {
+    calls.push(body.p_receipt_id); return body.p_receipt_id === uid(50) ? validAck(body) : { ...validAck(body), session_id: uid(999) };
+  } });
+  assert.equal((await delivery.flush()).delivered, 0); assert.equal(calls.length, 2);
+  assert.equal((await delivery.flush()).delivered, 1); assert.equal(calls.length, 3);
+  assert.deepEqual((await f.pending()).map(row => row.id), [uid(30), uid(40)]);
+});
+
+test('a transport outage delays its account without fanning out or delaying another account', async () => {
+  const f = fixture(); f.row(20, 'user', 'u'); f.row(21, 'assistant', 'a'); f.observe(['u', 'a']); await f.capture();
+  const [entry] = await f.pending(); await f.outbox.put(owner(2), { ...entry, session_id: uid(22) });
+  let active = scope, time = 0, online = false, calls = 0;
+  const delivery = createConversationPlaybackDelivery({ outbox: f.outbox, getScope: () => active, now: () => time,
+    send: async body => { calls++; if (!online) throw Error('Offline'); return validAck(body); } });
+  await delivery.flush(); assert.equal(calls, 1);
+  time = 5000; await delivery.flush(); assert.equal(calls, 1);
+  online = true; active = owner(2); assert.equal((await delivery.flush()).delivered, 1);
+  active = scope; assert.equal((await delivery.flush()).delivered, 0); assert.equal(calls, 2);
+  time = 10000; assert.equal((await delivery.flush()).delivered, 1);
+  assert.equal((await f.outbox.list(scope)).length, 0); assert.equal((await f.outbox.list(owner(2))).length, 0);
 });
 
 test('account changes during a request cannot acknowledge another account or start a stale send', async () => {

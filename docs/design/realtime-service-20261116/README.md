@@ -55,6 +55,8 @@ fingerprint와 일치했다. 앱 데이터·계정 권한은 이 긴급 수정�
 [독립 검토](operations/conflict-independent-review.json),
 [운영 적용·대조](operations/conflict-hotfix-applied.json)를 보존한다.
 
+운영의 작성 대화 플래그도 비활성화했다. 일회성 함수에서 실제 런타임의 false 값을 확인했고 모델·DB 요청은 없었다. 확인 함수는 삭제 뒤 별도 목록에서 부재를 확인했다. [실제 런타임 확인](operations/runtime-transport-flag-verification.json)을 보존한다.
+
 ## Database 권고 정리와 운영 설정
 
 `202611160001`은 소유권·승인 조건을 유지한 채 RLS 인증 재평가 6건, 실제 접근

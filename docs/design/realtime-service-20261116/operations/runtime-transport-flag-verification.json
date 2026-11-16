@@ -1,0 +1,16 @@
+{
+  "actual_model_requests": 0,
+  "actual_database_requests": 0,
+  "ttl_minutes": 10,
+  "created": true,
+  "observations": [
+    {
+      "route": "project_gateway",
+      "http": 200,
+      "buffered_enabled": false,
+      "flag_is_false": true
+    }
+  ],
+  "delete_http": 200,
+  "independent_absence_verified": true
+}

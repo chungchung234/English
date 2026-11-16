@@ -97,7 +97,50 @@ const eventually = async (check, label, timeout = 15000) => {
 };
 const results = [];
 const recoveryScreens = [];
+const realtimeScreens = [];
 let productionBuild = null;
+
+async function captureRealtimeLayout(page, state) {
+  const viewport = page.viewportSize();
+  await page.evaluate(() => {
+    window.fixture.realtimeFonts = [...document.querySelectorAll('#live-call h1,#live-call h2,#live-call h3,#live-call p,#live-call button,#live-call span,#live-call small,#live-call label')]
+      .map(node => ({ node, fontSize: node.style.fontSize }));
+  });
+  try {
+    for (const size of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+      await page.setViewportSize(size);
+      await page.evaluate(() => {
+        for (const { node, fontSize } of window.fixture.realtimeFonts) node.style.fontSize = fontSize;
+        const values = window.fixture.realtimeFonts.map(({ node }) => ({ node, size: parseFloat(getComputedStyle(node).fontSize) }));
+        for (const { node, size } of values) node.style.fontSize = size * 1.25 + 'px';
+      });
+      const screenshot = `test-results/realtime-service-${state}-${size.width}.png`;
+      await page.screenshot({ path: screenshot, fullPage: true });
+      const layout = await page.evaluate(() => {
+        const bounds = selector => {
+          const node = document.querySelector(selector), r = node.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+          return { y: r.y, bottom: r.bottom, visible: !!node.getClientRects().length, text: node.textContent,
+            hit: !!hit && (hit === node || node.contains(hit)) };
+        };
+        return { horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
+          status: bounds('#call-status'), stop: bounds('#stop-response'), end: bounds('#end-call') };
+      });
+      realtimeScreens.push({ state, ...size, textScale: 1.25, screenshot, ...layout });
+      assert.equal(layout.horizontalOverflow, false, `${state} must fit ${size.width}px at 125% text`);
+      assert(layout.end.visible && layout.end.hit && layout.end.y >= 0 && layout.end.bottom <= size.height,
+        'hangup remains visible and usable while direct realtime audio is playing or listening');
+      if (state === 'streaming') assert(layout.stop.visible && layout.stop.hit && layout.stop.y >= 0 && layout.stop.bottom <= layout.end.y,
+        'explicit stop remains available before response completion');
+    }
+  } finally {
+    await page.evaluate(() => {
+      for (const { node, fontSize } of window.fixture.realtimeFonts) node.style.fontSize = fontSize;
+      delete window.fixture.realtimeFonts;
+    });
+    await page.setViewportSize(viewport);
+  }
+}
 
 async function captureRecoveryLayout(page, state) {
   const originalViewport = page.viewportSize();
@@ -172,11 +215,11 @@ async function buildProductionFixture() {
 }
 
 async function setup({ manual = true, startupNoise = false, detectorFailure = false, nativeGraph = false, built = false, holdRawAck = false,
-  checkpointError = null, voiceContextFailures = 0 } = {}) {
+  checkpointError = null, voiceContextFailures = 0, realtime = manual, staleAuthored = false } = {}) {
   const context = await browser.newContext({ permissions: ['microphone'], viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   await context.addInitScript(({ pcm, waveRate, manual, startupNoise, detectorFailure, nativeGraph }) => {
     window.fixture = { manual, startupNoise, detectorFailure, nativeGraph, nativeContexts: [] };
-    window.testMessages = []; window.testTracks = []; window.detectorNodes = [];
+    window.testMessages = []; window.testProviderEvents = []; window.testTracks = []; window.detectorNodes = [];
     const createProcessor = AudioContext.prototype.createScriptProcessor;
     AudioContext.prototype.createScriptProcessor = function (...args) {
       if (window.fixture.detectorFailure) throw Error('Fixture detector unavailable');
@@ -216,7 +259,10 @@ async function setup({ manual = true, startupNoise = false, detectorFailure = fa
     window.RTCPeerConnection = class {
       constructor() { window.testPeer = this; this.connectionState = 'new'; this.tracks = []; }
       addTrack(track) { this.tracks.push(track); window.testTracks.push(track); }
-      emit(event) { this.dc.onmessage?.({ data: JSON.stringify(event) }); }
+      emit(event) {
+        window.testProviderEvents.push({ type: event.type, responseId: event.response?.id || event.response_id || null });
+        this.dc.onmessage?.({ data: JSON.stringify(event) });
+      }
       createDataChannel() { return this.dc = { readyState: 'open', send: raw => {
         const event = JSON.parse(raw); window.testMessages.push(event);
         if (event.type === 'session.update' && event.session?.audio?.input?.turn_detection) queueMicrotask(() => this.emit({ type: 'session.updated', session: { audio: { input: { turn_detection: event.session.audio.input.turn_detection } } } }));
@@ -249,7 +295,7 @@ async function setup({ manual = true, startupNoise = false, detectorFailure = fa
     };
   }, { pcm, waveRate, manual, startupNoise, detectorFailure, nativeGraph });
   const page = await context.newPage(); page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(30000);
-  const sessions = [], saved = new Map(), diagnostics = [], errors = [], routeErrors = [], voiceRequests = [], checkpointRequests = [], playbackReceipts = [];
+  const sessions = [], saved = new Map(), diagnostics = [], errors = [], routeErrors = [], voiceRequests = [], checkpointRequests = [], playbackReceipts = [], requestedPaths = [];
   const recovery = { checkpointError, checkpointFailures: checkpointError ? 1 : 0, voiceContextFailures, refreshRequests: [], memoryRevision: 0 };
   let releaseRawAck;
   const rawAck = new Promise(resolve => { releaseRawAck = resolve; });
@@ -268,11 +314,15 @@ async function setup({ manual = true, startupNoise = false, detectorFailure = fa
   await page.route('**/public-config.js', route => route.fulfill({ contentType: 'text/javascript', body: `globalThis.LOOP_PUBLIC_CONFIG=${JSON.stringify({ url: project, key: 'sb_publishable_fixture' })};` }));
   await page.route(project + '/**', async route => {
     const request = route.request(), url = new URL(request.url()), body = request.postData() ? request.postDataJSON() : {};
+    requestedPaths.push(url.pathname);
     try {
       let data = [];
       if (url.pathname === '/auth/v1/user') data = { id: uid };
       else if (url.pathname === '/auth/v1/settings') data = { external: { google: false, kakao: false } };
-      else if (url.pathname.endsWith('/coach/config')) data = { models: { voice: 'fixture' }, capabilities: { manual_turns_v1: manual } };
+      else if (url.pathname.endsWith('/coach/config')) data = { models: { voice: 'fixture' },
+        ...(realtime ? { voice_transport: 'realtime_webrtc_v1' } : {}),
+        capabilities: { manual_turns_v1: manual, realtime_streaming_v1: realtime, authored_dialogue_v1: staleAuthored, authored_dialogue_stream_v1: staleAuthored } };
+      else if (/\/coach\/dialogue-/.test(url.pathname)) assert.fail('the realtime fixture must never request authored text, synthesis, or PCM endpoints');
       else if (url.pathname.endsWith('/coach/memory-manage')) data = { revision: 0, facts: [], excluded_sessions: [], history_suppressed: false };
       else if (url.pathname.endsWith('/coach/memory')) data = { memories: [] };
       else if (url.pathname.endsWith('/coach/memory-prepare')) data = { status: 'unavailable' };
@@ -366,7 +416,7 @@ async function setup({ manual = true, startupNoise = false, detectorFailure = fa
   await page.evaluate(baseInstructions => { window.fixture.baseInstructions = baseInstructions; }, baseInstructions);
   await page.locator('#start-call').click();
   await eventually(() => page.evaluate(() => document.body.dataset.callPhase === 'connected'), 'manual fixture should connect');
-  return { context, page, sessions, saved, diagnostics, voiceRequests, checkpointRequests, playbackReceipts, recovery, emit, messages, creates, micLive, begin, complete, input, stopAck, end,
+  return { context, page, sessions, saved, diagnostics, voiceRequests, checkpointRequests, playbackReceipts, requestedPaths, recovery, emit, messages, creates, micLive, begin, complete, input, stopAck, end,
     releaseRawAck, checkpointCount: () => checkpoints };
 }
 
@@ -375,7 +425,9 @@ try {
     args: ['--no-sandbox', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--enable-unsafe-swiftshader', '--use-angle=swiftshader', '--autoplay-policy=no-user-gesture-required'] });
   await mkdir('test-results', { recursive: true });
   await buildProductionFixture();
-  const primary = await setup({ holdRawAck: true });
+  // An explicit realtime transport must take precedence over stale authored
+  // flags, including while the caller's asynchronous save ACK remains pending.
+  const primary = await setup({ holdRawAck: true, staleAuthored: true });
   const { page, emit, creates, messages, micLive, begin, complete, input, stopAck } = primary;
   assert.equal(primary.voiceRequests[0].turnControl, 'manual_turns_v1');
   const csp = await page.locator('meta[http-equiv="Content-Security-Policy"]').getAttribute('content');
@@ -428,10 +480,19 @@ try {
   assert(reply.response.input.some(item => item.type === 'item_reference' && item.id === 'qualified-user'));
   assert(!reply.response.input.some(item => ['noise-item', 'echo-item'].includes(item.id)), 'curated model input must exclude unqualified background transcriptions');
   await begin(reply, 'reply-response');
+  const streaming = await page.evaluate(() => {
+    const audio = document.querySelector('#remote-audio');
+    return { streamAttached: audio.srcObject instanceof MediaStream, muted: audio.muted, paused: audio.paused,
+      responseDone: window.testProviderEvents.some(event => event.type === 'response.done' && event.responseId === 'reply-response') };
+  });
+  assert.deepEqual(streaming, { streamAttached: true, muted: false, paused: false, responseDone: false },
+    'the native remote stream must remain playable before full response completion and before the held raw-save ACK');
+  assert(!primary.requestedPaths.some(value => /\/coach\/dialogue-/.test(value)), 'explicit realtime transport must win over stale authored capabilities');
   assert.equal(await page.locator('#stop-response').isVisible(), true);
   assert.equal(await page.locator('#manual-reply').isVisible(), false, 'active playback should not show an unusable fallback reply action');
   assert.equal(await page.locator('#voice-input-help').isVisible(), false);
   await page.screenshot({ path: 'test-results/qualified-turns-playing-390.png', fullPage: true });
+  await captureRealtimeLayout(page, 'streaming');
   await emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'qualified-user', transcript: sharedUtterance });
   await page.evaluate(() => { window.testPeer.connectionState = 'disconnected'; window.testPeer.onconnectionstatechange(); window.testPeer.connectionState = 'connected'; window.testPeer.onconnectionstatechange(); });
   assert.equal((await creates()).length, 2, 'late ASR and reconnect cannot replay a greeting or consume the same input twice');
@@ -478,7 +539,9 @@ try {
   assert.equal(primary.playbackReceipts.length, 1, 'compaction and deleted provider items must not duplicate playback receipts');
   assert.equal((await creates()).length, 3);
   await page.screenshot({ path: 'test-results/qualified-turns-listening.png', fullPage: true });
-  await primary.end(); results.push({ case: 'real-wasm-qualified-turn-ownership', generated: 3, checkpoint: primary.checkpointCount(), playbackReceiptAfterRawAck: true, ended: true });
+  await captureRealtimeLayout(page, 'listening');
+  await primary.end(); results.push({ case: 'real-wasm-qualified-turn-ownership', generated: 3, checkpoint: primary.checkpointCount(), playbackReceiptAfterRawAck: true,
+    explicitRealtimeWinsStaleAuthored: true, nativeRemoteStreamPlayableBeforeResponseDoneAndRawAck: true, authoredRequests: 0, ended: true });
   await primary.context.close();
 
   // A known privacy/source revocation retires model references, but raw speech
@@ -611,14 +674,29 @@ try {
   await native.page.evaluate(() => Promise.all(window.fixture.nativeContexts.map(context => context.close())));
   results.push({ case: 'production-hashed-csp-native-web-audio-callback', generated: 2, ended: true, scriptHashVerified: true }); await native.context.close();
 
+  const longCall = await setup();
+  await eventually(async () => (await longCall.creates()).length === 1, 'a realtime call must connect and start its owned opening');
+  const longGreeting = (await longCall.creates())[0];
+  await longCall.begin(longGreeting, 'long-call-greeting'); await longCall.complete(longGreeting, 'long-call-greeting');
+  await longCall.page.clock.install(); await longCall.page.clock.fastForward(10 * 60 * 1000 + 1000); await longCall.page.clock.runFor(1000);
+  assert.equal(await longCall.page.evaluate(() => document.body.dataset.callPhase), 'connected');
+  assert.equal(await longCall.micLive(), true); assert.equal(longCall.checkpointCount(), 0);
+  assert.equal((await longCall.creates()).length, 1, 'elapsed time must not generate another greeting or unsolicited reply');
+  assert.equal(await longCall.page.locator('#notice').textContent(), '', 'ten minutes alone must not show an unstable-call warning');
+  assert(!longCall.requestedPaths.some(value => /\/coach\/dialogue-/.test(value)));
+  await longCall.end(); results.push({ case: 'ten-minute-realtime-low-token-call', elapsedTimeOnlyKeepsMicrophoneLive: true, noAutomaticCheckpoint: true, noDuplicateGreeting: true, ended: true });
+  await longCall.context.close();
+
   const legacy = await setup({ manual: false });
   assert.equal(Object.hasOwn(legacy.voiceRequests[0], 'turnControl'), false, 'servers without the capability must retain the legacy protocol');
   await eventually(async () => (await legacy.creates()).length === 1, 'legacy fixtures should still start their original greeting');
   assert.equal(await legacy.page.locator('#manual-reply').isVisible(), false);
   await legacy.end(); results.push({ case: 'legacy-capability-compatibility', generated: 1, ended: true }); await legacy.context.close();
   await writeFile('test-results/qualified-turns-result.json', JSON.stringify({ fixture: true, fixtureOrigin: base, actualWasm: true,
+    actualProvider: false, actualWebRtc: false, actualPhysicalAudio: false, realtimeTransport: 'realtime_webrtc_v1',
     productionHashCspVerified: true, conversationalQualityVerified: false, acousticEffectivenessVerified: false, cases: results }, null, 2));
   await writeFile('test-results/context-recovery-layout.json', JSON.stringify(recoveryScreens, null, 2));
+  await writeFile('test-results/realtime-service-layout.json', JSON.stringify(realtimeScreens, null, 2));
   console.log('PASS: owned startup input[], typed historical opening context, real WASM-qualified interruption/replies, noise-safe startup, duplicate/reconnect/hint/checkpoint ownership, playback receipts after raw ACK, privacy-retired context recovery and explicit retry, explicit stop/reply fallback and legacy compatibility; the actual production build also runs native WebAudio/WASM under verified hash CSP and SRI without JavaScript unsafe-eval. Provider speech, model conversational quality and acoustic quality remain unverified.');
 } finally {
   try { await browser?.close(); } finally {

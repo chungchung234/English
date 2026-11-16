@@ -17,7 +17,7 @@ await new Promise((resolve,reject)=>{server.stdout.once('data',resolve);server.o
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox','--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream','--enable-unsafe-swiftshader','--use-angle=swiftshader','--autoplay-policy=no-user-gesture-required']});
 const results=[];
 
-async function setup(mode,{missingAbortHelpers=false,vadPending=false,playbackBlocked=false,initialPolicy='good',policyAck='good',initialEventAfterOpen=false}={}){
+async function setup(mode,{missingAbortHelpers=false,vadPending=false,playbackBlocked=false,initialPolicy='good',policyAck='good',initialEventAfterOpen=false,staleAuthored=false}={}){
  const context=await browser.newContext({permissions:['microphone'],viewport:{width:390,height:844},reducedMotion:'reduce'});
  await context.addInitScript(({mode,missingAbortHelpers,vadPending,playbackBlocked,initialPolicy,policyAck,initialEventAfterOpen,voiceInstructions,policy})=>{
   window.connectionFixture={mode,vadPending,playbackBlocked,initialPolicy,policyAck,initialEventAfterOpen,peers:[],streams:[],sent:[],playAttempts:0};
@@ -71,24 +71,33 @@ async function setup(mode,{missingAbortHelpers=false,vadPending=false,playbackBl
   };
  },{mode,missingAbortHelpers,vadPending,playbackBlocked,initialPolicy,policyAck,initialEventAfterOpen,voiceInstructions,policy});
  const page=await context.newPage();page.setDefaultTimeout(15000);
- const errors=[],routeErrors=[],sessions=[],saved=new Map(),voiceRequests=[],diagnostics=[],finishes=[],pending={},failedRequests=new WeakSet();
+ const errors=[],routeErrors=[],sessions=[],saved=new Map(),voiceRequests=[],diagnostics=[],finishes=[],requestedPaths=[],pending={},failedRequests=new WeakSet();
  page.on('pageerror',error=>errors.push(error.message));page.on('requestfailed',request=>failedRequests.add(request));
  await page.route('**/public-config.js',route=>route.fulfill({contentType:'text/javascript',body:`globalThis.LOOP_PUBLIC_CONFIG=${JSON.stringify({url:project,key:'sb_publishable_fixture'})};`}));
  await page.route(project+'/**',async route=>{
   const request=route.request(),url=new URL(request.url()),body=request.postData()?request.postDataJSON():{};
+  requestedPaths.push(url.pathname);
   try{
    let data=[];
    if(url.pathname==='/auth/v1/settings')data={external:{google:false,kakao:false}};
    else if(url.pathname==='/auth/v1/user')data={id:uid};
-   else if(url.pathname.endsWith('/coach/config'))data={models:{voice:'fixture'},capabilities:{manual_turns_v1:true}};
+   else if(url.pathname.endsWith('/coach/config'))data={models:{voice:'fixture'},voice_transport:'realtime_webrtc_v1',capabilities:{manual_turns_v1:true,realtime_streaming_v1:true,authored_dialogue_v1:staleAuthored,authored_dialogue_stream_v1:staleAuthored}};
+   else if(/\/coach\/dialogue-/.test(url.pathname))assert.fail('connection setup must use the real-time voice endpoint rather than an authored bootstrap');
    else if(url.pathname.endsWith('/coach/memory-manage'))data={revision:0,facts:[],excluded_sessions:[],history_suppressed:false};
    else if(url.pathname.endsWith('/coach/memory'))data={memories:[]};
    else if(url.pathname.endsWith('/coach/memory-prepare'))data={status:'unavailable'};
    else if(url.pathname.endsWith('/coach/voice')){
     voiceRequests.push(body);if(mode==='voice-hang'&&!pending.voice){pending.voice=defer();await pending.voice.promise;}
+    if(mode==='voice-unavailable'&&voiceRequests.length===1)return route.fulfill({status:503,json:{error:{code:'UPSTREAM_UNAVAILABLE',message:'Synthetic service temporarily unavailable.'}}});
     data={sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n',voice_instructions:voiceInstructions,opening_instructions:openingInstructions,audio_policy:{version:'fixture',turn_control:'manual_turns_v1',expected_noise_reduction:'far_field',turn_detection:policy}};
    }else if(url.pathname.endsWith('/coach/review'))return route.fulfill({status:503,json:{error:{code:'UPSTREAM_UNAVAILABLE',message:'Synthetic feedback unavailable.'}}});
-   else if(url.pathname.endsWith('/rpc/learning_snapshot'))data={items:[],recommended_item_ids:[],next_plan:null,feedback:[]};
+   else if(url.pathname.endsWith('/rpc/learning_snapshot')){
+    // Login hydration and the explicit call preflight can overlap. Hold every
+    // snapshot requested while dialing, so an unrelated hydration request
+    // cannot be mistaken for the call's own blocked exclusion-state read.
+    if(mode==='learning-hang'&&await page.evaluate(()=>document.body.dataset.callPhase==='connecting')){pending.learning??=defer();await pending.learning.promise;}
+    data={items:[],recommended_item_ids:[],next_plan:null,feedback:[]};
+   }
    else if(url.pathname.endsWith('/rpc/learning_enhancement_snapshot'))data={reviews:[],schedules:[],recalls:[],usage:[],weekly_goals:[],imports:[],personalized_item_ids:[],recommendation_reasons:{}};
    else if(url.pathname.endsWith('/rpc/learning_record_event'))data={saved:true};
    else if(url.pathname.endsWith('/rpc/record_call_diagnostics')){diagnostics.push(...(body.p_events||[]));data={event_ids:(body.p_events||[]).map(event=>event.event_id),dropped_event_ids:[]};}
@@ -109,12 +118,21 @@ async function setup(mode,{missingAbortHelpers=false,vadPending=false,playbackBl
  const state=()=>page.evaluate(()=>({phase:document.body.dataset.callPhase,clock:document.querySelector('#call-timer').textContent,peers:window.connectionFixture.peers.map(peer=>({closed:peer.closed||false,state:peer.connectionState,dc:peer.dc?.readyState,offer:peer.offerStarted||false,local:peer.localStarted||false,remote:peer.remoteStarted||false,description:peer.descriptionApplied||false})),tracks:window.connectionFixture.streams.flatMap(stream=>stream.getTracks()).map(track=>({enabled:track.enabled,state:track.readyState})),greetings:window.connectionFixture.sent.filter(({event})=>event.type==='response.create').length}));
  const start=async()=>{await page.locator('#start-call').click();await eventually(async()=>{const s=await state();return s.tracks.length>0;},'the fixture should receive a real microphone stream');};
  const release=async()=>{for(const gate of Object.values(pending))gate.resolve();await page.evaluate(()=>{for(const peer of window.connectionFixture.peers){peer.releaseOffer?.();peer.releaseLocal?.();peer.releaseRemote?.();}});};
- const dispose=async()=>{await release();await context.close();assert.deepEqual(errors,[]);assert.deepEqual(routeErrors,[]);};
- return{context,page,state,start,release,dispose,sessions,voiceRequests,diagnostics,finishes};
+ const dispose=async()=>{await release();await context.close();assert.deepEqual(errors,[]);assert.deepEqual(routeErrors,[]);assert(!requestedPaths.some(path=>/\/coach\/dialogue-/.test(path)),'realtime setup must not depend on authored context or synthesis');};
+ return{context,page,state,start,release,dispose,sessions,voiceRequests,diagnostics,finishes,preflightHeld:()=>Boolean(pending.learning)};
 }
 
 try{
  await mkdir('test-results',{recursive:true});
+ const preflight=await setup('learning-hang');await preflight.page.locator('#start-call').click();await eventually(()=>Promise.resolve(preflight.preflightHeld()),'the controlled learning-state preflight should be pending');
+ assert.equal((await preflight.state()).phase,'connecting');assert.equal((await preflight.state()).tracks.length,0);
+ await preflight.page.clock.runFor(46000);await eventually(()=>preflight.page.locator('#call-help').isVisible(),'preflight must also have a bounded deadline rather than wait for a ninety-second generic API timeout');
+ await preflight.release();await preflight.page.clock.runFor(1000);assert.notEqual((await preflight.state()).phase,'connecting');assert.equal((await preflight.state()).peers.length,0,'late preflight completion cannot create a peer after expiry');assert.equal((await preflight.state()).tracks.length,0,'late preflight completion cannot capture a microphone after expiry');
+ results.push({case:'learning-preflight-timeout',boundedBeforeCapture:true,lateCompletionIgnored:true});await preflight.dispose();
+ const preflightCancel=await setup('learning-hang');await preflightCancel.page.locator('#start-call').click();await eventually(()=>Promise.resolve(preflightCancel.preflightHeld()),'the cancellable learning-state preflight should be pending');
+ await eventually(()=>preflightCancel.page.evaluate(()=>{const node=document.querySelector('#cancel-connection'),r=node.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return document.body.dataset.callPhase==='connecting'&&!node.hidden&&!!hit&&(hit===node||node.contains(hit));}),'cancel must be visible and unobstructed during learning preflight');
+ await preflightCancel.page.locator('#cancel-connection').click();await preflightCancel.release();await preflightCancel.page.clock.runFor(1000);assert.notEqual((await preflightCancel.state()).phase,'connecting');assert.equal((await preflightCancel.state()).tracks.length,0);assert.equal((await preflightCancel.state()).peers.length,0);assert.equal(await preflightCancel.page.locator('#call-help').isVisible(),false,'an intentional preflight cancel must not later display a timeout warning');
+ results.push({case:'cancel-late-learning-preflight',cancelledBeforeCapture:true,lateCompletionIgnored:true});await preflightCancel.dispose();
  for(const mode of ['session-hang','offer-hang','local-hang','voice-hang','remote-hang','ice-hang','data-hang','rtc-hang']){
   const test=await setup(mode);await test.start();
   await eventually(async()=>mode==='session-hang'?test.sessions.length===1:mode==='voice-hang'?test.voiceRequests.length===1:(await test.state()).peers.some(peer=>mode==='offer-hang'?peer.offer:mode==='local-hang'?peer.local:mode==='remote-hang'?peer.remote:peer.description),'the controlled setup stage should be reached');
@@ -155,11 +173,26 @@ try{
   await test.page.evaluate(()=>{window.connectionFixture.policyAck='good';window.connectionFixture.initialPolicy='good';});await test.page.locator('#call-help-retry').click();await eventually(async()=>(await test.state()).phase==='connected','a fresh attempt can confirm the policy and connect');await test.page.clock.runFor(500);assert.equal((await test.state()).greetings,1);
   results.push({case:'policy-ack-'+policyAck,policyTimeout:true,microphoneReleased:true,serverSessionClosed:true,noPrematureGreetingOrClock:true,retryConnected:true});await test.dispose();
  }
+ const unavailable=await setup('voice-unavailable');await unavailable.start();await eventually(()=>unavailable.page.locator('#call-help').isVisible(),'a backend 503 must show an actionable service recovery state');
+ const serviceHelp=await unavailable.page.locator('#call-help').textContent();assert.match(serviceHelp,/서비스/);assert.doesNotMatch(serviceHelp,/네트워크를 확인/,'a confirmed backend service failure must not blame the caller network');
+ await eventually(async()=>(await unavailable.state()).tracks.every(track=>track.state==='ended'),'503 releases all captured microphones');await eventually(()=>Promise.resolve(unavailable.sessions.every(session=>session.status==='ended')),'503 closes the owned setup session');
+ assert((await unavailable.state()).peers.every(peer=>peer.closed));assert.equal((await unavailable.state()).greetings,0);assert.equal((await unavailable.state()).clock,'00:00');
+ const serviceScreens=[];
+ for(const viewport of [{width:390,height:844},{width:320,height:568}]){
+  await unavailable.page.setViewportSize(viewport);await unavailable.page.evaluate(()=>{for(const node of document.querySelectorAll('#call-help h1,#call-help h2,#call-help h3,#call-help p,#call-help button')){const original=node.hasAttribute('data-fixture-original-font')?node.dataset.fixtureOriginalFont:node.style.fontSize;node.dataset.fixtureOriginalFont=original;node.style.fontSize=original;node.style.fontSize=parseFloat(getComputedStyle(node).fontSize)*1.25+'px';}});
+  const screenshot=`test-results/call-service-unavailable-${viewport.width}.png`;await unavailable.page.screenshot({path:screenshot,fullPage:true});
+  const layout=await unavailable.page.evaluate(()=>{const node=document.querySelector('#call-help-retry'),r=node.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return{horizontalOverflow:document.documentElement.scrollWidth>innerWidth,retry:{visible:!!node.getClientRects().length,y:r.y,bottom:r.bottom,hit:!!hit&&(hit===node||node.contains(hit))}};});
+  assert.equal(layout.horizontalOverflow,false);assert(layout.retry.visible&&layout.retry.hit&&layout.retry.y>=0&&layout.retry.bottom<=viewport.height,'service retry remains visible and usable with large text');serviceScreens.push({...viewport,textScale:1.25,screenshot,...layout});
+ }
+ await writeFile('test-results/call-service-unavailable-layout.json',JSON.stringify(serviceScreens,null,2)+'\n');
+ await unavailable.page.evaluate(()=>{for(const node of document.querySelectorAll('[data-fixture-original-font]')){node.style.fontSize=node.dataset.fixtureOriginalFont;delete node.dataset.fixtureOriginalFont;}window.connectionFixture.mode='ready';});await unavailable.page.setViewportSize({width:390,height:844});
+ await unavailable.page.locator('#call-help-retry').click();await eventually(async()=>(await unavailable.state()).phase==='connected','retry after service recovery must create a fresh usable call');await unavailable.page.clock.runFor(500);assert.equal((await unavailable.state()).greetings,1);assert.equal(unavailable.voiceRequests.length,2);
+ results.push({case:'voice-service-503-and-retry',serviceFailureClearlyIdentified:true,noNetworkBlame:true,microphoneReleased:true,serverSessionClosed:true,noPrematureGreeting:true,retryConnected:true});await unavailable.dispose();
  const cancelled=await setup('remote-hang');await cancelled.start();await eventually(async()=>(await cancelled.state()).peers.some(peer=>peer.remote),'remote description should be held before user cancellation');
  await cancelled.page.locator('#cancel-connection').click();await eventually(async()=>(await cancelled.state()).tracks.every(track=>track.state==='ended'),'user cancellation releases capture synchronously');
  await cancelled.release();await cancelled.page.clock.runFor(46000);assert.notEqual((await cancelled.state()).phase,'connecting');assert.equal((await cancelled.state()).greetings,0);assert.equal(await cancelled.page.locator('#call-help').isVisible(),false,'cancel must not turn into a later timeout warning');results.push({case:'cancel-late-remote',cancelled:true,lateCompletionIgnored:true});await cancelled.dispose();
- const compatibility=await setup('ready',{missingAbortHelpers:true,vadPending:true});await compatibility.start();await eventually(async()=>(await compatibility.state()).phase==='connected','missing optional AbortSignal helpers and pending VAD must not block RTC readiness');await compatibility.page.clock.runFor(500);assert.equal((await compatibility.state()).greetings,1);await compatibility.page.clock.runFor(46000);assert.equal((await compatibility.state()).phase,'connected');results.push({case:'missing-abort-helpers-and-pending-vad',connected:true});await compatibility.dispose();
+ const compatibility=await setup('ready',{missingAbortHelpers:true,vadPending:true,staleAuthored:true});await compatibility.start();await eventually(async()=>(await compatibility.state()).phase==='connected','missing optional AbortSignal helpers and pending VAD must not block RTC readiness');await compatibility.page.clock.runFor(500);assert.equal((await compatibility.state()).greetings,1);await compatibility.page.clock.runFor(46000);assert.equal((await compatibility.state()).phase,'connected');results.push({case:'missing-abort-helpers-and-pending-vad',connected:true,explicitRealtimeWinsStaleAuthored:true,noAuthoredBootstrap:true});await compatibility.dispose();
  const playback=await setup('ready',{playbackBlocked:true});await playback.start();await eventually(async()=>(await playback.state()).phase==='connected','autoplay denial must not undo actual connection');await eventually(()=>playback.page.evaluate(()=>window.connectionFixture.playAttempts>=1),'the real application should attempt to play the remote stream');await playback.page.evaluate(()=>{window.connectionFixture.playbackBlocked=false;});await playback.page.locator('#call-status').click();await eventually(()=>playback.page.evaluate(()=>window.connectionFixture.playAttempts>=2),'a user gesture retries the same stream after autoplay denial');await eventually(async()=>!await playback.page.locator('#notice').isVisible(),'successful playback recovery clears the blocked-playback advice');await playback.page.clock.runFor(500);assert.equal(playback.voiceRequests.length,1);assert.equal((await playback.state()).greetings,1);await playback.page.screenshot({path:'test-results/call-connection-playback-recovered-390.png',fullPage:true});results.push({case:'autoplay-denied-then-tap',retriedSameStream:true,newVoiceRequest:false,recoveryNoticeCleared:true});await playback.dispose();
  await writeFile('test-results/call-connection-result.json',JSON.stringify({fixture:true,manualCapability:true,realMicrophoneTracks:true,actualProvider:false,actualWebRtc:false,modelQualityVerified:false,cases:results},null,2)+'\n');
- console.log('PASS: 15 initial-connection lifecycle scenarios cover bounded setup, explicit policy acknowledgement, owned cleanup, stale completions, retry, missing optional signal helpers, pending VAD and user-gesture playback recovery. Auth/backend/provider/RTC are fixtures.');
+ console.log('PASS: 18 initial-connection lifecycle scenarios cover bounded learning preflight and setup, explicit policy acknowledgement, owned cleanup, stale completions, backend 503 recovery, retry, missing optional signal helpers, pending VAD and user-gesture playback recovery. Auth/backend/provider/RTC are fixtures.');
 }finally{await browser.close();server.kill('SIGTERM');}

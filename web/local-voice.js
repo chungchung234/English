@@ -113,7 +113,7 @@ export async function createLocalVoiceAnalyzer({ onVoice = () => {} } = {}) {
   };
 }
 
-export function createLocalVoiceActivity({ onVoice = () => {}, onState = () => {}, now = () => performance.now(),
+export function createLocalVoiceActivity({ onVoice = () => {}, onReferenceAudio = () => {}, onState = () => {}, now = () => performance.now(),
   AudioContextConstructor = globalThis.AudioContext || globalThis.webkitAudioContext } = {}) {
   let context = null, merger = null, processor = null, silent = null, microphone = null, reference = null;
   let microphoneStream = null, referenceStream = null, analyzer = null, disposed = false, failed = false, status = null;
@@ -154,7 +154,14 @@ export function createLocalVoiceActivity({ onVoice = () => {}, onState = () => {
         if (disposed || failed || status !== 'ready' || !analyzer || !microphone) return;
         const mic = event.inputBuffer.getChannelData(0);
         const ref = reference && event.inputBuffer.numberOfChannels > 1 ? event.inputBuffer.getChannelData(1) : null;
-        analyzer.push(mic, ref, context.sampleRate, now());
+        const at = now();
+        // Observe decoded remote-stream samples in the existing native graph.
+        // Only a monotonic timestamp leaves this callback, never its samples.
+        // This is not a physical speaker, post-volume or human-hearing receipt.
+        if (Number.isFinite(at) && ref?.some(value => Number.isFinite(value) && Math.abs(value) > .00001)) {
+          try { onReferenceAudio(at); } catch { /* Telemetry cannot change capture or playback. */ }
+        }
+        analyzer.push(mic, ref, context.sampleRate, at);
       } catch { unavailable(); }
     };
     context.onstatechange = () => {

@@ -1,0 +1,66 @@
+{
+  "fixture": true,
+  "fixtureOrigin": "http://127.0.0.1:38331",
+  "actualWasm": true,
+  "actualProvider": false,
+  "actualWebRtc": false,
+  "actualPhysicalAudio": false,
+  "realtimeTransport": "realtime_webrtc_v1",
+  "productionHashCspVerified": true,
+  "conversationalQualityVerified": false,
+  "acousticEffectivenessVerified": false,
+  "cases": [
+    {
+      "case": "real-wasm-qualified-turn-ownership",
+      "generated": 3,
+      "checkpoint": 2,
+      "playbackReceiptAfterRawAck": true,
+      "explicitRealtimeWinsStaleAuthored": true,
+      "nativeRemoteStreamPlayableBeforeResponseDoneAndRawAck": true,
+      "authoredRequests": 0,
+      "ended": true
+    },
+    {
+      "case": "revoked-context-memory-free-recovery",
+      "generated": 3,
+      "rawHistoryPreserved": true,
+      "retiredContextExcluded": true,
+      "ended": true
+    },
+    {
+      "case": "revoked-context-explicit-retry",
+      "generated": 3,
+      "rawHistoryPreserved": true,
+      "retiredContextExcluded": true,
+      "ended": true
+    },
+    {
+      "case": "startup-noise-does-not-silence-call",
+      "generated": 1,
+      "ended": true
+    },
+    {
+      "case": "detector-unavailable-explicit-reply",
+      "generated": 2,
+      "ended": true
+    },
+    {
+      "case": "production-hashed-csp-native-web-audio-callback",
+      "generated": 2,
+      "ended": true,
+      "scriptHashVerified": true
+    },
+    {
+      "case": "ten-minute-realtime-low-token-call",
+      "elapsedTimeOnlyKeepsMicrophoneLive": true,
+      "noAutomaticCheckpoint": true,
+      "noDuplicateGreeting": true,
+      "ended": true
+    },
+    {
+      "case": "legacy-capability-compatibility",
+      "generated": 1,
+      "ended": true
+    }
+  ]
+}

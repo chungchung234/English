@@ -1,0 +1,21 @@
+{
+  "verdict": "CLEAR",
+  "migration": "202611160003_nonretryable_business_conflicts.sql",
+  "sha256": "80ba0bf1623d8a9b73666cbc3be0e7a1e70fef24a961409effbe50e11618bf04",
+  "isolated_only": true,
+  "production_requests": 0,
+  "app_functions_compared": 140,
+  "allowlisted_functions": 29,
+  "rewritten_guards": 60,
+  "all_other_function_sources_unchanged": true,
+  "all_catalog_attributes_including_oid_owner_acl_security_search_path_unchanged": true,
+  "exact_code_literal_only_change": true,
+  "idempotence": true,
+  "source_drift_rejected": true,
+  "specific_serialization_catches_requiring_changes": 0,
+  "engine_serialization_retries_not_redefined": true,
+  "limits": [
+    "No PostgREST server or production RPC was exercised by this reviewer.",
+    "Live source fingerprints must match the migration allowlist before production application."
+  ]
+}

@@ -4,7 +4,8 @@ import { projectSharedExchanges, type SharedExchange } from './shared-exchanges.
 
 // Engineering bounds, not validated conversational/learning optima. Seven days
 // bounds unsolicited callbacks by source speech time; three openings in fourteen
-// days give expression variation context without replaying a conversation log.
+// days show how recent calls actually began, including repeated wording, without
+// replaying a conversation log.
 export const OPENING_POLICY_VERSION = 'opening-context-v2';
 export const OPENING_BOUNDS = Object.freeze({ continuityDays: 7, styleDays: 14, styleCount: 3, styleChars: 240, topicChars: 300, maxBytes: 3600 });
 const DAY = 86_400_000, PREPARED_PREFIX = 'User-prepared conversation:';
@@ -78,7 +79,7 @@ function preparedTopic(context: Data): OpeningContext['prepared_topic'] {
 }
 function openingHistory(value: unknown, now: number, companionId: unknown): OpeningContext['recent_openings'] {
   if (!Array.isArray(value)) return [];
-  const seen = new Set<string>(), sessions = new Set<string>();
+  const sessions = new Set<string>();
   return value.flatMap(entry => {
     if (!record(entry) || !uuid(entry.session_id) || !short(entry.text, 2000) || entry.role !== 'past_assistant_opening' || entry.source_kind !== 'observed_transcript' ||
       (entry.speaker !== undefined && entry.speaker !== 'assistant') || (entry.is_opening !== undefined && entry.is_opening !== true) ||
@@ -89,9 +90,11 @@ function openingHistory(value: unknown, now: number, companionId: unknown): Open
     if (!text || unsafe(entry.text)) return [];
     return [{ session_id: entry.session_id, occurred_at: instant, text, role: 'style_only' as const }];
   }).sort((a, b) => b.occurred_at.localeCompare(a.occurred_at) || a.session_id.localeCompare(b.session_id)).filter(entry => {
-    const signature = entry.text.toLocaleLowerCase('en');
-    if (sessions.has(entry.session_id) || seen.has(signature)) return false;
-    sessions.add(entry.session_id); seen.add(signature); return true;
+    // Repeated wording across distinct calls is useful evidence of repetition.
+    // Deduplicating it would make three identical greetings look like one, or
+    // replace them with older, more varied openings that were not the latest.
+    if (sessions.has(entry.session_id)) return false;
+    sessions.add(entry.session_id); return true;
   }).slice(0, OPENING_BOUNDS.styleCount);
 }
 

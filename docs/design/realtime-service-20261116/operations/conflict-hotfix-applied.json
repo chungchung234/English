@@ -1,0 +1,9 @@
+{
+  "applied": true,
+  "all_29_bodies_match_reviewed_nonretryable_sources": true,
+  "functions": 29,
+  "business_guards": 60,
+  "source_sha256": "80ba0bf1623d8a9b73666cbc3be0e7a1e70fef24a961409effbe50e11618bf04",
+  "observed_at": "2026-11-16T14:44:05.103854+00:00",
+  "data_rows_or_account_privileges_changed": false
+}

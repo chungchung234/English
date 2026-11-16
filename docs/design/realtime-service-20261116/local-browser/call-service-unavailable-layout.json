@@ -1,0 +1,28 @@
+[
+  {
+    "width": 390,
+    "height": 844,
+    "textScale": 1.25,
+    "screenshot": "test-results/call-service-unavailable-390.png",
+    "horizontalOverflow": false,
+    "retry": {
+      "visible": true,
+      "y": 386.375,
+      "bottom": 434.625,
+      "hit": true
+    }
+  },
+  {
+    "width": 320,
+    "height": 568,
+    "textScale": 1.25,
+    "screenshot": "test-results/call-service-unavailable-320.png",
+    "horizontalOverflow": false,
+    "retry": {
+      "visible": true,
+      "y": 352.375,
+      "bottom": 400.625,
+      "hit": true
+    }
+  }
+]

@@ -28,11 +28,22 @@ function report(value) {
 
 // The pending immutable report joins the next turn transaction too. A slow
 // optional receipt ACK cannot make the next turn forget already played speech.
-export function createAuthoredPlaybackDelivery({ getScope, send, storage, maxRequests = 50 } = {}) {
-  if (typeof getScope !== 'function' || typeof send !== 'function') throw new TypeError('Playback delivery callbacks required.');
-  const memory = new Map(), writes = new Set(), flights = new Map();
+export function createAuthoredPlaybackDelivery({ getScope, send, storage, maxRequests = 50, now = Date.now,
+  retryBaseMs = 10_000, retryMaxMs = 300_000 } = {}) {
+  if (typeof getScope !== 'function' || typeof send !== 'function' || typeof now !== 'function' ||
+    !Number.isSafeInteger(maxRequests) || maxRequests < 1 || !Number.isFinite(retryBaseMs) || retryBaseMs <= 0 ||
+    !Number.isFinite(retryMaxMs) || retryMaxMs < retryBaseMs) throw new TypeError('Playback delivery callbacks required.');
+  const memory = new Map(), writes = new Set(), flights = new Map(), retries = new Map(), accountRetries = new Map();
   const store = () => storage ??= createLearningOutbox('loop-authored-playback-v1');
   const identity = value => value.owner.scope + '|' + value.receiptId;
+  const defer = (states, key) => {
+    const attempt = Math.min((states.get(key)?.attempt || 0) + 1, 30);
+    states.set(key, { attempt, due: now() + Math.min(retryMaxMs, retryBaseMs * 2 ** Math.min(attempt - 1, 20)) });
+  };
+  const acknowledged = (ack, value) => ack?.protocol === protocol && same(ack.owner, value.owner) &&
+    ack.generation === value.generation && ack.receiptId === value.receiptId &&
+    (ack.status === 'recorded' && ack.reason === null || ack.status === 'discarded' &&
+      ['stale_authority', 'stale_revision', 'cancelled', 'source_changed', 'session_ended', 'source_missing', 'session_missing'].includes(ack.reason));
   async function pending(scope) {
     await Promise.allSettled([...writes]);
     let durable = [];
@@ -78,16 +89,40 @@ export function createAuthoredPlaybackDelivery({ getScope, send, storage, maxReq
     flush() {
       const scope = getScope(); if (!scope) return Promise.resolve({ delivered: 0 });
       if (flights.has(scope)) return flights.get(scope);
+      if ((accountRetries.get(scope)?.due ?? -Infinity) > now()) return Promise.resolve({ delivered: 0 });
       const work = (async () => {
         let delivered = 0;
-        for (const value of (await pending(scope)).slice(0, maxRequests)) {
+        const values = await pending(scope), retained = new Set(values.map(identity));
+        for (const id of retries.keys()) if (id.startsWith(scope + '|') && !retained.has(id)) retries.delete(id);
+        const eligible = values.filter(value => (retries.get(identity(value))?.due ?? -Infinity) <= now()).slice(0, maxRequests);
+        let failures = 0;
+        for (const value of eligible) {
           if (getScope() !== scope) break;
           try {
             const ack = await send(value, scope);
-            if (getScope() !== scope || ack?.protocol !== protocol || !same(ack.owner, value.owner) || ack.generation !== value.generation || ack.receiptId !== value.receiptId || !(ack.status === 'recorded' && ack.reason === null || ack.status === 'discarded' && ['stale_authority', 'stale_revision', 'cancelled', 'source_changed', 'session_ended', 'source_missing', 'session_missing'].includes(ack.reason))) break;
-            memory.delete(identity(value)); try { await store().remove(scope, value.receiptId); } catch { /* An exact duplicate is safe to retry. */ }
-            delivered++;
-          } catch { break; }
+            if (getScope() !== scope) break;
+            if (!acknowledged(ack, value)) {
+              defer(retries, identity(value));
+              if (++failures >= 2) break;
+              continue;
+            }
+            let removed = true;
+            try { await store().remove(scope, value.receiptId); } catch { removed = false; }
+            memory.delete(identity(value)); accountRetries.delete(scope); delivered++;
+            if (removed) retries.delete(identity(value));
+            else defer(retries, identity(value)); // A retained disk duplicate is safe, but never a 5-second retry loop.
+          } catch (error) {
+            if (getScope() !== scope) break;
+            defer(retries, identity(value));
+            // A transport/auth outage affects the account; a source-specific
+            // rejection must not starve later immutable completion reports.
+            const status = error?.status;
+            if (!Number.isInteger(status) || status === 401 || status === 429 || status >= 500 ||
+              ['UNAUTHENTICATED', 'ACCOUNT_NOT_ALLOWED', 'PGRST301', 'PGRST302', 'PGRST303'].includes(error?.code)) {
+              defer(accountRetries, scope); break;
+            }
+            if (++failures >= 2) break;
+          }
         }
         return { delivered };
       })().finally(() => flights.delete(scope));

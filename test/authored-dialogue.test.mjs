@@ -426,18 +426,20 @@ const pendingAuthority = { sessionId, callEpoch, authorityGeneration: 7, memoryR
 const ack = value => ({ protocol, owner: clone(value.owner), generation: value.generation, receiptId: value.receiptId, status: 'recorded', reason: null });
 
 test('playback delivery retries exact payload and removes only exact known recorded/discarded ACKs', async () => {
-  const storage = storageFixture(), value = playbackReport(), sent = []; let attempt = 0;
+  const storage = storageFixture(), value = playbackReport(), sent = []; let attempt = 0, time = 0;
   const mutations = [result => ({ ...result, owner: { ...result.owner, scope: `https://service.example|${uid(99)}` } }),
     result => ({ ...result, owner: { ...result.owner, sessionId: uid(98) } }), result => ({ ...result, receiptId: uid(97) }),
     result => ({ ...result, generation: 99 }), result => ({ ...result, status: 'discarded', reason: 'unknown' }),
     result => ({ ...result, status: 'recorded', reason: 'stale_revision' })];
-  const delivery = createAuthoredPlaybackDelivery({ storage, getScope: () => scope, send: async body => {
+  const delivery = createAuthoredPlaybackDelivery({ storage, getScope: () => scope, now: () => time, send: async body => {
     sent.push(clone(body)); const index = attempt++; if (index === 0) throw Error('offline');
     if (index <= mutations.length) return mutations[index - 1](ack(body));
     return { ...ack(body), status: 'discarded', reason: 'stale_revision' };
   } });
   await delivery.queue(value);
-  for (let i = 0; i <= mutations.length; i++) { assert.equal((await delivery.flush()).delivered, 0); assert.equal((await delivery.pending(scope, pendingAuthority)).length, 1); }
+  for (let i = 0; i <= mutations.length; i++) {
+    assert.equal((await delivery.flush()).delivered, 0); assert.equal((await delivery.pending(scope, pendingAuthority)).length, 1); time += 300_000;
+  }
   assert.equal((await delivery.flush()).delivered, 1); assert.equal((await delivery.pending(scope, pendingAuthority)).length, 0);
   assert(sent.every(item => JSON.stringify(item) === JSON.stringify(value)));
 });
@@ -453,6 +455,49 @@ test('durable report identity survives reload, duplicate queue timestamps, and c
   await assert.rejects(Promise.resolve().then(() => reloaded.queue({ ...playbackReport(), generation: 77 })), /identity|immutable/i);
   const pending = await reloaded.pending(scope, pendingAuthority); assert.equal(pending.length, 1); assert.equal(pending[0].generation, 1); assert.equal(pending[0].owner.scope, scope);
   assert.equal((await reloaded.flush()).delivered, 1);
+});
+
+test('a rejected legacy report backs off without blocking later completion reports or changing its immutable owner', async () => {
+  const storage = storageFixture(), first = playbackReport(1), second = playbackReport(2), sent = []; let time = 0;
+  const delivery = createAuthoredPlaybackDelivery({ storage, getScope: () => scope, now: () => time, send: async value => {
+    sent.push(clone(value));
+    if (value.receiptId === first.receiptId) throw Object.assign(Error('State changed'), { status: 409, code: 'MEMORY_CHANGED' });
+    return ack(value);
+  } });
+  await delivery.queue(first); await delivery.queue(second);
+  assert.equal((await delivery.flush()).delivered, 1); assert.equal(sent.length, 2);
+  time = 5000; assert.equal((await delivery.flush()).delivered, 0); assert.equal(sent.length, 2);
+  time = 10000; await delivery.flush(); assert.equal(sent.length, 3); assert.deepEqual(sent[0], sent[2]);
+  time = 15000; await delivery.flush(); assert.equal(sent.length, 3);
+  time = 30000; await delivery.flush(); assert.equal(sent.length, 4); assert.deepEqual(sent[0], sent[3]);
+  assert.deepEqual(await delivery.pending(scope, pendingAuthority), [first]);
+});
+
+test('legacy delivery rate-limits a transport outage to its account and preserves reports without inventing discard ACKs', async () => {
+  const storage = storageFixture(), first = playbackReport(), scope2 = `https://service.example|${uid(9)}`;
+  let time = 0, active = scope, online = false, calls = 0;
+  const delivery = createAuthoredPlaybackDelivery({ storage, getScope: () => active, now: () => time, send: async value => {
+    calls++; if (!online) throw Error('Offline'); return ack(value);
+  } });
+  await delivery.queue(first); await delivery.queue(playbackReport(2, scope2));
+  await delivery.flush(); assert.equal(calls, 1);
+  time = 5000; await delivery.flush(); assert.equal(calls, 1);
+  online = true; active = scope2; assert.equal((await delivery.flush()).delivered, 1);
+  active = scope; assert.equal((await delivery.flush()).delivered, 0); assert.equal(calls, 2);
+  assert.deepEqual(await delivery.pending(scope, pendingAuthority), [first]);
+  time = 10000; assert.equal((await delivery.flush()).delivered, 1);
+});
+
+test('a confirmed legacy ACK tolerates local removal failure without hammering the retained disk duplicate', async () => {
+  const storage = storageFixture(), value = playbackReport(), remove = storage.remove;
+  let time = 0, removable = false, calls = 0;
+  storage.remove = async (...args) => { if (!removable) throw Error('Disk unavailable'); return remove(...args); };
+  const delivery = createAuthoredPlaybackDelivery({ storage, getScope: () => scope, now: () => time,
+    send: async value => { calls++; return ack(value); } });
+  await delivery.queue(value); assert.equal((await delivery.flush()).delivered, 1);
+  time = 5000; await delivery.flush(); assert.equal(calls, 1);
+  removable = true; time = 10000; assert.equal((await delivery.flush()).delivered, 1);
+  assert.equal((await delivery.pending(scope, pendingAuthority)).length, 0);
 });
 
 test('a verified quota-only new write failure preserves immutable current-call evidence without claiming durability', async () => {
@@ -495,16 +540,17 @@ test('concurrent changed payloads cannot overwrite the first immutable report wh
 
 test('an exact stale head report is retired and allows later recorded reports through the same flush', async () => {
  for (const reason of ['stale_authority', 'source_missing', 'session_missing']) {
-  const storage = storageFixture(), first = playbackReport(1), second = playbackReport(2), sent = []; let rejectFirstAck = true;
-  const delivery = createAuthoredPlaybackDelivery({ storage, getScope: () => scope, send: async value => {
+  const storage = storageFixture(), first = playbackReport(1), second = playbackReport(2), sent = []; let rejectFirstAck = true, time = 0;
+  const delivery = createAuthoredPlaybackDelivery({ storage, getScope: () => scope, now: () => time, send: async value => {
     sent.push(clone(value));
     if (rejectFirstAck) { rejectFirstAck = false; return { ...ack(value), owner: { ...value.owner, authorityGeneration: 99 }, status: 'discarded', reason }; }
     return value.receiptId === first.receiptId ? { ...ack(value), status: 'discarded', reason } : ack(value);
   } });
   await delivery.queue(first); await delivery.queue(second);
-  assert.equal((await delivery.flush()).delivered, 0); assert.equal((await delivery.pending(scope, pendingAuthority)).length, 2);
-  assert.equal((await delivery.flush()).delivered, 2); assert.equal((await delivery.pending(scope, pendingAuthority)).length, 0);
-  assert.deepEqual(sent.map(value => value.receiptId), [first.receiptId, first.receiptId, second.receiptId]);
+  assert.equal((await delivery.flush()).delivered, 1); assert.equal((await delivery.pending(scope, pendingAuthority)).length, 1);
+  assert.equal((await delivery.flush()).delivered, 0); time = 10_000;
+  assert.equal((await delivery.flush()).delivered, 1); assert.equal((await delivery.pending(scope, pendingAuthority)).length, 0);
+  assert.deepEqual(sent.map(value => value.receiptId), [first.receiptId, second.receiptId, first.receiptId]);
  }
 });
 

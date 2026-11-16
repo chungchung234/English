@@ -6,6 +6,9 @@ import {randomUUID} from 'node:crypto';
 import {readFile,readdir} from 'node:fs/promises';
 import {PGlite} from '@electric-sql/pglite';
 import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
+import {createConversationPlaybackCollector,createConversationPlaybackDelivery} from '../web/conversation-playback.js';
+import {createQualifiedTurnControls} from '../web/qualified-turn-controls.js';
+import {projectSharedExchanges} from '../supabase/functions/coach/shared-exchanges.ts';
 
 const owner='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const at=hours=>new Date(Date.now()-hours*3600000).toISOString();
@@ -37,6 +40,62 @@ async function call(db,{companion='alex',user=owner,hours=24,status='ended'}={})
  const a=await event(db,session,'assistant','That is a pretty good wrong turn. I would notice the window first.',90);
  return{session,user:u,noise,assistant:a};
 }
+
+test('direct Realtime plays without a memory save gate and receipt-backed next-call context stays revocable',async t=>{
+ const db=await setup(t),c=await call(db,{hours:2,status:'active'}),scope='https://service.example|'+owner;
+ const pending=new Map(),requests=[],transcript=new Map(),providers=new Map();
+ const outbox={
+  async put(account,row){assert.equal(account,scope);pending.set(row.id,structuredClone(row));},
+  async list(account){assert.equal(account,scope);return[...pending.values()].map(row=>structuredClone(row));},
+  async remove(account,id){assert.equal(account,scope);pending.delete(id);},
+ };
+ const collector=createConversationPlaybackCollector({scope,sessionId:c.session.id,companionId:'alex',outbox});
+ for(const [source,provider] of [[c.user,'caller'],[c.assistant,'reply-item']]){
+  const row={id:source.id,event_key:source.event_key,speaker:source.speaker,text:source.text,
+   occurred_at:new Date(source.timestamp).toISOString(),storage:'device'};
+  transcript.set(row.event_key,row);providers.set(row.id,provider);
+ }
+ const floor=createQualifiedTurnControls({send:event=>requests.push(event),instructions:()=> 'Current friendly context.',
+  openingInstructions:()=> 'Current opening context.',hasRecentVoice:()=>true,now:()=>1000,graceMs:0});
+ t.after(()=>floor.dispose());
+ const emit=event=>{floor.event(event);collector.observe(floor.acceptedItemIds(),0);};
+ emit({type:'session.updated',session:{audio:{input:{turn_detection:{type:'semantic_vad',eagerness:'low',create_response:false,interrupt_response:false}}}}});
+ floor.availability(true);
+ emit({type:'input_audio_buffer.speech_started',item_id:'caller'});floor.voice(1000);
+ emit({type:'input_audio_buffer.speech_stopped',item_id:'caller'});
+ emit({type:'input_audio_buffer.committed',item_id:'caller'});
+ emit({type:'conversation.item.input_audio_transcription.completed',item_id:'caller',transcript:c.user.text});
+ floor.start();
+ const request=requests.find(event=>event.type==='response.create');assert(request,'the live response starts while source ACKs are still pending');
+ emit({type:'response.created',response:{id:'reply',metadata:request.response.metadata}});
+ emit({type:'response.output_item.added',response_id:'reply',item:{id:'reply-item',type:'message',role:'assistant'}});
+ emit({type:'output_audio_buffer.started',response_id:'reply'});
+ assert.equal((await collector.capture(transcript,providers)).queued,0);
+ emit({type:'response.done',response:{id:'reply',status:'completed',output:[{id:'reply-item',type:'message',role:'assistant',content:[{type:'audio'}]}]}});
+ assert.equal((await collector.capture(transcript,providers)).queued,0,'generation complete is not completed playback');
+ emit({type:'output_audio_buffer.stopped',response_id:'reply'});
+ assert.equal((await collector.capture(transcript,providers)).queued,0,'completed playback still needs raw source ACKs before optional memory admission');
+ for(const row of transcript.values())row.storage='server';
+ assert.equal((await collector.capture(transcript,providers)).queued,1);
+ const delivery=createConversationPlaybackDelivery({outbox,getScope:()=>scope,send:body=>role(db,'authenticated',owner,
+  async()=>(await db.query('select public.record_conversation_playback($1,$2,$3,$4,$5) result',
+   [body.p_session_id,body.p_event_ids,body.p_receipt_id,body.p_qualified_user_ids,body.p_expected_memory_revision])).rows[0].result)});
+ assert.equal((await delivery.flush()).delivered,1);assert.equal(pending.size,0);
+ assert.deepEqual((await context(db)).exchanges,[],'an active call cannot become prior conversation context');
+ await db.query("update public.sessions set status='ended',ended_at=$1 where id=$2",[new Date(Date.parse(c.session.created_at)+600000).toISOString(),c.session.id]);
+ const memory=await service(db,'memory_context',[owner,'alex','',null,'text-embedding-3-small',12]);
+ const next=projectSharedExchanges(memory.shared_exchanges,{companionId:'alex',revision:memory.revision,now:new Date().toISOString(),currentSessionId:randomUUID(),facts:memory.facts});
+ assert.equal(next.length,1);assert.equal(next[0].caller.quote,c.user.text);assert.equal(next[0].companion.quote,c.assistant.text);
+ assert.equal(next[0].admission,'client_reported_playback_completed');assert(!JSON.stringify(next).includes(c.noise.text));
+ assert.deepEqual((await context(db,'alex',other)).exchanges,[]);assert.deepEqual((await context(db,'mia')).exchanges,[]);
+ await db.query('update public.transcript_events set text=$1 where id=$2',['I corrected the earlier story.',c.user.id]);
+ assert(!(await context(db)).exchanges.some(row=>row.source_session_id===c.session.id),'a changed user source invalidates the old assistant quote');
+ await db.query('update public.transcript_events set text=$1 where id=$2',[c.user.text,c.user.id]);
+ await service(db,'memory_manage',[owner,'alex','forgetFact','interest',null,null]);
+ assert.deepEqual((await context(db)).exchanges,[],'forgetting invalidates the original revision');
+ const receipt=[...transcript.values()].find(row=>row.speaker==='assistant');
+ assert.equal(receipt.text,c.assistant.text,'optional memory invalidation never edits raw speech');
+});
 
 test('source-backed conversation exchanges preserve speaker identity, playback admission and privacy',async t=>{
  const db=await setup(t);

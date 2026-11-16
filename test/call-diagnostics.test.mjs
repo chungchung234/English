@@ -46,10 +46,13 @@ test('failed delivery retries the exact receipt, including after client reload, 
   let calls = 0; const sent = [], store = storage();
   const f = fixture({ storage: store, send: async rows => { sent.push(rows); if (++calls === 1) throw Error('offline'); return {}; } });
   f.client.record(base); await f.client.flush(); await f.client.flush();
+  assert.equal(sent.length, 1, 'five-second sync cannot bypass cooldown');
+  f.advance(30_000); await f.client.flush();
   assert.equal(sent.length, 2); assert.deepEqual(sent[0], sent[1]); assert.equal(f.client.list().length, 1);
   const afterReload = fixture({ storage: store });
   assert.deepEqual(afterReload.client.list(), f.client.list());
-  await afterReload.client.flush(); assert.deepEqual(afterReload.client.list(), []);
+  await afterReload.client.flush(); assert.equal(afterReload.client.list().length, 1, 'reload retains cooldown');
+  afterReload.advance(90_000); await afterReload.client.flush(); assert.deepEqual(afterReload.client.list(), []);
 });
 
 test('server receipts remove only sent IDs; explicit capacity drops settle while unrelated and absent receipts remain queued', async () => {
@@ -99,7 +102,7 @@ test('queue and batch work are bounded, including absent server acknowledgements
   assert.equal(f.client.list()[0].code, 'error_25');
   await f.client.flush(); assert.equal(sent.length, 1); assert.equal(sent[0].length, 20);
   const drained = fixture({ storage: f.store });
-  await drained.client.flush(); assert.deepEqual(drained.client.list(), []);
+  drained.advance(30_000); await drained.client.flush(); assert.deepEqual(drained.client.list(), []);
 });
 
 test('storage denial, corrupt caches, invalid clocks and signed-out records cannot disrupt calls', async () => {
@@ -164,9 +167,78 @@ test('deduplication preserves distinct responses and effective settings, while c
   assert.equal(f.client.list().length, 3);
   const reloaded = fixture({ storage: store });
   assert.equal(reloaded.client.record(one), false, 'a reload still deduplicates the same queued receipt');
-  await f.client.flush(); await f.client.flush();
+  await f.client.flush(); f.advance(30_000); await f.client.flush();
   assert.deepEqual(sent[0], sent[1], 'an offline retry retains the original nested settings');
   assert.deepEqual(f.client.list(), []);
-  assert.equal(f.client.record(one), false, 'acknowledged response still has a ten-second burst guard');
+  assert.equal(f.client.record(one), true, 'after the backoff exceeds ten seconds a later observation is eligible');
+  assert.equal(f.client.record(one), false, 'the later observation still has a ten-second burst guard');
   assert.equal(f.client.record({ ...one, audio_context: { ...one.audio_context, response_key: '33333333-3333-4333-8333-333333333333' } }), true);
+});
+
+test('malformed immutable diagnostic batches are quarantined without fabricated ACKs or starving a later session', async () => {
+  const sent = [], f = fixture({ send: async rows => {
+    sent.push(structuredClone(rows));
+    if (rows.some(row => row.session_id === session)) throw Object.assign(Error('private database detail'), { code: '22023' });
+    return { event_ids: rows.map(row => row.event_id) };
+  } });
+  f.client.record(base); const original = f.client.list(); await f.client.flush();
+  for (let i = 0; i < 10; i++) { f.advance(5000); await f.client.flush(); }
+  assert.equal(sent.length, 1); assert.deepEqual(f.client.list(), original, 'quarantine is not an acknowledgement or raw receipt edit');
+  assert(!JSON.stringify([...f.store.rows.values()]).includes('private database detail'));
+  f.client.record({ ...base, session_id: otherSession }); await f.client.flush();
+  assert.equal(sent.length, 2); assert.equal(sent[1][0].session_id, otherSession);
+  assert.deepEqual(f.client.list(), original, 'an unrelated valid session can settle without resending poison');
+});
+
+test('transport, permission and absent-receipt retries stop after a bounded count and remain bounded across reload', async () => {
+  for (const error of [undefined, Object.assign(Error('denied'), { code: '42501', status: 403 }), Error('offline')]) {
+    let calls = 0;
+    const f = fixture({ send: async () => { calls++; if (error) throw error; return {}; } });
+    f.client.record(base);
+    for (let i = 0; i < 12; i++) { await f.client.flush(); f.advance(300_000); }
+    assert.equal(calls, 8); assert.equal(f.client.list().length, 1);
+    const reloaded = fixture({ storage: f.store, send: async () => { calls++; return {}; } });
+    reloaded.advance(20_000_000); await reloaded.client.flush(); assert.equal(calls, 8, 'reload cannot restart a poison batch');
+  }
+});
+
+test('retry cooldown is account-scoped and does not expose retry bookkeeping in transport receipts', async () => {
+  const sent = [], f = fixture({ send: async (rows, owner) => {
+    sent.push({ rows: structuredClone(rows), owner });
+    if (owner === 'account-a') throw Error('offline');
+    return { event_ids: rows.map(row => row.event_id) };
+  } });
+  f.client.record(base); await f.client.flush(); f.setScope('account-b');
+  f.client.record({ ...base, session_id: otherSession }); await f.client.flush();
+  assert.equal(sent.length, 2); assert.equal(sent[1].owner, 'account-b');
+  assert.deepEqual(f.client.list(), []);
+  assert(!JSON.stringify(sent).includes('nextAt')); assert(!JSON.stringify(sent).includes('quarantined'));
+  f.setScope('account-a'); await f.client.flush(); assert.equal(sent.length, 2);
+  f.advance(30_000); await f.client.flush(); assert.equal(sent.length, 3);
+});
+
+test('latency receipts keep bounded timing enums and local keys, reject invalid metrics, and own their nested context', async () => {
+  const sent = [], f = fixture({ send: async rows => { sent.push(structuredClone(rows)); return { event_ids: rows.map(row => row.event_id) }; } });
+  const context = { turn_key: '11111111-1111-4111-8111-111111111111', purpose: 'reply', start_basis: 'speech_stop_received',
+    measurement: 'provider_output_started', request_ms: 220, transcription_ms: 200, provider_output_ms: 650 };
+  assert.equal(f.client.record({ ...base, kind: 'turn_latency', code: 'REALTIME_PROVIDER_OUTPUT', latency_context: { ...context,
+    response_id: 'resp_private', item_id: 'item_private', transcript: 'private utterance' } }), true);
+  const listed = f.client.list(); assert.deepEqual(listed[0].latency_context, context); listed[0].latency_context.request_ms = 1;
+  assert(!JSON.stringify([...f.store.rows.values()]).includes('private'));
+  for (const latency_context of [undefined, {}, { ...context, turn_key: 'resp_private' }, { ...context, purpose: 'private utterance' },
+    { ...context, start_basis: 'physically_heard' }, { ...context, measurement: 'heard' }, { ...context, request_ms: -1 },
+    { ...context, transcription_ms: 120001 }, { ...context, request_ms: 1.5 }, { ...context, request_ms: '10' },
+    { ...context, provider_output_ms: undefined }, { ...context, measurement: 'native_render' }, { ...context, measurement: 'source_saved' }]) {
+    assert.equal(f.client.record({ ...base, kind: 'turn_latency', latency_context }), false);
+  }
+  await f.client.flush(); assert.equal(sent[0][0].latency_context.request_ms, 220);
+});
+
+test('an already-open tab observes a peer quarantine instead of restarting the same failed batch', async () => {
+  let attempts = 0; const store = storage();
+  const stale = fixture({ storage: store, send: async rows => { attempts++; return { event_ids: rows.map(row => row.event_id) }; } });
+  const writer = fixture({ storage: store, send: async () => { attempts++; throw Object.assign(Error('invalid'), { code: '22023' }); } });
+  writer.client.record(base); assert.equal(stale.client.list().length, 1, 'the second tab is warm before failure');
+  await writer.client.flush(); stale.advance(300_000); await stale.client.flush();
+  assert.equal(attempts, 1); assert.equal(stale.client.list().length, 1);
 });

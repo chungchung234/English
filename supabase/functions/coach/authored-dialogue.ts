@@ -373,6 +373,7 @@ export function authoredDialogueStream(userId: string, body: Data, deps: Dialogu
         } catch (error) {
           if (!cancelled && !combined.aborted) {
             const code = error instanceof AppError && /^[A-Z][A-Z_0-9]{0,63}$/.test(error.code) ? error.code : 'DIALOGUE_UNAVAILABLE';
+            try { console.warn(JSON.stringify({ kind: 'authored_dialogue_stream_failed', code })); } catch { /* observational */ }
             try { emit({ type: 'error', error: { code, message: 'The conversation reply could not be completed.' } }); } catch { /* an abandoned stream cannot publish */ }
           }
         } finally {

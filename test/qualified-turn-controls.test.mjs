@@ -97,17 +97,100 @@ test('empty or failed ASR never replies and user transcription is never filtered
   assert.equal(f.sent.some(event => event.type === 'input_audio_buffer.clear' || event.type === 'conversation.item.delete'), false);
 });
 
-test('only server candidate plus recent local voice interrupts; noise never cancels', t => {
+test('interruption requires a server candidate and continuing current local voice; one pulse never cancels', t => {
   const f = fixture(t); f.control.start(); f.ack('greeting');
   f.emit({ type: 'output_audio_buffer.started', response_id: 'greeting' });
   f.voice(); assert.equal(f.sent.some(event => event.type === 'response.cancel'), false, 'local detector alone does not interrupt');
   f.utter('noise', { qualified: false, transcript: '' });
-  const g = fixture(t); g.control.start(); g.ack('other'); g.emit({ type: 'output_audio_buffer.started', response_id: 'other' });
+  let time = 1000;
+  const g = fixture(t, { now: () => time }); g.control.start(); g.ack('other'); g.emit({ type: 'output_audio_buffer.started', response_id: 'other' });
   g.emit({ type: 'input_audio_buffer.speech_started', item_id: 'noise-only' });
   assert.equal(g.sent.some(event => event.type === 'response.cancel'), false);
   g.voice();
+  assert.equal(g.sent.some(event => event.type === 'response.cancel'), false, 'a transient pulse cannot destroy live streamed speech');
+  assert.equal(g.output.at(-1), false, 'candidate qualification does not mute or skip RTC audio');
+  time += 100; g.voice();
   assert.deepEqual(g.sent.slice(-2).map(event => event.type), ['response.cancel', 'output_audio_buffer.clear']);
   assert.equal(g.sent.at(-2).response_id, 'other');
+});
+
+test('one local pulse followed by empty or failed ASR keeps the same real-time response playing', t => {
+  for (const failure of [false, true]) {
+    const f = fixture(t); f.control.start(); f.ack('playing');
+    f.emit({ type: 'output_audio_buffer.started', response_id: 'playing' });
+    const before = [...f.output];
+    f.emit({ type: 'input_audio_buffer.speech_started', item_id: 'transient' }); f.voice();
+    f.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'transient' });
+    f.emit({ type: 'input_audio_buffer.committed', item_id: 'transient' });
+    f.emit({ type: failure ? 'conversation.item.input_audio_transcription.failed' : 'conversation.item.input_audio_transcription.completed', item_id: 'transient', transcript: '' });
+    assert.equal(f.sent.some(event => ['response.cancel', 'output_audio_buffer.clear'].includes(event.type)), false);
+    assert.deepEqual(f.output, before, 'RTC stream is never muted for a rejected candidate');
+    assert.equal(f.control.state.phase, 'responding'); assert.equal(f.control.state.needsResume, false);
+    assert.equal(f.creates().length, 1, 'same stream continues without regeneration');
+  }
+});
+
+test('stale and replayed local voice cannot manufacture continuing evidence for a new candidate', t => {
+  let time = 1000;
+  const f = fixture(t, { now: () => time }); f.control.start(); f.ack('playing');
+  f.emit({ type: 'output_audio_buffer.started', response_id: 'playing' }); f.voice();
+  time += 100;
+  f.emit({ type: 'input_audio_buffer.speech_started', item_id: 'current' });
+  f.control.voice(1000); f.control.voice(1000);
+  assert.equal(f.sent.some(event => event.type === 'response.cancel'), false);
+  f.voice(); f.voice();
+  assert.equal(f.sent.some(event => event.type === 'response.cancel'), false, 'duplicate timestamps count once');
+  time += 99; f.voice();
+  assert.equal(f.sent.some(event => event.type === 'response.cancel'), false);
+  time += 1; f.voice();
+  assert.equal(f.sent.filter(event => event.type === 'response.cancel').length, 1);
+});
+
+test('isolated pulses across silence or different server candidates never accumulate into an interruption', t => {
+  let time = 1000;
+  const f = fixture(t, { now: () => time }); f.control.start(); f.ack('playing');
+  f.emit({ type: 'output_audio_buffer.started', response_id: 'playing' });
+  f.emit({ type: 'input_audio_buffer.speech_started', item_id: 'first' }); f.voice();
+  time += 200; f.voice();
+  assert.equal(f.sent.some(event => event.type === 'response.cancel'), false, 'a silence gap resets continuing evidence');
+  f.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'first' });
+  time += 100; f.emit({ type: 'input_audio_buffer.speech_started', item_id: 'second' }); f.voice();
+  assert.equal(f.sent.some(event => event.type === 'response.cancel'), false, 'a new candidate starts fresh');
+  time += 100; f.voice();
+  assert.equal(f.sent.filter(event => event.type === 'response.cancel').length, 1);
+});
+
+test('brief locally-qualified final speech may interrupt without waiting for continuing voice or a timer', t => {
+  const f = fixture(t); f.control.start(); f.ack('playing');
+  f.emit({ type: 'output_audio_buffer.started', response_id: 'playing' });
+  f.emit({ type: 'input_audio_buffer.speech_started', item_id: 'brief' }); f.voice();
+  f.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'brief' });
+  assert.equal(f.sent.some(event => event.type === 'response.cancel'), false);
+  f.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'brief', transcript: 'Wait.' });
+  assert.equal(f.sent.filter(event => event.type === 'response.cancel').length, 1);
+  assert.equal(f.creates().length, 1, 'commit and scoped output release still gate the next response');
+});
+
+test('late ASR from an earlier interruption candidate never cancels a newer response', async t => {
+  const f = fixture(t, { timeoutMs: 10 }); f.control.start(); f.ack('first');
+  f.emit({ type: 'output_audio_buffer.started', response_id: 'first' });
+  f.utter('late-candidate', { final: false });
+  await wait(15);
+  f.done('first'); f.utter('new-question'); f.ack('new-response');
+  f.emit({ type: 'output_audio_buffer.started', response_id: 'new-response' });
+  f.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'late-candidate', transcript: 'An earlier utterance arriving late.' });
+  assert.equal(f.sent.some(event => event.type === 'response.cancel'), false, 'candidate cancellation remains bound to its original response');
+  assert.equal(f.control.state.phase, 'responding'); assert.equal(f.output.at(-1), false);
+});
+
+test('explicit stop remains immediate while a transient candidate is still uncertain', t => {
+  const f = fixture(t); f.control.start(); f.ack('playing');
+  f.emit({ type: 'output_audio_buffer.started', response_id: 'playing' });
+  f.emit({ type: 'input_audio_buffer.speech_started', item_id: 'pulse' }); f.voice();
+  assert.equal(f.sent.some(event => event.type === 'response.cancel'), false);
+  assert.equal(f.control.stop(), true);
+  assert.equal(f.sent.filter(event => event.type === 'response.cancel').length, 1);
+  assert.equal(f.sent.at(-2).response_id, 'playing');
 });
 
 test('barge in waits for scoped generation done and output clear in either order before one reply', t => {
@@ -374,10 +457,11 @@ test('persistent unqualified VAD noise cannot delay greeting and the same item m
   f.control.start(); assert.equal(f.control.state.inputBusy, false);
   await wait(16); assert.equal(f.creates().length, 1); assert.equal(f.creates()[0].response.metadata.purpose, 'startup');
   f.ack(); f.emit({ type: 'output_audio_buffer.started', response_id: 'r1' });
-  f.voice(); assert.equal(f.sent.at(-2).type, 'response.cancel'); assert.equal(f.sent.at(-2).response_id, 'r1');
+  f.voice(); assert.equal(f.sent.some(event => event.type === 'response.cancel'), false, 'one late pulse does not interrupt');
   f.emit({ type: 'input_audio_buffer.speech_stopped', item_id: 'long-candidate' });
   f.emit({ type: 'input_audio_buffer.committed', item_id: 'long-candidate' });
   f.emit({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'long-candidate', transcript: 'This is my real question.' });
+  assert.equal(f.sent.at(-2).type, 'response.cancel'); assert.equal(f.sent.at(-2).response_id, 'r1');
   f.emit({ type: 'response.done', response: { id: 'r1', status: 'cancelled', output: [] } });
   f.emit({ type: 'output_audio_buffer.cleared', response_id: 'r1' });
   assert.equal(f.creates().length, 2); assert.deepEqual(f.creates()[1].response.input, [{ type: 'item_reference', id: 'long-candidate' }]);

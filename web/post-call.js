@@ -263,7 +263,29 @@ export function createPostCallFlow(deps) {
     planApplied = key;
     deps.chooseScenario(plan.scenario, plan.source_session_id || item.source_session_id, { restore: true, itemId: item.id });
   }
-  async function load(data = {}) {
+  const activeLoads=new Map();
+  function load(data = {}) {
+    const owner=currentIdentity(),task=loadState(data);
+    activeLoads.set(task,owner);
+    const settled=()=>activeLoads.delete(task);
+    task.then(settled,settled);
+    return task;
+  }
+  async function prepareCall() {
+    if(!ensureIdentity())return;
+    const t=token();
+    await load();
+    // A background hydration may supersede this load at its IndexedDB await.
+    // Supersession is not completion: wait for all reads owned by this scope.
+    // The caller's connection deadline/cancellation still bounds this wait.
+    while(same(t)){
+      const pending=[...activeLoads].filter(([,owner])=>owner===t.identity).map(([task])=>task);
+      if(!pending.length)break;
+      await Promise.all(pending);
+    }
+    if(same(t))await flush();
+  }
+  async function loadState(data = {}) {
     if (!ensureIdentity()) return;
     const t = token(), version = ++loadVersion;
     const belongs = session => session.companion_id === companion;
@@ -1158,5 +1180,5 @@ export function createPostCallFlow(deps) {
   });
   window.addEventListener('online', () => { if (identity && identity === currentIdentity()) { void flush(); void refreshSnapshot(); } });
   function getPlan(){if(!identity||identity!==currentIdentity()||snapshotError||hasPendingExclusions())return null;const plan=snapshot?.next_plan;const item=itemOf(plan?.item_id||plan?.target_item_id);return plan&&item&&!suppressed(item)?plan:null;}
-  return { getPlan, show, selectSession, feedbackViewed, load, openSession, saved, interrupted, openPreview, clear, viewed, closePractice, hasPendingExclusions, flush, getBackup, restoreBackup, requestReview, prepareNext, recordConnected };
+  return { getPlan, show, selectSession, feedbackViewed, load, prepareCall, openSession, saved, interrupted, openPreview, clear, viewed, closePractice, hasPendingExclusions, flush, getBackup, restoreBackup, requestReview, prepareNext, recordConnected };
 }

@@ -124,11 +124,14 @@ async function setup(mode,{missingAbortHelpers=false,vadPending=false,playbackBl
 
 try{
  await mkdir('test-results',{recursive:true});
+ // Exercise the login/call load-version race across repeated fresh sessions.
+ for(let trial=0;trial<8;trial++){
  const preflight=await setup('learning-hang');await preflight.page.locator('#start-call').click();await eventually(()=>Promise.resolve(preflight.preflightHeld()),'the controlled learning-state preflight should be pending');
  assert.equal((await preflight.state()).phase,'connecting');assert.equal((await preflight.state()).tracks.length,0);
  await preflight.page.clock.runFor(46000);await eventually(()=>preflight.page.locator('#call-help').isVisible(),'preflight must also have a bounded deadline rather than wait for a ninety-second generic API timeout');
  await preflight.release();await preflight.page.clock.runFor(1000);assert.notEqual((await preflight.state()).phase,'connecting');assert.equal((await preflight.state()).peers.length,0,'late preflight completion cannot create a peer after expiry');assert.equal((await preflight.state()).tracks.length,0,'late preflight completion cannot capture a microphone after expiry');
- results.push({case:'learning-preflight-timeout',boundedBeforeCapture:true,lateCompletionIgnored:true});await preflight.dispose();
+ if(trial===0)results.push({case:'learning-preflight-timeout',boundedBeforeCapture:true,lateCompletionIgnored:true});await preflight.dispose();
+ }
  const preflightCancel=await setup('learning-hang');await preflightCancel.page.locator('#start-call').click();await eventually(()=>Promise.resolve(preflightCancel.preflightHeld()),'the cancellable learning-state preflight should be pending');
  await eventually(()=>preflightCancel.page.evaluate(()=>{const node=document.querySelector('#cancel-connection'),r=node.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return document.body.dataset.callPhase==='connecting'&&!node.hidden&&!!hit&&(hit===node||node.contains(hit));}),'cancel must be visible and unobstructed during learning preflight');
  await preflightCancel.page.locator('#cancel-connection').click();await preflightCancel.release();await preflightCancel.page.clock.runFor(1000);assert.notEqual((await preflightCancel.state()).phase,'connecting');assert.equal((await preflightCancel.state()).tracks.length,0);assert.equal((await preflightCancel.state()).peers.length,0);assert.equal(await preflightCancel.page.locator('#call-help').isVisible(),false,'an intentional preflight cancel must not later display a timeout warning');

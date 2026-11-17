@@ -1027,7 +1027,7 @@ async function startCall() {
     // Their immutable outbox and ACK checks continue in the background.
     void sync().catch(()=>{if(scope===callScope)void updatePending().catch(()=>{});});
     checkAttempt();
-    await waitForAttempt(learning.load());await waitForAttempt(learning.flush());
+    await waitForAttempt(learning.prepareCall());
     const omitLearningContext=learning.hasPendingExclusions();
     $('call-status').textContent='마이크 사용을 허용해 주세요';
     stream=await waitForAttempt(navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(value=>{

@@ -5,9 +5,10 @@ import { validatePublicConfig } from '../src/public-config.mjs';
 // Resolve deployment configuration in CI. Only an anon/publishable key is
 // returned. Provider management credentials never enter the built website.
 export async function hostingConfig(env, request=fetch) {
-  const ref=env.SUPABASE_PROJECT_REF||'domkmxmwmihcfadophfg';
+  const ref=env.SUPABASE_PROJECT_REF||'';
   if(!/^[a-z0-9]{20}$/.test(ref))throw Error('Invalid Supabase project reference.');
   const url=env.PUBLIC_SUPABASE_URL||`https://${ref}.supabase.co`;
+  if(url!==`https://${ref}.supabase.co`)throw Error('PUBLIC_SUPABASE_URL does not match the deployment project.');
   let key=env.PUBLIC_SUPABASE_KEY||env.SUPABASE_ANON_KEY;
   if(!key&&env.SUPABASE_ACCESS_TOKEN){
     const response=await request(`https://api.supabase.com/v1/projects/${ref}/api-keys?reveal=true`,{headers:{Authorization:`Bearer ${env.SUPABASE_ACCESS_TOKEN}`},signal:AbortSignal.timeout(30000)});

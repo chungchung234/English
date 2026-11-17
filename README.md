@@ -105,7 +105,7 @@ BUILD_SITE_URL=http://127.0.0.1:4173/built/ npm run build
 
 ## 새 Supabase 프로젝트 연결
 
-현재 선택한 프로젝트: `domkmxmwmihcfadophfg`
+현재 선택한 프로젝트: `zsapmrcurmzgsaccscwe`
 
 1. https://supabase.com/dashboard/project/domkmxmwmihcfadophfg 에서 연결합니다.
 2. **API / Connect**에서 Project URL과 publishable 또는 anon 공개 키를 확인합니다. service_role/secret 키를 프런트 화면에 넣지 마세요.
@@ -209,3 +209,9 @@ BUILD_SITE_URL=https://example.com/English/ npm run build -- --require-config
 모델별 추론·캐시·예산·실측 검증은 [모델과 비용 정책](docs/model-policy.md)을 참고하세요.
 
 복습 목록은 통화한 날짜와 상대별로 유효한 표현들을 모아 보여줍니다. 표현 선택 시 해당 통화의 학습 노트로 이동하며, 책갈피 저장과 연습 기록을 구분합니다. [날짜별 복습 구현·검증](docs/review-journal-20261111.md), [시안 대조](design-qa.md).
+
+## 새 프로젝트 이전 (2026-11-17)
+
+최신 main을 기준으로 마이그레이션 27개를 적용하고 기존 승인 계정 정책을 유지했습니다. 자동 저장은 장애 때 5초부터 최대 5분까지 간격을 늘리며, 로컬 기록은 서버 ACK 전까지 보존합니다. DB 중지·위험한 확장·시스템 설정 변경은 발견되지 않았습니다. GitHub의 5분 간격 복구 작업은 실행당 최대 4개이며 그대로 유지합니다.
+
+Supabase 연결 정보는 새 프로젝트 값으로 교체합니다. 기존 OpenAI 키는 `OPEN_API_KEY` 이름도 지원하며 새 키를 발급하지 않았습니다. SMTP는 사용자가 다시 입력했습니다. Google·카카오 OAuth는 기존 비밀키와 새 callback `https://zsapmrcurmzgsaccscwe.supabase.co/auth/v1/callback` 등록이 필요해 미완료입니다. 이메일 실제 수신은 별도 확인이 필요합니다.

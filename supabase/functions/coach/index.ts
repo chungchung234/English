@@ -16,7 +16,7 @@ type Session = { id: string; user_id: string; companion_id: CompanionId; scenari
 type Run = { job_id: string; lease_token: string; state: string; reserved: boolean; reason: string; result: unknown; attempts?: number; retry_at?: string };
 const envValue = (name: string) => Deno.env.get(name);
 function environment(): Env {
-  const supabase = envValue('SUPABASE_URL'), serviceKey = envValue('SUPABASE_SERVICE_ROLE_KEY'), openai = envValue('OPENAI_API_KEY');
+  const supabase = envValue('SUPABASE_URL'), serviceKey = envValue('SUPABASE_SERVICE_ROLE_KEY'), openai = envValue('OPENAI_API_KEY') || envValue('OPEN_API_KEY');
   const emails = (envValue('ALLOWED_EMAILS') || '').split(',').map(email => email.trim().toLowerCase()).filter(Boolean);
   const mode=envValue('ACCESS_MODE')||'public', publicAccess=mode==='public';
   if (!['public','invite'].includes(mode) || !supabase || !serviceKey || !openai || (!publicAccess&&!emails.length) || emails.some(email => !/^[^\s@*]+@[^\s@*]+\.[^\s@*]+$/.test(email))) throw new AppError(503, 'CONFIGURATION_REQUIRED', 'The coach service requires configuration.');

@@ -839,15 +839,18 @@ async function appendSavedEvents(accountScope,sessionId,events,expectedCall=null
   }
   transcriptReview.confirm(accountScope,sessionId,events);
 }
-async function sync() {
+let syncFailures = 0, nextSyncAt = 0, syncScope;
+async function sync(automatic = false) {
   if(!auth||!scope)return;
+  if(syncScope!==scope){syncScope=scope;syncFailures=0;nextSyncAt=0;}
+  if(automatic&&(!navigator.onLine||Date.now()<nextSyncAt))return;
   void callDiagnostics.flush();
   void conversationPlaybackDelivery.flush();
   void authoredPlaybackDelivery.flush();
   if(flushing)return flushing;
   const current=scope;
   flushing=flushOutbox(outbox,current,(sessionId,events)=>appendSavedEvents(current,sessionId,events))
-    .then(updatePending).catch(async e=>{await updatePending();throw e;}).finally(()=>{flushing=null;});
+    .then(async()=>{syncFailures=0;nextSyncAt=0;await updatePending();}).catch(async e=>{syncFailures++;nextSyncAt=Date.now()+Math.min(300000,5000*2**Math.min(syncFailures-1,6));await updatePending();throw e;}).finally(()=>{flushing=null;});
   return flushing;
 }
 function renderTurn(event,pending=false) {
@@ -892,7 +895,7 @@ async function capture(item,current) {
   if(item.storage!=='server')item.storage='device';transcriptReview.changed(current);
   captureConversationPlayback(current);
   if(call===current)await updatePending();
-  sync().catch(e=>notice('저장 대기 중이에요. 연결을 확인해 주세요.'));
+  sync(true).catch(e=>notice('저장 대기 중이에요. 연결을 확인해 주세요.'));
 }
 // Compact only at a completed assistant turn. Pause input while taking the
 // durable checkpoint, then delete old items only after the server acknowledges
@@ -1616,7 +1619,7 @@ window.addEventListener('pageshow',event=>{if(call){updateCallClock(call);update
 window.addEventListener('online',()=>sync().catch(e=>notice(e)));
 window.addEventListener('offline',()=>{cloudVerified=false;updatePending().catch(()=>{});});
 window.addEventListener('beforeunload',e=>{if(call || callStarting || callEnding){e.preventDefault();e.returnValue='';}});
-setInterval(()=>{if(auth)sync().catch(()=>{});},5000);
+setInterval(()=>{if(auth&&document.visibilityState==='visible')sync(true).catch(()=>{});},5000);
 $('review-back').onclick=protect(()=>{if(!memoryBusy()){if(journal.isOpen())journal.back();else openReviewHub();}});
 document.querySelectorAll('[data-view]').forEach(button=>button.onclick=protect(async()=>{if(memoryBusy())return;const view=button.dataset.view;if(view==='history')historyFilter=null;if(view==='review')openReviewHub();else setView(view);if(view==='history')await loadHistory();if(view==='review')await learning.resume();}));
 document.querySelectorAll('dialog').forEach(dialog=>dialog.addEventListener('close',()=>{if(dialog.contains($('notice')))clearNotice();}));

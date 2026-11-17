@@ -88,7 +88,7 @@ def main():
     if not isinstance(metadata,list):
         raise SystemExit('Could not verify the function secret names.')
     names={item.get('name') for item in metadata}
-    if 'OPENAI_API_KEY' not in names:
+    if not names.intersection({'OPENAI_API_KEY', 'OPEN_API_KEY'}):
         raise SystemExit('Set OPENAI_API_KEY in the project Edge Functions Secrets before deploying.')
     if 'ALLOWED_ORIGINS' not in names:
         origin=os.environ.get('PUBLIC_SITE_ORIGIN','https://chungchung234.github.io')

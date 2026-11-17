@@ -1,0 +1,21 @@
+{
+  "captured_at": "2026-11-17T06:12:54.505Z",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "sources": [],
+  "app_states": [
+    {
+      "step": 1,
+      "state": "login",
+      "file": "01-current-login.png",
+      "source": "https://chungchung234.github.io/English/"
+    }
+  ],
+  "limits": [
+    "Public competitor marketing/docs only; no competitor private app audit.",
+    "App states after login use an isolated synthetic test account."
+  ],
+  "error": "/v1/projects/zsapmrcurmzgsaccscwe/api-keys: HTTP 401"
+}

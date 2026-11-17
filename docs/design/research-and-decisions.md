@@ -1,6 +1,6 @@
 # 시시콜콜: 컬러·AI 캐릭터·대화 모션 연구와 최종 결정
 
-정리일: 2026-11-10 (사용자 시간대 Asia/Seoul). 이 문서는 이번에 승인된 시각 체계의 근거와 적용 범위를 기록한다. 제품 자체의 대화 성격 연구는 [persona-research.md](../persona-research.md), 구현 세부는 [color-system.md](color-system.md), 시안 대조와 검증은 [design-qa.md](../../design-qa.md)를 함께 본다.
+정리일: 2026-11-10 (사용자 시간대 Asia/Seoul). 이 문서는 이번에 승인된 시각 체계의 근거와 적용 범위를 기록한다. 제품 자체의 대화 성격 연구는 persona-research.md, 구현 세부는 [color-system.md](color-system.md), 시안 대조와 검증은 design-qa.md를 함께 본다.
 
 ## 제품 목표와 승인 기준
 
@@ -35,7 +35,7 @@
 
 ## 캐릭터: 성격에서 색·형태로
 
-성격의 기준은 서버의 실제 `COMPANIONS` 설정과 [행동 연구](../persona-research.md)다. 아래 연결은 승인된 제품 디자인 결정이며 색채 심리의 과학적 인과관계를 주장하지 않는다. 색의 의미를 성별에 배정하지 않는다.
+성격의 기준은 서버의 실제 `COMPANIONS` 설정과 행동 연구다. 아래 연결은 승인된 제품 디자인 결정이며 색채 심리의 과학적 인과관계를 주장하지 않는다. 색의 의미를 성별에 배정하지 않는다.
 
 | 캐릭터 | 대화 성격 | 승인된 색·윤곽 | 흐름·반응 |
 | --- | --- | --- | --- |
@@ -72,9 +72,9 @@
 ## 검토·검증 자료
 
 - [승인 시안](approved-characters/reference.png)
-- [시안/구현 전체 대조](approved-characters/qa-comparison.png), [캐릭터 집중 대조](approved-characters/qa-focused.png)
-- [Alex 홈](approved-characters/home-alex.png), [Mia 홈](approved-characters/home-mia.png), [Juno 홈](approved-characters/home-juno.png), [작은 화면](approved-characters/home-compact.png)
-- [단계별 동시 비교](approved-characters/stage-comparison.png), [영상](approved-characters/stage-comparison.mp4)
+- 시안/구현 전체 대조, 캐릭터 집중 대조
+- Alex 홈, Mia 홈, Juno 홈, 작은 화면
+- 단계별 동시 비교, 영상
 
 영상은 실제 앱과 동일한 렌더러에 합성 오디오 강약을 연결한 비교 시연이다. 실제 AI와 나눈 대화 녹화가 아니다. 캡처 일부는 최신 로고·기억 기능 병합 전의 시각 증거이므로, 최종 배포 화면 검증과 구분한다.
 
@@ -94,15 +94,15 @@
 - 서비스: https://chungchung234.github.io/English/
 - 배포된 앱 커밋: [`a57790d`](https://github.com/chungchung234/English/commit/a57790d1b75e2197f8213ca056e9ee729fe84203)
 - [배포 워크플로 성공](https://github.com/chungchung234/English/actions/runs/42664184362): 타입 검사, 서버/DB 테스트 70개, 합성 기억 평가 10개, 실제 이미지 GPU·음성 반응 검사, 모바일·기억 관리·20분 자동 종료 검사, 백엔드·Pages 게시, 비승인 계정 차단 검증.
-- 게시된 HTML의 HTTPS 응답 200과 세 캐릭터 이미지 원본 일치를 확인했다. 실제 게시 파일 크기는 4,168,483바이트이며, SHA-256은 `0fdcc780185b9d06ac03ee9d1827c97d30db8ac3ca8569a955b6fd74e5248997`이다. [검증 메타데이터](approved-characters/deployed/verification.json).
+- 게시된 HTML의 HTTPS 응답 200과 세 캐릭터 이미지 원본 일치를 확인했다. 실제 게시 파일 크기는 4,168,483바이트이며, SHA-256은 `0fdcc780185b9d06ac03ee9d1827c97d30db8ac3ca8569a955b6fd74e5248997`이다. 검증 메타데이터.
 - 공개 파일 확인 시각: 2026-11-10 02:26:15 KST.
-- [최종 Alex 홈](approved-characters/deployed/home-alex.png), [Mia 홈](approved-characters/deployed/home-mia.png), [Juno 홈](approved-characters/deployed/home-juno.png), [상대 선택](approved-characters/deployed/companions.png), [기억 관리](approved-characters/deployed/memory.png), [작은 화면](approved-characters/deployed/compact.png).
+- 최종 Alex 홈, Mia 홈, Juno 홈, 상대 선택, 기억 관리, 작은 화면.
 
 최종 화면은 게시된 HTML을 그대로 읽어 같은 CSP 하에서 렌더링했다. 보호된 화면의 데이터는 브라우저에서 차단·대체한 합성 응답을 사용했으며, 실제 이용자의 계정·기록에는 접근하지 않았다. 390×844에서 지난 표현 행이 하단 탭 위에 완전히 보이고, 320×568에서 통화 시작 버튼이 하단 탭 위에 있으며 화면 너비가 넘치지 않는 것을 확인했다. 페이지 실행 오류는 없었다.
 
 배포 후 실제 Supabase 검증은 기존 승인 정책을 유지한 채 비승인 계정의 데이터·AI·기억 관리 접근 거부를 확인했다. 테스트를 위해 승인 목록을 확장하지 않았으므로 이 릴리스의 승인 계정 실기기 음성 통화가 통과했다고 주장하지 않는다. SMTP·재해 복구도 이번 디자인 배포 검증 범위가 아니다.
 
-외부 코드 참고는 확인한 커밋으로 고정했으며 [출처 버전 목록](research-sources.json)에 보존했다.
+외부 코드 참고는 확인한 커밋으로 고정했으며 출처 버전 목록에 보존했다.
 
 ## 통화 홈과 글래스 정리 · 2026-11-10
 
@@ -113,8 +113,8 @@
 - 승인된 세 캐릭터 자산과 오디오 반응은 보존한다. 첫 전환에서 새 이미지가 준비되는 동안 이전 캐릭터가 남지 않도록 같은 캐릭터의 포스터로 전환하고 렌더 준비 상태를 맞췄다.
 - 기억 관리는 내 계정과 최근 통화 메뉴에 유지한다. 통화 경과 시간은 연결 후 표시하고, 남은 시간은 마지막 1분에만 표시한다. 20분 자동 종료·저장은 유지한다.
 
-[수정 시안·구현·작은 화면·검수 기록](call-glass/README.md), [전체 디자인 QA](../../design-qa.md). 앞 절의 연락처형 화면과 배포 링크는 이전 결정의 기록이다.
+수정 시안·구현·작은 화면·검수 기록, 전체 디자인 QA. 앞 절의 연락처형 화면과 배포 링크는 이전 결정의 기록이다.
 
 ## 최근 통화·복습의 정보 우선순위 · 2026-11-10
 
-전체 기능 회귀 검사와 홈의 시안 대조를 구분해 추가 검수했다. 최근 통화의 최대 5개 행동을 목록에서 모두 드러내던 구조, 교정보다 먼저 보이던 요약/메타데이터, 연한 원문 대비, 통화가 없을 때 활성화된 주간 분석을 보완했다. 목록은 상대·날짜·다시 걸기, 상세는 피드백·대화문·관리로 역할을 나누며 복습은 교정과 연습 표현을 먼저 보여준다. 추가 정보는 삭제하지 않고 펼쳐볼 수 있게 유지한다. 원문은 보조 텍스트 토큰으로 대비를 확보하고 주간 분석은 해당 상대의 7일 종료 통화를 확인한 뒤 제공한다. [전후 화면과 기능·디자인 검수](tabs-refinement/README.md).
+전체 기능 회귀 검사와 홈의 시안 대조를 구분해 추가 검수했다. 최근 통화의 최대 5개 행동을 목록에서 모두 드러내던 구조, 교정보다 먼저 보이던 요약/메타데이터, 연한 원문 대비, 통화가 없을 때 활성화된 주간 분석을 보완했다. 목록은 상대·날짜·다시 걸기, 상세는 피드백·대화문·관리로 역할을 나누며 복습은 교정과 연습 표현을 먼저 보여준다. 추가 정보는 삭제하지 않고 펼쳐볼 수 있게 유지한다. 원문은 보조 텍스트 토큰으로 대비를 확보하고 주간 분석은 해당 상대의 7일 종료 통화를 확인한 뒤 제공한다. 전후 화면과 기능·디자인 검수.

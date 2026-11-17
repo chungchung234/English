@@ -55,7 +55,7 @@ Generic API documentation does not prove this app's exact `gpt-realtime-2.1-mini
 
 ## What can be designed, and what remains gated
 
-The existing [release note](../call-experience-improvements-20261110.md) documents `server_vad`, `threshold=0.5`, `prefix_padding_ms=300`, `silence_duration_ms=2000`, and automatic response/interruption enabled. This is the comparison baseline, not an empirically validated prescription. This review did not verify runtime configuration.
+The existing release note documents `server_vad`, `threshold=0.5`, `prefix_padding_ms=300`, `silence_duration_ms=2000`, and automatic response/interruption enabled. This is the comparison baseline, not an empirically validated prescription. This review did not verify runtime configuration.
 
 | Candidate | Rationale supported by evidence | Unvalidated decision |
 | --- | --- | --- |

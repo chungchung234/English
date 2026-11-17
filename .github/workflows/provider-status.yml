@@ -1,16 +1,6 @@
 name: Check provider readiness
 on:
-  push:
-    branches: [main]
-    paths:
-      - scripts/provider-status.mjs
-      - .github/workflows/provider-status.yml
   workflow_dispatch:
-    inputs:
-      expected_digest:
-        description: Optional one-way credential comparison
-        type: string
-        required: false
 permissions:
   contents: read
 jobs:
@@ -21,24 +11,6 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
-      - name: Diagnose management credential without revealing it
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          EXPECTED_DIGEST: ${{ inputs.expected_digest }}
-        run: |
-          python3 - <<'PYAUTH'
-          import os, json, urllib.request, urllib.error, hashlib, hmac
-          token=os.environ.get('SUPABASE_ACCESS_TOKEN','')
-          kind=('management token' if token.startswith('sbp_') else 'publishable project key' if token.startswith('sb_publishable_') else 'secret project key' if token.startswith('sb_secret_') else 'JWT-shaped token' if token.count('.')==2 else 'unknown format')
-          print('Credential kind:',kind)
-          print('Leading/trailing whitespace:',token!=token.strip())
-          if os.environ.get('EXPECTED_DIGEST'): print('Matches execution environment credential:', hmac.compare_digest(hashlib.sha256(token.encode()).hexdigest(), os.environ['EXPECTED_DIGEST']))
-          for path in ['/v1/projects/zsapmrcurmzgsaccscwe','/v1/projects/zsapmrcurmzgsaccscwe/api-keys?reveal=false']:
-            req=urllib.request.Request('https://api.supabase.com'+path,headers={'Authorization':'Bearer '+token})
-            try:
-              with urllib.request.urlopen(req,timeout=20) as response: print(path.split('?')[0],response.status)
-            except urllib.error.HTTPError as error: print(path.split('?')[0],error.code)
-          PYAUTH
       - run: node scripts/provider-status.mjs
         env:
           SUPABASE_PROJECT_REF: zsapmrcurmzgsaccscwe

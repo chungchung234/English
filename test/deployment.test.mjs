@@ -68,6 +68,15 @@ test('HTTPS deploy payload is idempotent, refuses changed checksum, and blocks m
  const allMigrations=readdirSync('supabase/migrations').filter(name=>name.endsWith('.sql')).sort();
  for(const file of allMigrations.slice(2)){const wrapped=buildSql('',file,file.split('_')[0]);await db.exec(wrapped);await db.exec(wrapped);}
  assert.equal((await db.query('select count(*) from loop_private.migrations')).rows[0].count,allMigrations.length);
+ // Removing a personal seed updates only the exact legacy checksum, retaining
+ // private approvals and refusing arbitrary changes to the redacted migration.
+ await db.exec("insert into loop_private.approved_emails values('retained@example.invalid'); update loop_private.migrations set sha256='a1b440a67378e71c4e99440cee5de05ed84f6d77e0fee367e34689a52c7914a9' where version='202611090003'");
+ await db.exec(buildSql('','202611090003_approved_access.sql','202611090003'));
+ assert.equal((await db.query("select sha256 from loop_private.migrations where version='202611090003'")).rows[0].sha256,'74e8378dda10a47704a000a8b7285628632b0a45ae3bca7e525536b20db14df9');
+ assert.equal((await db.query("select count(*) from loop_private.approved_emails where email='retained@example.invalid'")).rows[0].count,1);
+ await assert.rejects(db.exec(buildSql('\n-- unexpected edit','202611090003_approved_access.sql','202611090003')),/checksum differs/);
+ await db.exec('rollback');
+
  const verify=spawnSync('python3',['scripts/deploy.py'],{env:{...process.env,SUPABASE_PROJECT_REF:'domkmxmwmihcfadophfg',SUPABASE_ACCESS_TOKEN:''},encoding:'utf8'});
  assert.notEqual(verify.status,0);assert.match(verify.stderr,/missing/);assert.doesNotMatch(verify.stderr,/https:\/\//);
 });

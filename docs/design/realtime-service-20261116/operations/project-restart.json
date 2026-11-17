@@ -1,6 +1,0 @@
-{
-  "operation": "restart_project_for_PGRST002_after_schema_reload_failed",
-  "http": 200,
-  "at": "2026-11-16T14:26:40.419700+00:00",
-  "application_data_reset": false
-}

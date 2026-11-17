@@ -5,7 +5,6 @@ revoke all on schema loop_private from public, anon, authenticated;
 create table loop_private.approved_emails (
   email text primary key check (email = lower(btrim(email)))
 );
-insert into loop_private.approved_emails values ('a8207637@naver.com');
 revoke all on loop_private.approved_emails from public, anon, authenticated;
 
 create function public.is_approved_user()

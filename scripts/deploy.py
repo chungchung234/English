@@ -18,6 +18,14 @@ def migration_sql(source: str, version: str = '202611090001') -> str:
     if not re.fullmatch(r'[0-9]{12,14}', version):
         raise ValueError('Invalid migration version')
     digest = hashlib.sha256(source.encode()).hexdigest()
+    # Exact checksum transition for removing a personal seed from the published
+    # approval migration. Existing DB approvals are retained; no SQL is replayed.
+    privacy_transition = ""
+    if version == '202611090003' and digest == '74e8378dda10a47704a000a8b7285628632b0a45ae3bca7e525536b20db14df9':
+        privacy_transition = """if existing = 'a1b440a67378e71c4e99440cee5de05ed84f6d77e0fee367e34689a52c7914a9' then
+update loop_private.migrations set sha256 = '74e8378dda10a47704a000a8b7285628632b0a45ae3bca7e525536b20db14df9' where version = '202611090003';
+existing := '74e8378dda10a47704a000a8b7285628632b0a45ae3bca7e525536b20db14df9';
+end if;"""
     # The complete migration and its marker commit atomically. A changed existing
     # migration is refused; future schema changes must be separate migrations.
     literal = source.replace("'", "''")
@@ -30,6 +38,7 @@ do $loop_setup$
 declare existing text;
 begin
 select sha256 into existing from loop_private.migrations where version='{version}';
+{privacy_transition}
 if existing is not null and existing <> '{digest}' then
 raise exception 'Existing migration checksum differs; create a new migration';
 end if;

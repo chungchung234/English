@@ -78,7 +78,7 @@ jobs:
           path: dist
   deploy:
     permissions:
-      contents: write
+      contents: read
       pages: write
       id-token: write
     needs: build
@@ -108,21 +108,3 @@ jobs:
           SITE_URL: ${{ steps.deployment.outputs.page_url }}
           SMOKE_AUDIO: /tmp/loop-smoke.wav
           CHROMIUM_PATH: /usr/bin/google-chrome
-      - name: Save synthetic release screenshots
-        if: always()
-        run: |
-          python3 - <<'PYSCREEN'
-          from pathlib import Path
-          import shutil
-          out=Path('docs/release-evidence')
-          for image in Path('test-results').glob('live-*.png'):
-              out.mkdir(parents=True,exist_ok=True)
-              shutil.copyfile(image,out/image.name)
-          PYSCREEN
-          if [ ! -d docs/release-evidence ]; then exit 0; fi
-          git checkout -b release-evidence-${{ github.run_id }}
-          git config user.name github-actions[bot]
-          git config user.email github-actions[bot]@users.noreply.github.com
-          git add docs/release-evidence
-          git commit -m "Capture isolated synthetic release verification"
-          git push origin HEAD:refs/heads/release-evidence-${{ github.run_id }}

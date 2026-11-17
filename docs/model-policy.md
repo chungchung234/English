@@ -10,7 +10,7 @@
 - 음성 사용량은 브라우저가 보내는 값을 청구 근거로 신뢰하지 않습니다. 연결 모델 정보는 서버 job result에 남기지만, 오디오·전사 실제 청구는 OpenAI Usage가 기준입니다. 기존 음성30/교정20/주간3 요청 제한과 음성 응답512토큰 제한을 유지합니다. 전체 서비스/전체 사용자 음성 달러 상한은 구현하지 않았습니다.
 - 프록시 자격 증명을 로컬 CLI가 거부하는 환경에서는 `python3 scripts/deploy.py --apply --https-function`으로 동일 Management API에 `index.ts`, `core.ts`, `policy.ts`, `enhancements.ts`, `weekly.ts`를 직접 배포합니다. 실제 키를 출력하거나 로컬에 복사하지 않습니다.
 
-고도화의 의도 재검토는 기존 Luna 교정 정책과 공유 텍스트 예산을 사용하며 사용자당 UTC 일10회 제한을 별도로 적용합니다. 완료된 동일 요청은 재사용하고 실패 재시도도 한도를 사용합니다. 표현 출현 관찰은 생성 모델 없이 처리하고, 주간 목표는 요청형 주간 분석의 일3회·공유 비용 한도를 유지합니다. 회상·사람 검토 상태 변화로 주간 캐시가 달라지면 새 분석 예약이 생길 수 있습니다. [고도화 구현·검증 범위](post-call-enhancement-validation.md)를 참고하세요.
+고도화의 의도 재검토는 기존 Luna 교정 정책과 공유 텍스트 예산을 사용하며 사용자당 UTC 일10회 제한을 별도로 적용합니다. 완료된 동일 요청은 재사용하고 실패 재시도도 한도를 사용합니다. 표현 출현 관찰은 생성 모델 없이 처리하고, 주간 목표는 요청형 주간 분석의 일3회·공유 비용 한도를 유지합니다. 회상·사람 검토 상태 변화로 주간 캐시가 달라지면 새 분석 예약이 생길 수 있습니다. 고도화 구현·검증 범위를 참고하세요.
 
 공식 근거: [가격](https://developers.openai.com/api/docs/pricing), [종료 일정](https://developers.openai.com/api/docs/deprecations), [프롬프트 캐시](https://developers.openai.com/api/docs/guides/prompt-caching).
 

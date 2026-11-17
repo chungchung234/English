@@ -236,6 +236,19 @@ try{
  assert.equal(await page.locator('#hint-call').isDisabled(),true,'hint waits for the active response');
  await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'response.done',response:{status:'completed',usage:{input_tokens:100}}})}));
  await page.waitForFunction(()=>!document.querySelector('#hint-call').disabled);
+ await page.locator('#mute-call').click();
+ await page.waitForFunction(()=>document.querySelector('#live-avatar').dataset.muted==='true');
+ assert.equal(await page.locator('#call-status').textContent(),'마이크가 꺼져 있어요');
+ await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'output_audio_buffer.started'})}));
+ await page.waitForFunction(()=>document.querySelector('#live-avatar').dataset.state==='speaking');
+ assert.equal(await page.locator('#live-avatar').getAttribute('data-muted'),'true','AI speech keeps its output animation while microphone input is muted');
+ await page.evaluate(()=>window.testPeer.dc.onmessage({data:JSON.stringify({type:'output_audio_buffer.stopped'})}));
+ await page.waitForFunction(()=>document.querySelector('#live-avatar').dataset.state==='listening');
+ assert.equal(await page.locator('#call-status').textContent(),'마이크가 꺼져 있어요');
+ await page.locator('#mute-call').click();
+ await page.waitForFunction(()=>document.querySelector('#live-avatar').dataset.muted==='false');
+ assert.match(await page.locator('#call-status').textContent(),/듣고 있어요/);
+ console.log('PASS: mute stops microphone visualization, preserves AI speech animation and status, and unmute restores the listening cue.');
  const providerInstructions='Untrusted provider default instructions';
  const staleInstructions='Stale provider instruction update';
  await page.evaluate(({providerInstructions,staleInstructions})=>{

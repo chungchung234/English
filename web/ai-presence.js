@@ -1,5 +1,5 @@
-// Approved character artwork, animated as a continuous material rather than redrawn.
-// Motion principles: Google Gemini visual design; state continuity: VoiceOrbs/Murmur.
+// Generated, approved silhouettes and eye artwork; animate their texture coordinates.
+import {CHARACTER_PALETTES,PRESENCE_STATES,characterPose} from './character-motion.js';
 const AI_ART_SOURCES = Object.fromEntries(['alex','mia','juno'].map(name => [name,
   document.getElementById('ai-art-'+name)?.dataset.src || document.getElementById('ai-art-'+name)?.src || new URL('assets/ai-'+name+'.webp',document.baseURI).href
 ]));
@@ -8,82 +8,95 @@ const EMPTY_ART = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAA
 async function loadAIArtwork(name) {
   if(!AI_ART_IMAGES.has(name)) AI_ART_IMAGES.set(name,(async()=>{
     const image=new Image();image.src=AI_ART_SOURCES[name];await image.decode();
-    // The approved files contain near-transparent export debris outside the body.
-    // Remove it before resizing, so filtering cannot pull its RGB into the edge.
-    const source=document.createElement('canvas');source.width=image.naturalWidth;source.height=image.naturalHeight;
-    const pixels=source.getContext('2d',{colorSpace:'srgb',willReadFrequently:true});pixels.drawImage(image,0,0);
-    const frame=pixels.getImageData(0,0,source.width,source.height);
-    for(let i=0;i<frame.data.length;i+=4)if(frame.data[i+3]<=8)frame.data.fill(0,i,i+4);
-    pixels.putImageData(frame,0,0);
     const texture=document.createElement('canvas');texture.width=texture.height=512;
-    texture.getContext('2d',{colorSpace:'srgb'}).drawImage(source,0,0,512,512);
+    const pixels=texture.getContext('2d',{colorSpace:'srgb',willReadFrequently:true});
+    pixels.drawImage(image,0,0,512,512);
+    const frame=pixels.getImageData(0,0,512,512),data=frame.data,n=512;
+    // Keep the main connected silhouette, with its antialiasing fringe. Generated
+    // transparent files can include isolated colored pixels well outside the body.
+    const visited=new Uint8Array(n*n),queue=new Int32Array(n*n);let body=[];
+    for(let start=0;start<n*n;start++){
+      if(visited[start]||data[start*4+3]<128)continue;
+      let head=0,tail=1;queue[0]=start;visited[start]=1;
+      while(head<tail){const k=queue[head++],x=k%n,y=Math.floor(k/n);
+        for(const next of [x?k-1:-1,x<n-1?k+1:-1,y?k-n:-1,y<n-1?k+n:-1]){
+          if(next>=0&&!visited[next]&&data[next*4+3]>=128){visited[next]=1;queue[tail++]=next;}
+        }
+      }
+      if(tail>body.length)body=Array.from(queue.subarray(0,tail));
+    }
+    const keep=new Uint8Array(n*n);
+    for(const k of body){const x=k%n,y=Math.floor(k/n);
+      for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)if(x+dx>=0&&x+dx<n&&y+dy>=0&&y+dy<n)keep[k+dy*n+dx]=1;
+    }
+    const color=CHARACTER_PALETTES[name];
+    for(let k=0;k<n*n;k++){
+      const i=k*4;
+      if(!keep[k]||data[i+3]<=8){data.fill(0,i,i+4);continue;}
+      // Preserve imagegen's actual eye shapes; enforce the selected flat palette.
+      const white=Math.max(0,Math.min(1,(Math.min(data[i],data[i+1],data[i+2])/255-.75)/.21));
+      for(let channel=0;channel<3;channel++)data[i+channel]=Math.round(color[channel]+(255-color[channel])*white);
+    }
+    // Locate the two generated white eyes rather than approximating them in code.
+    visited.fill(0);const eyes=[];
+    const white=k=>data[k*4+3]>200&&Math.min(data[k*4],data[k*4+1],data[k*4+2])>235;
+    for(let start=0;start<n*n;start++){
+      if(visited[start]||!white(start))continue;
+      let head=0,tail=1,minX=n,minY=n,maxX=0,maxY=0,sx=0,sy=0,sxx=0,syy=0,sxy=0;queue[0]=start;visited[start]=1;
+      while(head<tail){const k=queue[head++],x=k%n,y=Math.floor(k/n);minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);sx+=x;sy+=y;sxx+=x*x;syy+=y*y;sxy+=x*y;
+        for(const next of [x?k-1:-1,x<n-1?k+1:-1,y?k-n:-1,y<n-1?k+n:-1])if(next>=0&&!visited[next]&&white(next)){visited[next]=1;queue[tail++]=next;}
+      }
+      if(tail>32)eyes.push({angle:.5*Math.atan2(-2*(sxy/tail-sx*sy/(tail*tail)),sxx/tail-sx*sx/(tail*tail)-syy/tail+sy*sy/(tail*tail))-Math.PI/2,area:tail,rect:[(minX+maxX+1)/(2*n),1-(minY+maxY+1)/(2*n),(maxX-minX+5)/n,(maxY-minY+5)/n]});
+    }
+    const selectedEyes=eyes.sort((a,b)=>b.area-a.area).slice(0,2).sort((a,b)=>a.rect[0]-b.rect[0]);
+    const eyeRects=selectedEyes.map(eye=>eye.rect),eyeAngles=selectedEyes.map(eye=>Math.atan(Math.tan(eye.angle)));
+    if(eyeRects.length!==2)throw Error('Character artwork must contain two capsule eyes.');
+    pixels.putImageData(frame,0,0);
     // Canvas sources consistently honor WebGL's unpack flags on iOS as well.
     // Share the cleaned silhouette with reduced-motion/GPU fallback and swipes.
-    return {texture,posterSrc:texture.toDataURL('image/png')};
+    return {texture,eyeRects,eyeAngles,posterSrc:texture.toDataURL('image/png')};
   })());
   return AI_ART_IMAGES.get(name);
 }
 export function createAIPresence(root = document) {
   const profiles={alex:0,mia:1,juno:2};
-  const stateNames=['idle','connecting','listening','thinking','speaking','error'];
+  const stateNames=PRESENCE_STATES;
   const weights=Object.fromEntries(stateNames.map(key=>[key,key==='idle'?1:0]));
   const motion=matchMedia('(prefers-reduced-motion: reduce)');
-  let profile='alex',state='idle',inputLevel=0,outputLevel=0,clock=0,idleClock=0,ambientClock=0;
+  let profile='alex',state='idle',inputLevel=0,outputLevel=0,ambientClock=0,stateClock=0,muted=false,interrupting=false;
   let context,raf=0,last=0,destroyed=false,paused=false;
   const sources=new Map(),analysers=new Map(),revisions={input:0,output:0};
   const artwork=new Map();
   const vertex='attribute vec2 position;varying vec2 uv;void main(){uv=position*.5+.5;gl_Position=vec4(position,0.,1.);}';
   const fragment=`precision mediump float;
     varying vec2 uv;uniform sampler2D art;
-    uniform float time,ambientTime,personality,activity,rest;
-    uniform vec4 attention;
+    uniform vec4 bodyPose,facePose,eyeLeft,eyeRight;
+    uniform vec2 eyeOpen,eyeAngles;uniform vec3 bodyColor,eyeStyle;
+    float eye(vec2 p,vec4 rect,float openness,float sourceAngle){
+      vec2 q=p-rect.xy-facePose.xy;
+      // Work along each raster eye's actual axis, not the bounding-box axis.
+      q=mat2(cos(sourceAngle),-sin(sourceAngle),sin(sourceAngle),cos(sourceAngle))*q;
+      // Bend and rotate the actual capsule texture into a rounded arch or oval.
+      float across=clamp(q.x/max(rect.w*max(.1,openness)*.5,.001),-1.,1.);
+      q.y-=eyeStyle.z*(1.-across*across);
+      float angle=eyeStyle.y;
+      q=mat2(cos(angle),-sin(angle),sin(angle),cos(angle))*q;
+      q.x/=max(.25,eyeStyle.x);q.y/=max(.055,openness);
+      q=mat2(cos(sourceAngle),sin(sourceAngle),-sin(sourceAngle),cos(sourceAngle))*q;
+      if(abs(q.x)>rect.z*.6||abs(q.y)>rect.w*.6)return 0.;
+      vec4 sampleColor=texture2D(art,rect.xy+q);
+      vec3 rgb=sampleColor.rgb/max(sampleColor.a,.001);
+      float base=min(bodyColor.r,min(bodyColor.g,bodyColor.b));
+      return clamp((min(rgb.r,min(rgb.g,rgb.b))-base)/(1.-base),0.,1.)*sampleColor.a;
+    }
     void main(){
-      bool mia=personality>.5&&personality<1.5;bool juno=personality>1.5;
-      float tempo=mia?.72:(juno?1.12:.86);float t=time*tempo;
-      // Slow breathing and a gentle current stay independent of voice energy.
-      // A zero ambient clock preserves the exact still pose for reduced motion.
-      float ambient=ambientTime*(mia?.44:(juno?.60:.52));
-      float calm=1.-rest*.65;
-      vec2 p=uv-.5-vec2(sin(ambient*.73)*.008,sin(ambient)*.012)*calm;
-      vec2 breath=vec2(1.)+sin(ambient)*vec2(.018,.028)*calm;
-      // Whole-body motion is conditional: incoming voice opens the form vertically,
-      // outgoing voice lends it volume; silent speech states do not fake a pulse.
-      float character=mia?.78:(juno?1.12:.92);
-      vec2 scale=breath+activity*character*(attention.x*vec2(-.018,.040)+attention.z*vec2(.055,.095));
-      p/=scale;
-      float tilt=sin(ambient*.61)*.018*calm+activity*attention.z*character*.040*sin(t*1.15);
+      vec2 p=uv-.5;float tilt=bodyPose.z;
       p=mat2(cos(tilt),-sin(tilt),sin(tilt),cos(tilt))*p;
-      float angle=atan(p.y,p.x);float radius=length(p);
-      float bend=activity*character*(attention.x*.012+attention.z*.042);
-      float contour=sin(angle*(juno?3.:2.)+t)*bend
-        +sin(angle*(juno?3.:2.)+ambient*.5)*sin(ambient*.8)*.010*calm;
-      vec2 maskUV=.5+p*(1.+contour*smoothstep(.12,.42,radius));
-      maskUV+=p*attention.y*.025;
-      vec4 original=texture2D(art,clamp(maskUV,0.,1.));
-      if(original.a<.002){gl_FragColor=vec4(0.);return;}
-      float reach=.010+attention.x*.035+attention.y*.070+attention.z*.050+activity*.090;
-      vec2 flow;
-      if(mia){
-        // Broad embracing arcs, with a long response/release.
-        flow=vec2(sin(p.y*4.+t*.8)-sin(p.y*4.),cos(p.x*3.-t*.65)-cos(p.x*3.));
-      }else if(juno){
-        // A bend in direction, not rapid jitter or an orbit around the screen.
-        flow=vec2(sin(p.y*4.+t)+.25*sin(p.x*5.-t*.7),cos(p.x*4.-t*.85));
-        flow-=vec2(sin(p.y*4.)+.25*sin(p.x*5.),cos(p.x*4.));
-      }else{
-        // A single composed diagonal current.
-        float drift=sin(p.y*3.+t*.7)-sin(p.y*3.);
-        flow=vec2(drift,drift*.5);
-      }
-      // Keep source alpha/silhouette separate from the larger internal flow.
-      float innerMask=1.-smoothstep(.17,.34,length(maskUV-.5));
-      vec2 inside=clamp(maskUV+((maskUV-.5)*attention.y*.08+flow*reach)*innerMask*original.a,0.,1.);
-      vec4 moving=texture2D(art,inside);
-      float safe=smoothstep(.72,.99,moving.a);
-      vec3 color=mix(original.rgb/max(original.a,.001),moving.rgb/max(moving.a,.001),safe);
-      float light=1.+attention.y*.018+activity*.025;
-      color=mix(color,min(vec3(1.),color*light),1.-rest*.55);
-      gl_FragColor=vec4(color*original.a,original.a);
+      p=p/bodyPose.xy+.5;
+      if(p.x<0.||p.x>1.||p.y<0.||p.y>1.){gl_FragColor=vec4(0.);return;}
+      float alpha=texture2D(art,p).a;
+      float face=max(eye(p,eyeLeft,eyeOpen.x,eyeAngles.x),eye(p,eyeRight,eyeOpen.y,eyeAngles.y));
+      gl_FragColor=vec4(mix(bodyColor,vec3(1.),face)*alpha,alpha);
     }`;
   function nameFor(canvas){return canvas.dataset.aiProfile==='current'?profile:canvas.dataset.aiProfile;}
   function updatePoster(s,name){
@@ -122,7 +135,7 @@ export function createAIPresence(root = document) {
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
       gl.uniform1i(gl.getUniformLocation(program,'art'),0);
-      Object.assign(s,{gl,program,buffer,texture,uniforms:Object.fromEntries(['time','ambientTime','personality','activity','rest','attention'].map(n=>[n,gl.getUniformLocation(program,n)]))});
+      Object.assign(s,{gl,program,buffer,texture,uniforms:Object.fromEntries(['bodyPose','facePose','eyeLeft','eyeRight','eyeOpen','bodyColor','eyeStyle','eyeAngles'].map(n=>[n,gl.getUniformLocation(program,n)]))});
       s.lostHandler=e=>{e.preventDefault();s.lost=true;showPoster(s,true);};
       canvas.addEventListener('webglcontextlost',s.lostHandler);
       // A lost GPU context keeps the approved artwork with a gentle CSS fallback.
@@ -136,23 +149,22 @@ export function createAIPresence(root = document) {
     return Math.min(1,Math.max(0,Math.sqrt(sum/analyser.data.length)-.006)*5);
   }
   function approach(value,target,rate,dt){return value+(target-value)*(1-Math.exp(-rate*dt));}
-  function draw(now){
-    raf=0;if(destroyed||paused||document.hidden)return;
-    if(last&&now-last<32&&!motion.matches){raf=requestAnimationFrame(draw);return;}
+  function draw(now,force=false){
+    raf=0;if(destroyed||(!force&&paused)||document.hidden)return;
+    if(!force&&last&&now-last<32&&!motion.matches){raf=requestAnimationFrame(draw);return;}
     const dt=last?Math.min(.06,(now-last)/1000):0;last=now;
-    const input=rms('input'),output=rms('output');
-    const speed=profile==='mia'?1.8:profile==='juno'?3.8:2.8;
-    inputLevel=approach(inputLevel,input,input>inputLevel?10:speed,dt);
-    outputLevel=approach(outputLevel,output,output>outputLevel?10:speed,dt);
-    for(const key of stateNames)weights[key]=approach(weights[key],key===state?1:0,state==='idle'||state==='error'?5:14,dt);
-    // Integrate tempo. Multiplying an elapsed clock by a new speed would jump the flow.
-    clock+=dt*(.22*weights.idle+.42*weights.connecting+.48*weights.listening+.86*weights.thinking+.73*weights.speaking+.12*weights.error);
-    idleClock+=dt*.22;ambientClock+=dt;
-    const energy=outputLevel*weights.speaking+inputLevel*weights.listening;
+    const input=muted||state!=='listening'?0:rms('input'),output=state==='speaking'?rms('output'):0;
+    const release=profile==='mia'?5:profile==='juno'?10:7;
+    inputLevel=approach(inputLevel,input,input>inputLevel?18:release,dt);
+    outputLevel=approach(outputLevel,output,output>outputLevel?22:release,dt);
+    for(const key of stateNames)weights[key]=motion.matches||paused?(key===state?1:0):approach(weights[key],key===state?1:0,interrupting?28:18,dt);
+    if(weights.listening>.98)interrupting=false;
+    ambientClock+=dt;stateClock+=dt;
     let drewSurface=false;
     for(const s of surfaces){
       const {canvas,gl}=s,current=canvas.dataset.aiProfile==='current',name=nameFor(canvas);
-      canvas.dataset.profile=name;canvas.dataset.state=current?state:'idle';
+      canvas.dataset.profile=name;canvas.dataset.state=current?state:'idle';canvas.dataset.muted=String(current&&muted);
+      if(s.poster){s.poster.dataset.state=canvas.dataset.state;s.poster.dataset.muted=canvas.dataset.muted;}
       if(s.poster){s.poster.alt=canvas.getAttribute('aria-label')||'';updatePoster(s,name);}
       const visible=canvas.hidden&&s.poster&&!s.poster.hidden?s.poster:canvas;
       let box=visible.getBoundingClientRect();
@@ -169,17 +181,17 @@ export function createAIPresence(root = document) {
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL,true);gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL,true);
         gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,image.texture);s.textureName=name;
       }
-      gl.uniform1f(s.uniforms.time,motion.matches?0:current?clock:idleClock);
-      gl.uniform1f(s.uniforms.ambientTime,motion.matches?0:ambientClock);
-      gl.uniform1f(s.uniforms.personality,profiles[name]??0);
-      gl.uniform1f(s.uniforms.activity,motion.matches?0:current?energy:0);
-      gl.uniform1f(s.uniforms.rest,current?weights.error:0);
-      gl.uniform4f(s.uniforms.attention,
-        motion.matches||!current?0:weights.listening,motion.matches||!current?0:weights.thinking,
-        motion.matches||!current?0:weights.speaking,motion.matches||!current?0:weights.connecting);
+      const pose=characterPose({profile:name,time:ambientClock,stateTime:stateClock,weights:current?weights:{idle:1},input:inputLevel,output:outputLevel,muted:current&&muted,reduced:motion.matches,paused});
+      gl.uniform4f(s.uniforms.bodyPose,pose.scaleX,pose.scaleY,pose.tilt,0);
+      gl.uniform4f(s.uniforms.facePose,pose.gazeX,pose.gazeY,0,0);
+      gl.uniform2f(s.uniforms.eyeOpen,pose.leftOpen,pose.rightOpen);
+      gl.uniform3f(s.uniforms.eyeStyle,pose.eyeWidth,pose.eyeTurn,pose.eyeCurve);
+      gl.uniform2fv(s.uniforms.eyeAngles,image.eyeAngles);
+      gl.uniform4fv(s.uniforms.eyeLeft,image.eyeRects[0]);gl.uniform4fv(s.uniforms.eyeRight,image.eyeRects[1]);
+      gl.uniform3fv(s.uniforms.bodyColor,CHARACTER_PALETTES[name].map(value=>value/255));
       gl.drawArrays(gl.TRIANGLES,0,6);canvas.dataset.ready='true';drewSurface=true;
     }
-    if(!motion.matches&&drewSurface)raf=requestAnimationFrame(draw);
+    if(!motion.matches&&!paused&&drewSurface)raf=requestAnimationFrame(draw);
   }
   function refresh(){if(!raf&&!destroyed&&!paused)raf=requestAnimationFrame(draw);}
   const pendingArtwork=new Map();
@@ -201,9 +213,15 @@ export function createAIPresence(root = document) {
       copy.getContext('2d').drawImage(source,0,0,copy.width,copy.height);return copy;
     }catch{return null;}
   }
-  function setPaused(value){paused=Boolean(value);cancelAnimationFrame(raf);raf=0;last=0;for(const s of surfaces){s.canvas.dataset.paused=String(paused);if(s.poster)s.poster.style.animationPlayState=document.hidden||paused?'paused':'running';}if(!paused)refresh();}
+  function setPaused(value){paused=Boolean(value);cancelAnimationFrame(raf);raf=0;last=0;for(const s of surfaces)s.canvas.dataset.paused=String(paused);if(paused)draw(performance.now(),true);else refresh();}
   function setProfile(value){profile=Object.hasOwn(profiles,value)?value:'alex';refresh();}
-  function setState(value){state=stateNames.includes(value)?value:'idle';refresh();}
+  function setState(value){
+    const next=stateNames.includes(value)?value:'idle';
+    if(next!==state){stateClock=0;interrupting=state==='speaking'&&next==='listening';}
+    if(next!=='speaking')outputLevel=0;
+    state=next;refresh();
+  }
+  function setMuted(value){muted=Boolean(value);if(muted)inputLevel=0;refresh();}
   async function attachAudio(stream,kind){
     if(!['input','output'].includes(kind))return;
     const revision=++revisions[kind];
@@ -219,13 +237,13 @@ export function createAIPresence(root = document) {
   function detachAudio(){
     revisions.input++;revisions.output++;
     for(const source of sources.values())source.disconnect();for(const a of analysers.values())a.node.disconnect();
-    sources.clear();analysers.clear();inputLevel=outputLevel=0;
+    sources.clear();analysers.clear();inputLevel=outputLevel=0;muted=false;
     const old=context;context=null;old?.close().catch(()=>{});setState('idle');
   }
   const visibility=()=>{for(const s of surfaces)if(s.poster)s.poster.style.animationPlayState=document.hidden||paused?'paused':'running';if(document.hidden){cancelAnimationFrame(raf);raf=0;last=0;}else refresh();};
   const changed=()=>{cancelAnimationFrame(raf);raf=0;last=0;refresh();};
   document.addEventListener('visibilitychange',visibility);motion.addEventListener('change',changed);refresh();
-  return {get ready(){return Promise.all([...new Set(surfaces.length?surfaces.map(s=>nameFor(s.canvas)):[profile])].map(ensureArtwork));},async posterSource(name){return (await ensureArtwork(Object.hasOwn(profiles,name)?name:'alex'))?.posterSrc||EMPTY_ART;},snapshot,setProfile,setState,setPaused,attachAudio,detachAudio,refresh,destroy(){
+  return {get ready(){return Promise.all([...new Set(surfaces.length?surfaces.map(s=>nameFor(s.canvas)):[profile])].map(ensureArtwork));},async posterSource(name){return (await ensureArtwork(Object.hasOwn(profiles,name)?name:'alex'))?.posterSrc||EMPTY_ART;},snapshot,setProfile,setState,setMuted,setPaused,attachAudio,detachAudio,refresh,destroy(){
     destroyed=true;cancelAnimationFrame(raf);detachAudio();document.removeEventListener('visibilitychange',visibility);motion.removeEventListener('change',changed);
     for(const s of surfaces){s.canvas.removeEventListener('webglcontextlost',s.lostHandler);s.poster?.remove();if(s.gl){s.gl.deleteTexture(s.texture);s.gl.deleteBuffer(s.buffer);s.gl.deleteProgram(s.program);}}
   }};

@@ -72,14 +72,20 @@ try{
   const pixels=()=>{const gl=canvas.getContext('webgl'),data=new Uint8Array(canvas.width*canvas.height*4);gl.readPixels(0,0,canvas.width,canvas.height,gl.RGBA,gl.UNSIGNED_BYTE,data);return data;};
   for(const name of ['alex','mia','juno']){
    presence.setProfile(name);await presence.ready;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-   const before=pixels();await new Promise(resolve=>setTimeout(resolve,1300));const after=pixels();
-   let alpha=0;for(let i=3;i<before.length;i+=4)alpha+=Math.abs(before[i]-after[i]);
-   results.push({name,alphaMean:alpha/(before.length/4)});
+   const before=pixels();let largestChange=0;
+   // Sampling only two endpoints can alias a periodic breath around its peak.
+   // Check the path, not whether those two endpoints happen to match.
+   for(let sample=0;sample<2;sample++){
+    await new Promise(resolve=>setTimeout(resolve,650));const after=pixels();
+    let alpha=0;for(let i=3;i<before.length;i+=4)alpha+=Math.abs(before[i]-after[i]);
+    largestChange=Math.max(largestChange,alpha/(before.length/4));
+   }
+   results.push({name,alphaMean:largestChange});
   }
   presence.destroy();return results;
  });
  assert(idle.every(result=>result.alphaMean>.05),'every idle character must gently move its contour without an audio stream');
- console.log('PASS: all three idle characters gently breathe and drift without audio.');
+ console.log('PASS: all three idle characters gently breathe in place without audio.');
  await idlePage.close();
  const audioPage=await browser.newPage({viewport:{width:640,height:600}});
  await audioPage.goto('http://127.0.0.1:4193');
@@ -98,4 +104,19 @@ try{
  const fallback=await browser.newPage();await fallback.goto('http://127.0.0.1:4193');
  assert(await fallback.evaluate(async()=>{const {createAIPresence}=await import('/ai-presence.js');const root=document.createElement('div'),c=document.createElement('canvas');c.dataset.aiProfile='mia';c.getContext=()=>null;root.append(c);document.body.replaceChildren(root);const v=createAIPresence(root);await v.ready;const poster=root.querySelector('img');await poster.decode();const works=c.classList.contains('ai-presence-fallback')&&poster.src.startsWith('data:image/png')&&poster.dataset.profile==='mia';v.destroy();return works;}));
  console.log('PASS: missing WebGL keeps the same-artwork fallback.');
+ const statePage=await browser.newPage();await statePage.goto('http://127.0.0.1:4193');
+ const states=await statePage.evaluate(async()=>{
+  const {createAIPresence}=await import('/ai-presence.js');document.body.replaceChildren();
+  const root=document.createElement('section'),canvas=document.createElement('canvas');canvas.width=canvas.height=240;canvas.dataset.aiProfile='current';root.append(canvas);document.body.append(root);
+  const get=canvas.getContext.bind(canvas);canvas.getContext=(kind,options)=>get(kind,{...options,preserveDrawingBuffer:true});
+  const p=createAIPresence(root);await p.ready;const wait=()=>new Promise(r=>setTimeout(r,240));
+  const frames=[];for(const state of ['idle','connecting','listening','thinking','error']){p.setState(state);await wait();frames.push(canvas.toDataURL());}
+  p.setState('listening');p.setMuted(true);await wait();const muted=canvas.dataset.muted==='true'&&canvas.toDataURL()!==frames[2];
+  p.setState('ended');p.setPaused(true);await wait();const stopped=canvas.toDataURL();await wait();const endingStill=stopped===canvas.toDataURL();
+  p.setPaused(false);p.setMuted(false);p.setState('listening');await wait();const resumed=canvas.dataset.muted==='false'&&canvas.toDataURL()!==stopped;
+  p.destroy();return {distinct:new Set(frames).size,muted,endingStill,resumed};
+ });
+ assert.deepEqual(states,{distinct:5,muted:true,endingStill:true,resumed:true});
+ await statePage.close();console.log('PASS: real shader distinguishes attention/recovery/mute poses; ending settles and pauses; resuming clears mute.');
+
 }finally{await browser.close();server.kill('SIGTERM');}

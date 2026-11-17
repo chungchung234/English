@@ -294,6 +294,7 @@ function updateCompanion() {
   if(!call && !callStarting && !callEnding) $('call-status').textContent = companionName()+'와 대화할 준비가 되었어요';
 }
 function updateCallControls() {
+  presence.setMuted(Boolean(call?.muted));
   const current=call, connected=Boolean(current?.ready&&current.pc.connectionState==='connected');
   const locked=!current||!connected||current.ending||current.compacting||current.budgetExhausted||callStarting;
   if($('mute-call')){$('mute-call').disabled=locked||Boolean(current?.inputBlocked||current?.contextRecoveryNeeded);$('mute-call').setAttribute('aria-pressed',String(Boolean(current?.muted)));$('mute-call').setAttribute('aria-label','음소거');}
@@ -304,6 +305,8 @@ function updateCallControls() {
   current?.floor?.availability(Boolean(connected&&current.dc?.readyState==='open'&&!current.ending&&!current.budgetExhausted&&!current.contextRecoveryNeeded));
   if(current?.budgetExhausted)$('speed-pending').hidden=true;
   renderFloor(current);
+  if(current&&!current.muted&&connected&&$('call-status').textContent==='마이크가 꺼져 있어요')$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';
+  if(current?.muted&&connected&&!current.ending&&!current.responding&&!current.aiSpeaking&&!current.compacting&&!current.inputBlocked&&!current.contextRecoveryNeeded&&!current.budgetExhausted&&!current.floor?.state?.outputPaused&&!['error','interrupting'].includes(current.floor?.state?.phase))$('call-status').textContent='마이크가 꺼져 있어요';
 }
 function renderFloor(current) {
   const state=current?.floor?.state;
@@ -332,7 +335,7 @@ function renderFloor(current) {
     else if(current.aiSpeaking){$('call-status').textContent=companionName()+'가 말하고 있어요';presence.setState('speaking');}
     else if(current.responding){$('call-status').textContent='답변을 준비하고 있어요';presence.setState('thinking');}
     else if(!state?.ready){$('call-status').textContent='음성 연결을 확인하고 있어요';presence.setState('connecting');}
-    else{$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';presence.setState('listening');}
+    else{$('call-status').textContent=current.muted?'마이크가 꺼져 있어요':'듣고 있어요 · 편하게 말씀하세요';presence.setState('listening');}
     return;
   }
   if(state?.held&&!current.ending){presence.setState('listening');$('call-status').textContent=state.pending?'답변을 잠시 멈추고 있어요':state.phase==='error'?'답변 상태를 확인해 주세요':'듣고 있어요 · 편하게 말씀하세요';}
@@ -434,7 +437,7 @@ function renderSpeedDraft(value) {
   updateCallControls();
 }
 function setCallPhase(phase) {
-  document.body.dataset.callPhase=phase;presence.setPaused(phase==='ending');
+  document.body.dataset.callPhase=phase;if(phase==='ending')presence.setState('ended');presence.setPaused(phase==='ending');
   for(const selector of ['.live-actions','.call-floor-controls','.transcript-details']){const node=document.querySelector(selector);if(node)node.inert=phase==='ending';}
 }
 function setCallLayout(active) {
@@ -1093,11 +1096,11 @@ async function startCall() {
       current.instructionState.observe(event);
       const speedError=current.speed.event(event);
       if(!current.ending&&current.ready&&current.turnControl!=='manual_turns_v1') {
-        if(event.type==='input_audio_buffer.speech_started'&&!current.aiSpeaking){presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
+        if(event.type==='input_audio_buffer.speech_started'&&!current.aiSpeaking){presence.setState('listening');$('call-status').textContent=current.muted?'마이크가 꺼져 있어요':'듣고 있어요 · 편하게 말씀하세요';}
         if((event.type==='input_audio_buffer.speech_stopped' || event.type==='response.created')&&!current.aiSpeaking){presence.setState('thinking');$('call-status').textContent='답변을 준비하고 있어요';}
         if(event.type==='output_audio_buffer.started'){current.aiSpeaking=true;presence.setState('speaking');$('call-status').textContent=companionName()+'가 말하고 있어요';}
-        if(event.type==='output_audio_buffer.stopped' || event.type==='output_audio_buffer.cleared'){current.aiSpeaking=false;presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
-        if(event.type==='response.done' && event.response?.status && event.response.status!=='completed'&&!current.aiSpeaking){presence.setState('listening');$('call-status').textContent='듣고 있어요 · 편하게 말씀하세요';}
+        if(event.type==='output_audio_buffer.stopped' || event.type==='output_audio_buffer.cleared'){current.aiSpeaking=false;presence.setState('listening');$('call-status').textContent=current.muted?'마이크가 꺼져 있어요':'듣고 있어요 · 편하게 말씀하세요';}
+        if(event.type==='response.done' && event.response?.status && event.response.status!=='completed'&&!current.aiSpeaking){presence.setState('listening');$('call-status').textContent=current.muted?'마이크가 꺼져 있어요':'듣고 있어요 · 편하게 말씀하세요';}
       }
       if(current.turnControl==='manual_turns_v1'){
         if(!current.authored&&event.type==='output_audio_buffer.started')current.aiSpeaking=true;

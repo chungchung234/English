@@ -1,5 +1,7 @@
 # 시시콜콜: 컬러·AI 캐릭터·대화 모션 연구와 최종 결정
 
+이 문서의 11월10일 빛 구체/내부 흐름 결정은 2026-11-17 사용자 승인으로 대체됐다. 현재 디자인·자산·모션 규칙은 [color-system.md](color-system.md)와 [최신 승인 시안](approved-characters/reference.png)을 따른다. 아래는 당시 결정의 역사적 기록이며 현재 구현 기준이 아니다.
+
 정리일: 2026-11-10 (사용자 시간대 Asia/Seoul). 이 문서는 이번에 승인된 시각 체계의 근거와 적용 범위를 기록한다. 제품 자체의 대화 성격 연구는 persona-research.md, 구현 세부는 [color-system.md](color-system.md), 시안 대조와 검증은 design-qa.md를 함께 본다.
 
 ## 제품 목표와 승인 기준

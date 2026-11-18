@@ -62,7 +62,11 @@ export function validateMiaAnalysis(value: unknown, events: TranscriptEvent[], k
     if (typeof item.speech_context !== 'string' || !['scene', 'assisted_scene', 'expression_request'].includes(item.speech_context)) return invalid();
     const learning = item.learning as Record<string, unknown> | undefined;
     if (item.speech_context === 'expression_request') {
-      if (key !== 'practice' || learning?.source_is_question !== true || learning.source_quote !== item.quote) return invalid();
+      // The contextual quotation may include a turn-control prefix ("Pause.").
+      // The requested expression's exact question must remain inside that same
+      // verified quotation; the two source spans need not be identical.
+      if (key !== 'practice' || learning?.source_is_question !== true || typeof learning.source_quote !== 'string'
+        || !learning.source_quote.trim() || !(item.quote as string).includes(learning.source_quote)) return invalid();
     } else if (learning?.source_is_question === true) return invalid();
     if (key === 'corrections' && !(item.quote as string).includes(String(item.original))) return invalid();
     if (key === 'strengths' && item.speech_context === 'assisted_scene') return invalid();

@@ -48,6 +48,22 @@ test('Mia review rejects personal facts, false question labels, invented sources
  assert.equal(merged.next_scenario,'');assert.deepEqual(merged.memory_facts,[]);assert.equal(merged.practice.length,1);assert.equal(merged.practice[0].learning.source_is_question,true);
 });
 
+test('an explicit expression question can be an exact subspan of its contextual quote without losing source validation',()=>{
+ const spoken={...question,text:'Pause. '+question.text},value=content();
+ value.practice[0].quote=spoken.text;
+ const result=validateMiaAnalysis(value,[setup,event,spoken],'session');
+ assert.equal(result.practice[0].quote,spoken.text);
+ assert.equal(result.practice[0].learning.source_quote,question.text);
+ assert.equal(result.practice[0].learning.source_is_question,true);
+ // Another real question in the same event must not be attached to this quote.
+ const another='How do I ask to check out late?',mixed={...spoken,text:spoken.text+' '+another};
+ const wrong=structuredClone(value);wrong.practice[0].learning.source_quote=another;
+ assert.doesNotThrow(()=>validateAnalysis(wrong,[setup,event,mixed],'session',true));
+ assert.throws(()=>validateMiaAnalysis(wrong,[setup,event,mixed],'session'),{code:'INVALID_MODEL_OUTPUT'});
+ const invented=structuredClone(value);invented.practice[0].learning.source_quote='How do I ask for breakfast?';
+ assert.throws(()=>validateMiaAnalysis(invented,[setup,event,spoken],'session'),{code:'INVALID_MODEL_OUTPUT'});
+});
+
 test('Mia pure renderers discard supplied past memory and opening history while preserving the typed opening envelope',()=>{
  const clock={server_now_utc:'2026-11-18T01:11:00Z',time_zone:'Asia/Seoul',session_created_at:session.created_at};
  const memory={companionId:'mia',facts:[{key:'occupation',value:'PRIVATE_OLD_JOB',manual:true}],memories:[],recent_conversation:null,conversation_memories:[],focus:[],suppress_memory:false,revision:5,limited:false,retrieval:'keyword'};

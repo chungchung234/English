@@ -97,7 +97,7 @@ test('voice returns its approved dated instructions to the owning client while p
       const session = JSON.parse(options.body.get('session'));
       const sections = session.instructions.split('UNTRUSTED_CONTEXT_JSON:\n'); sent = JSON.parse(sections[1]);
       modelSnapshot = JSON.parse(session.instructions.split('TRUSTED_TIME_CONTEXT_JSON:\n')[1].split('\nTIME_AND_MEMORY_POLICY:')[0]);
-      assert.match(session.instructions, /friendly AI character in a personal English phone conversation/); assert.doesNotMatch(session.instructions, /encouraging English conversation coach/);
+      assert.match(session.instructions, /encouraging English conversation coach/); assert.match(session.instructions, /Do not impose a drill or a learning plan from stored history/);
       assert.match(session.instructions, /If asked for the exact current time, qualify/); assert.match(session.instructions, /Do not assume a plan happened/);
       assert.equal(modelSnapshot.time_zone, 'Asia/Seoul'); assert(modelSnapshot.local);
       assert.equal(Object.hasOwn(sent, 'continuity'), false); if (!withRecent) assert.equal(sent.memory.memories[0].evidence[0].id, eid);

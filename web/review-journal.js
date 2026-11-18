@@ -1,4 +1,5 @@
 import { deviceTimeZone, sessionTimeZone } from './conversation-time.js';
+import { scenarioLabel } from './conversation-mode.js';
 
 const names = { alex: 'Alex', mia: 'Mia', juno: 'Juno' };
 const kinds = { error: '교정', alternative: '대안', reusable: '활용 제안', positive: '잘 쓴 표현' };
@@ -240,7 +241,7 @@ export function createReviewJournal({ root, context, rpc, edge, allRows, setMode
       for (const call of dayCalls) {
         const section = node('section', '', 'journal-call'); section.dataset.sessionId = call.session.id;
         const heading = node('h3', meta(call.session)); section.append(heading);
-        const topic = call.session.scenario && call.session.scenario !== natural ? call.session.scenario : '';
+        const topic = call.session.scenario && call.session.scenario !== natural ? scenarioLabel(call.session) : '';
         if (topic) heading.append(node('span', ` · ${topic}`, 'journal-topic-inline'));
         if (!call.session.time_zone) section.append(node('p', '현재 시간대 기준', 'journal-time-zone'));
         else if (sessionTimeZone(call.session).zone !== deviceTimeZone()) section.append(node('p', sessionTimeZone(call.session).zone, 'journal-time-zone'));

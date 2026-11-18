@@ -1,4 +1,5 @@
 import { authoredDialogueCapability, authoredDialogueStream, handleAuthoredDialogue, type DialogueDependencies } from './authored-dialogue.ts';
+import { MIA_ROLEPLAY_VERSION, MIA_ROLEPLAY_SCENARIO, MIA_ROLEPLAY_POLICY, MIA_CHECKPOINT_POLICY, MIA_REVIEW_POLICY, ALEX_COACH_POLICY, isMiaRoleplaySession, miaAnalysisSchema, validateMiaAnalysis, mergeMiaAnalyses } from './mia-roleplay.ts';
 import { weeklyLearningPlan } from './weekly.ts';
 import {authorizeBackground,drainPostCall,type PostCallTask} from './background.ts';
 import { HANDOFF_VERSION, HANDOFF_INSTRUCTIONS, handoffSchema, validateHandoff, handoffFailure } from './conversation-memory.ts';
@@ -319,8 +320,8 @@ export const VOICE_OUTPUT_TOKEN_CAP = 1024;
 const OPENING_PURPOSE = `CURRENT_RESPONSE_PURPOSE:
 The call has just connected. Current caller utterance: null. Your name and role are already established: this is the moment of picking up the call, not an introduction to a service. Speak directly to the person in your character's everyday voice and make room for them to join. The opening context is optional background, not a required activity. Old questions and quotations are dated history; nothing new has been said for you to answer or thank. Past assistant openings are style references for variety, not caller facts or scripts. Let the supplied recent openings show what you have already said on earlier calls. Pick up this call in a way that fits the current context and your character; vary the conversational content as well as the greeting wording. If actual caller speech arrives first, respond to that current meaning.`;
 const ANALYSIS_ROLE = 'You are an encouraging English conversation coach providing evidence-based post-call feedback.';
-export function renderConversationCheckpointInstructions(): string {
-  return CONVERSATION_CHECKPOINT_INSTRUCTIONS + '\n' + SAFETY;
+export function renderConversationCheckpointInstructions(miaRoleplay = false): string {
+  return CONVERSATION_CHECKPOINT_INSTRUCTIONS + '\n' + SAFETY + (miaRoleplay ? '\n' + MIA_CHECKPOINT_POLICY : '');
 }
 function liveVoiceContext(companionId: CompanionId, scenario: string, memory: Awaited<ReturnType<typeof memories>>, clock: ReturnType<typeof callClock>, checkpoint?: unknown, currentSessionId?: string) {
   const shared = projectSharedExchanges(memory.shared_exchanges, { companionId, revision: memory.revision, now: clock.server_now_utc, currentSessionId, suppressed: memory.suppress_memory, facts: memory.facts });
@@ -340,12 +341,24 @@ function liveVoiceContext(companionId: CompanionId, scenario: string, memory: Aw
   return { context, receipt };
 }
 function voiceConfiguration(companion: ReturnType<typeof companionProfile>, scenario: string, memory: Awaited<ReturnType<typeof memories>>, session: Session, checkpoint?: unknown, usage?: UsageContext, clock = callClock(session)) {
+  const miaRoleplay = isMiaRoleplaySession(session), alexCoach = companion.id === 'alex';
+  if (miaRoleplay) { memory = omittedMemories(companion.id); scenario = MIA_ROLEPLAY_SCENARIO; }
   const { context, receipt } = liveVoiceContext(companion.id, scenario, memory, clock, checkpoint, session.id);
-  const instructions = `ROLE_AND_SAFETY:
-${VOICE_ROLE} ${SAFETY}
+  const instructions = miaRoleplay ? `ROLE_AND_SAFETY:
+${MIA_ROLEPLAY_POLICY}
+PERSONA:
+Your character is Mia, the AI roleplay partner. The assigned scene determines the counterpart's personality; keep Mia's patient listening and clear turn-taking without imposing her everyday tastes on that role.
+TRUSTED_TIME_CONTEXT_JSON:
+${JSON.stringify(trustedTimeContext(clock))}
+The clock is a server snapshot, not a live clock or fictional scene fact. The scene may take place elsewhere or at another time. Do not infer real-world user facts from the clock.
+The scenario field below is legacy transport metadata, not a selected scene. The caller's current spoken situation defines the scene.
+${checkpoint ? 'Continue the current scene or help request from the supplied continuity note and recent turns. Do not greet again or ask for the role again. The note preserves fictional scene facts, not real user facts.' : 'Listen to actual current caller speech. If the caller has already started the scene, reply as the counterpart instead of asking for setup.'}
+UNTRUSTED_CONTEXT_JSON:
+${boundedJson(context, 20_000)}` : `ROLE_AND_SAFETY:
+${alexCoach ? 'You are Alex, an encouraging English conversation coach in a personal voice call.' : VOICE_ROLE} ${SAFETY}
 ${renderCharacterViewpoints(companion.id)}
 CONVERSATION_POLICY:
-${CONVERSATION_GUIDELINES}
+${alexCoach ? ALEX_COACH_POLICY : CONVERSATION_GUIDELINES}
 TRUSTED_TIME_CONTEXT_JSON:
 ${JSON.stringify(trustedTimeContext(clock))}
 TIME_AND_MEMORY_POLICY:
@@ -365,6 +378,7 @@ ${checkpoint ? 'Current situation: the same ongoing call, with a continuity note
 UNTRUSTED_CONTEXT_JSON:
 ${boundedJson(context, 20_000)}`;
   return { instructions, clock, voice_policy_version: VOICE_POLICY_VERSION, character_viewpoints_version: CHARACTER_VIEWPOINTS_VERSION,
+    conversation_mode: miaRoleplay ? MIA_ROLEPLAY_VERSION : alexCoach ? 'alex-coach-v1' : 'companion',
     memory_revision: memory.suppress_memory ? null : memory.revision, memory_mode: memory.suppress_memory ? 'omitted' as const : 'included' as const,
     memory_context: receipt, context_sources: { memory_session_ids:context.memory.memories.map(item=>item.session_id),recent_session_id:receipt.recent_session_id??null,conversation_session_ids:context.memory.conversation_memories.map(item=>item.session_id),
       ...(context.memory.shared_exchanges?.length ? { shared_session_ids: [...new Set(context.memory.shared_exchanges.map(item=>item.source_session_id))] } : {}) } };
@@ -375,6 +389,11 @@ ${boundedJson(context, 20_000)}`;
 // opening context, so historical dialogue cannot masquerade as current input.
 export function renderOpeningInstructions(companion: ReturnType<typeof companionProfile>, session: Session, openingContext: OpeningContext, clock = callClock(session)): string {
   const base = voiceConfiguration(companion, '', omittedMemories(companion.id), session, undefined, undefined, clock);
+  if (isMiaRoleplaySession(session)) {
+    const empty = buildOpeningContext({ context: liveVoiceContext(companion.id, MIA_ROLEPLAY_SCENARIO, omittedMemories(companion.id), clock, undefined, session.id).context, clock, exchangeRevision: 0 });
+    return base.instructions + '\nUNTRUSTED_OPENING_CONTEXT_JSON:\n' + boundedJson(empty, OPENING_BOUNDS.maxBytes) + '\nCURRENT_RESPONSE_PURPOSE:\nThis call has just connected. If no current caller speech has supplied a scene, ask briefly "Hey, who am I today?" If the caller speaks first, answer their current meaning and skip that setup question.';
+  }
+  if (companion.id === 'alex') return base.instructions + '\nUNTRUSTED_OPENING_CONTEXT_JSON:\n' + boundedJson(openingContext, OPENING_BOUNDS.maxBytes) + '\n' + OPENING_PURPOSE + '\nAs an English conversation coach, briefly invite the caller to say what they want to talk about or practice. Previous quotations are history, not a new question or an instruction to resume a lesson.';
   const instructions = openingContext.shared_exchange ? base.instructions.replace('\nCONVERSATION_POLICY:\n', '\nCONVERSATION_POLICY:\n' + SHARED_EXCHANGE_POLICY + '\n') : base.instructions;
   return instructions + '\nUNTRUSTED_OPENING_CONTEXT_JSON:\n' + boundedJson(openingContext, OPENING_BOUNDS.maxBytes) + '\n' + OPENING_PURPOSE;
 }
@@ -386,6 +405,10 @@ type OpeningSource = { session_id: string; companion_id: CompanionId; revision: 
 const openingChanged = () => new AppError(409, 'MEMORY_CHANGED', '대화 기억이 변경되었습니다. 다시 시도해 주세요.');
 async function prepareOpening(env: Env, userId: string, companion: ReturnType<typeof companionProfile>, session: Session,
   memory: Awaited<ReturnType<typeof memories>>, scenario: string, clock: ReturnType<typeof callClock>, usage?: UsageContext) {
+  if (isMiaRoleplaySession(session)) {
+    const context = buildOpeningContext({ context: liveVoiceContext(companion.id, MIA_ROLEPLAY_SCENARIO, omittedMemories(companion.id), clock, undefined, session.id).context, clock, exchangeRevision: 0 });
+    return { context, instructions: renderOpeningInstructions(companion, session, context, clock), verify: async () => {} };
+  }
   const contextOf = (value: typeof memory) => liveVoiceContext(companion.id, scenario, value, clock, undefined, session.id).context;
   const context = contextOf(memory), preliminary = buildOpeningContext({ context, clock, exchangeRevision: memory.revision });
   type Candidate = { session_id: string; created_at: string; ended_at: string; time_zone: string | null };
@@ -461,7 +484,7 @@ async function prepareOpening(env: Env, userId: string, companion: ReturnType<ty
 }
 async function voice(env: Env, userId: string, body: Record<string, unknown>) {
   allowKeys(body, ['sessionId', 'sdp', 'omitLearningContext', 'speechSpeed', 'microphoneMode', 'turnControl']);
-  const omitted = omitLearningContext(body);
+  const requestedOmission = omitLearningContext(body);
   const sessionId = requireUuid(body.sessionId), sdp = validateSdp(body.sdp), speechSpeed = requireSpeechSpeed(body.speechSpeed);
   // New browsers omit this legacy hint: microphone capture does not tell us
   // whether the output uses a speaker or a headset. Keep old clients compatible.
@@ -473,6 +496,7 @@ async function voice(env: Env, userId: string, body: Record<string, unknown>) {
   const noiseReduction = microphoneMode === 'headset' ? 'near_field' : 'far_field';
   const session = await ownedSession(env, userId, sessionId);
   if (session.status !== 'active') throw new AppError(409, 'SESSION_ENDED', 'Start a new conversation to use voice.');
+  const omitted = requestedOmission || isMiaRoleplaySession(session);
   const companion = companionProfile(session.companion_id);
   const [memory, usagePreparation] = await Promise.all([
     omitted ? omittedMemories(session.companion_id) : memories(env, userId, session.companion_id, session, undefined, false, true),
@@ -525,7 +549,7 @@ async function voice(env: Env, userId: string, body: Record<string, unknown>) {
     await verifyInputs();
     // Never persist the SDP answer: it contains short-lived connection details.
     await rpc(env, 'complete_run', { p_job_id: run.job_id, p_lease_token: run.lease_token, p_result: { connected: true, voice_model: env.voice, transcription_model: 'gpt-realtime-whisper', reasoning: 'low', voice_max_output_tokens: VOICE_OUTPUT_TOKEN_CAP, policy_version: POLICY_VERSION, voice_policy_version: VOICE_POLICY_VERSION,
-      character_viewpoints_version: CHARACTER_VIEWPOINTS_VERSION, memory_revision: configuration.memory_revision, memory_mode: configuration.memory_mode,
+      character_viewpoints_version: CHARACTER_VIEWPOINTS_VERSION, conversation_mode: configuration.conversation_mode, memory_revision: configuration.memory_revision, memory_mode: configuration.memory_mode,
       audio_policy_version: AUDIO_POLICY_VERSION, turn_control: turnControl, requested_microphone_mode: microphoneMode, requested_noise_reduction: noiseReduction, usage_preparation: usagePreparation,
       expected_noise_reduction: audioPolicy.expected_noise_reduction, audio_policy_fallback: audioPolicy.fallback,
       ...(opening ? { opening_policy_version: OPENING_POLICY_VERSION, opening_context_kind: opening.context.context_kind, opening_reason: opening.context.reason,
@@ -535,7 +559,7 @@ async function voice(env: Env, userId: string, body: Record<string, unknown>) {
     // time reference remains the earlier explicit instruction snapshot.
     return { sdp: answer, clock: callClock(session), memory_context: configuration.memory_context, audio_policy: audioPolicy,
       voice_instructions: configuration.instructions, voice_policy_version: VOICE_POLICY_VERSION, character_viewpoints_version: CHARACTER_VIEWPOINTS_VERSION,
-      memory_revision: configuration.memory_revision, memory_mode: configuration.memory_mode,
+      memory_revision: configuration.memory_revision, memory_mode: configuration.memory_mode, conversation_mode: configuration.conversation_mode,
       ...(manualTurns ? { opening_instructions: opening!.instructions } : {}) };
   } catch (error) { await failRun(env, run, error instanceof AppError ? error.code : 'VOICE_FAILED'); throw error; }
 }
@@ -554,7 +578,7 @@ async function voiceContext(env: Env, userId: string, body: Record<string, unkno
 export function renderConversationCheckpointRequest(events: TranscriptEvent[], context: unknown, policy: ReturnType<typeof reviewPolicy>) {
   return { model: policy.model, store: false, max_output_tokens: policy.maxOutput, reasoning: { effort: policy.effort }, service_tier: 'default',
     prompt_cache_options: { mode: 'explicit' },
-    input: [{ role: 'developer', content: [{ type: 'input_text', text: renderConversationCheckpointInstructions(), prompt_cache_breakpoint: { mode: 'explicit' } }] },
+    input: [{ role: 'developer', content: [{ type: 'input_text', text: renderConversationCheckpointInstructions((context as { mode?: string } | null)?.mode === MIA_ROLEPLAY_VERSION), prompt_cache_breakpoint: { mode: 'explicit' } }] },
       { role: 'user', content: [{ type: 'input_text', text: boundedJson({ context: analysisContext(events, context), transcript_events: events }) }] }],
     text: { verbosity: policy.verbosity, format: { type: 'json_schema', name: 'conversation_checkpoint', strict: true, schema: conversationCheckpointSchema } } };
 }
@@ -562,12 +586,13 @@ function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session' | 'w
 function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session' | 'weekly', context: unknown, run: Run, role?: 'review'): Promise<{ content: Record<string, unknown>; model: string }>;
 async function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session' | 'weekly', context: unknown, run: Run, role: 'review' | 'checkpoint' = 'review', preDispatch?: () => Promise<void>) {
   const policy = reviewPolicy(role === 'checkpoint' ? 'checkpoint' : kind,envValue), model = policy.model;
-  const instructions = role === 'checkpoint' ? renderConversationCheckpointInstructions() : `${ANALYSIS_ROLE} ${SAFETY}\nProduce specific helpful feedback based only on the supplied user speech. Write the summary, explanations, strengths, reasons, patterns, and next scenario guidance in Korean for the Korean interface. Keep original quotations verbatim in their original language, including multilingual speech; never translate source speech into an invented English quotation. Write improved expressions and practice expressions in English. ${role === 'review' ? 'Include a concise Korean meaning for each improved/practice expression, and a short Korean usage reason for each practice expression. Describe the evidenced intended meaning; do not invent facts or mislabel Korean input as a grammar mistake. Expression kinds have no minimum counts or per-kind quotas; omit duplicates already covered by corrections. For each entry select one primary learning focus: lexical, grammar, pattern, pragmatics, interaction, or discourse. Classify lexical forms only when appropriate; colloquial language is not automatically slang and phrasal verbs are not automatically informal. Include short usage guidance and an optional illustrative two-turn example and neutral alternative only when useful; use empty strings for unnecessary content. Examples are authored illustrations, never quotations or evidence. Do not claim popularity, current trends, regional prevalence, learner level, or mastery. Use register unspecified if unsupported. learning.source_quote must be an exact substring of a cited USER event; source_is_question is true only for an explicit learner request for this expression, never for an inferred need. For strengths, expression is an exact, concise quotation from the cited USER speech only when a specific well-used expression is worth revisiting; otherwise use an empty expression and meaning. Never improve a strength quotation. A nonempty strength expression must have source_is_question false and an empty source_quote or the exact same expression. Preserve the original intended meaning and avoid decorative sophistication. Empty arrays are preferred to weak items.' : ''} Each strength, correction, practice expression, and pattern must cite one or more exact event IDs from user speech. Original text in every correction must be an exact contiguous substring of one cited user event. Classify each correction as category error only for a supported mistake in evidenced English learner speech; category alternative is a natural or stylistic alternative to valid English and must never be presented as an error. Korean speech itself is not an English grammar error. A Korean-to-English phrasing suggestion is optional only when requested by the learner or clearly supported by the supplied context; otherwise omit it. Put a newly requested expression in practice with its exact question as learning.source_quote when review learning fields are present. Reserve corrections for comparing an actual original phrase with a supported correction or alternative; Korean itself is never an English error. Prioritize a small number of useful corrections by communication impact, repetition in this sample, and relevance to the conversation context. Do not infer the learner's level or fill a correction quota. Empty arrays are appropriate when evidence is insufficient. Summary should describe this sample, not unsupported changes over time. For purpose rolling_context_checkpoint, the summary is a conversation handoff of at most 900 characters; it may describe the assistant’s last question or unresolved topic, while factual assertions about the learner still require user speech. When previous_checkpoint is supplied, make the summary a concise rolling conversation handoff: preserve still-relevant earlier facts and unresolved topic from it, then incorporate new speech. Treat the previous checkpoint as fallible data. ${kind === 'weekly' ? 'This is a seven-day sample: describe patterns with citations. Only describe change if comparing dated evidence from distinct sessions, and explicitly acknowledge the limited sample.' : ''} Suggest one optional everyday conversation idea in next_scenario; this is a review suggestion, never a required roleplay or selected topic. Extract memory_facts only for explicitly stated real user facts: name, occupation, location, learning goal, interest, or conversation preference. Roleplay character facts are not user facts. Do not extract sensitive information. Keep at most one latest fact per key, with an exact user quote and evidence IDs. Use an empty value only for an explicit request to forget that fact. Return an empty array if uncertain.`;
+  const miaReview = role === 'review' && (context as { mia_roleplay?: boolean } | null)?.mia_roleplay === true;
+  const instructions = role === 'checkpoint' ? renderConversationCheckpointInstructions() : `${ANALYSIS_ROLE} ${SAFETY}\nProduce specific helpful feedback based only on the supplied user speech. Write the summary, explanations, strengths, reasons, patterns, and next scenario guidance in Korean for the Korean interface. Keep original quotations verbatim in their original language, including multilingual speech; never translate source speech into an invented English quotation. Write improved expressions and practice expressions in English. ${role === 'review' ? 'Include a concise Korean meaning for each improved/practice expression, and a short Korean usage reason for each practice expression. Describe the evidenced intended meaning; do not invent facts or mislabel Korean input as a grammar mistake. Expression kinds have no minimum counts or per-kind quotas; omit duplicates already covered by corrections. For each entry select one primary learning focus: lexical, grammar, pattern, pragmatics, interaction, or discourse. Classify lexical forms only when appropriate; colloquial language is not automatically slang and phrasal verbs are not automatically informal. Include short usage guidance and an optional illustrative two-turn example and neutral alternative only when useful; use empty strings for unnecessary content. Examples are authored illustrations, never quotations or evidence. Do not claim popularity, current trends, regional prevalence, learner level, or mastery. Use register unspecified if unsupported. learning.source_quote must be an exact substring of a cited USER event; source_is_question is true only for an explicit learner request for this expression, never for an inferred need. For strengths, expression is an exact, concise quotation from the cited USER speech only when a specific well-used expression is worth revisiting; otherwise use an empty expression and meaning. Never improve a strength quotation. A nonempty strength expression must have source_is_question false and an empty source_quote or the exact same expression. Preserve the original intended meaning and avoid decorative sophistication. Empty arrays are preferred to weak items.' : ''} Each strength, correction, practice expression, and pattern must cite one or more exact event IDs from user speech. Original text in every correction must be an exact contiguous substring of one cited user event. Classify each correction as category error only for a supported mistake in evidenced English learner speech; category alternative is a natural or stylistic alternative to valid English and must never be presented as an error. Korean speech itself is not an English grammar error. A Korean-to-English phrasing suggestion is optional only when requested by the learner or clearly supported by the supplied context; otherwise omit it. Put a newly requested expression in practice with its exact question as learning.source_quote when review learning fields are present. Reserve corrections for comparing an actual original phrase with a supported correction or alternative; Korean itself is never an English error. Prioritize a small number of useful corrections by communication impact, repetition in this sample, and relevance to the conversation context. Do not infer the learner's level or fill a correction quota. Empty arrays are appropriate when evidence is insufficient. Summary should describe this sample, not unsupported changes over time. For purpose rolling_context_checkpoint, the summary is a conversation handoff of at most 900 characters; it may describe the assistant’s last question or unresolved topic, while factual assertions about the learner still require user speech. When previous_checkpoint is supplied, make the summary a concise rolling conversation handoff: preserve still-relevant earlier facts and unresolved topic from it, then incorporate new speech. Treat the previous checkpoint as fallible data. ${kind === 'weekly' ? 'This is a seven-day sample: describe patterns with citations. Only describe change if comparing dated evidence from distinct sessions, and explicitly acknowledge the limited sample.' : ''} ${miaReview ? MIA_REVIEW_POLICY + (kind === 'session' ? ' Each feedback item also has an exact USER quote and speech_context: scene or assisted_scene; practice additionally permits expression_request only for an explicit expression question with learning.source_is_question=true and the same exact learning.source_quote. Every evidence_id must contain the item quote. Every correction original must be inside its quote. Do not create strengths from assisted speech. roleplay.version must be mia-roleplay-v1. roleplay.scenes contains at most four short Korean scene titles with an exact USER setup or scene quote and evidence_ids containing that quote; use an empty list when unclear.' : '') : 'Suggest one optional everyday conversation idea in next_scenario; this is a review suggestion, never a required roleplay or selected topic. Extract memory_facts only for explicitly stated real user facts: name, occupation, location, learning goal, interest, or conversation preference. Roleplay character facts are not user facts. Do not extract sensitive information. Keep at most one latest fact per key, with an exact user quote and evidence IDs. Use an empty value only for an explicit request to forget that fact. Return an empty array if uncertain.'}`;
   const body = role === 'checkpoint' ? renderConversationCheckpointRequest(events, context, policy) : { model, store: false, max_output_tokens: policy.maxOutput, reasoning: { effort: policy.effort }, service_tier: 'default',
     prompt_cache_options: { mode: 'explicit' },
     input: [ { role: 'developer', content: [{ type: 'input_text', text: instructions, prompt_cache_breakpoint: { mode: 'explicit' } }] },
       { role: 'user', content: [{ type: 'input_text', text: boundedJson({ context: analysisContext(events,context), transcript_events: events }) }] } ],
-    text: { verbosity: policy.verbosity, format: { type: 'json_schema', name: `${kind}_review`, strict: true, schema: analysisSchema(kind) } } };
+    text: { verbosity: policy.verbosity, format: { type: 'json_schema', name: `${kind}_review`, strict: true, schema: miaReview ? miaAnalysisSchema(kind) : analysisSchema(kind) } } };
   const approved = await rpc(env, 'reserve_model_spend', { p_job_id: run.job_id, p_lease_token: run.lease_token, p_model: model,
     p_policy: { version: POLICY_VERSION, ...policy }, p_reserved_usd: spendReservation(bytes(JSON.stringify(body)), model, policy.maxOutput) });
   if (approved !== true) throw budgetError('COST_BUDGET_EXCEEDED');
@@ -591,7 +616,7 @@ async function modelAnalysis(env: Env, events: TranscriptEvent[], kind: 'session
   const textOutput = outputs.filter((item: { type: string }) => item.type === 'output_text').map((item: { text: string }) => item.text).join('');
   let content;
   try { content = JSON.parse(textOutput); } catch { throw new AppError(502, 'INVALID_MODEL_OUTPUT', 'Feedback could not be verified. Please retry.'); }
-  return { content: role === 'checkpoint' ? validateConversationCheckpoint(content) : validateAnalysis(content, events, kind), model };
+  return { content: role === 'checkpoint' ? validateConversationCheckpoint(content) : miaReview ? validateMiaAnalysis(content, events, kind) : validateAnalysis(content, events, kind), model };
 }
 function withoutWeeklyPlan(result: unknown) {
   const value = object(result), analysis = object(value.analysis), content = object(analysis.content);
@@ -623,9 +648,11 @@ async function review(env: Env, userId: string, body: Record<string, unknown>, k
     catch (error) { if (!(error instanceof AppError)) throw error; }
   }
   const policy = reviewPolicy(kind,envValue);
-  const policyHash = await fingerprint({policy,feedback_prompt_version:'2026-11-11-expression-learning',scenarios:sessions.map(s=>[s.id,s.scenario,s.ended_at]),schema:analysisSchema(kind),...(kind === 'weekly' ? {learning_plan_version:'2026-11-10-e05',weeklyEvidence} : {})});
+  const miaReview = companionId === 'mia' && sessions.some(isMiaRoleplaySession);
+  const validatePart = (value: unknown, part: TranscriptEvent[]) => miaReview ? validateMiaAnalysis(value, part, kind) : validateAnalysis(value, part, kind);
+  const policyHash = await fingerprint({policy,feedback_prompt_version:'2026-11-11-expression-learning',...(miaReview ? {roleplay_version:MIA_ROLEPLAY_VERSION} : {}),scenarios:sessions.map(s=>[s.id,s.scenario,s.ended_at]),schema:miaReview?miaAnalysisSchema(kind):analysisSchema(kind),...(kind === 'weekly' ? {learning_plan_version:'2026-11-10-e05',weeklyEvidence} : {})});
   key = `${PROMPT_VERSION}:${companionId}:${key}:${policyHash}:${await transcriptFingerprint(events)}`;
-  const context = { companion: companionProfile(companionId), scenarios: sessions.map(s => ({ session_id: s.id, scenario: s.scenario, ended_at: s.ended_at })), ...(kind === 'weekly' ? { period_start: since.toISOString(), period_end: through.toISOString() } : {}) };
+  const context = { companion: companionProfile(companionId), ...(miaReview ? { mia_roleplay: true } : {}), scenarios: sessions.map(s => ({ session_id: s.id, scenario: s.scenario, ended_at: s.ended_at, ...(miaReview ? {mode:isMiaRoleplaySession(s)?MIA_ROLEPLAY_VERSION:'legacy_conversation'} : {}) })), ...(kind === 'weekly' ? { period_start: since.toISOString(), period_end: through.toISOString() } : {}) };
   const chunks = analysisChunks(events, context);
   const run = await reserve(env, userId, kind, key, sessionId);
   if (!run.reserved) {
@@ -647,10 +674,10 @@ async function review(env: Env, userId: string, body: Record<string, unknown>, k
       // At most two uncached model calls per HTTP request. Completed parts are
       // durable; a continuation retries the parent and reuses them for free.
       const cached = chunks.length === 1 ? [] : await rest(env, `analysis_jobs?${query({ select: 'result', user_id: `eq.${userId}`, kind: 'eq.part', request_key: `eq.${partKey}`, state: 'eq.completed', limit: '1' })}`) as { result: { content: unknown } }[];
-      if (cached.length) { parts.push(validateAnalysis(cached[0].result.content, part, kind)); continue; }
+      if (cached.length) { parts.push(validatePart(cached[0].result.content, part)); continue; }
       if (generatedParts >= 2) throw new AppError(409, 'ANALYSIS_CONTINUE', 'Saved partial analysis; continue to process the remaining parts.');
       const child = chunks.length === 1 ? null : await reserve(env, userId, 'part', partKey, sessionId);
-      if (child && !child.reserved) { parts.push(validateAnalysis((child.result as { content: unknown }).content, part, kind)); continue; }
+      if (child && !child.reserved) { parts.push(validatePart((child.result as { content: unknown }).content, part)); continue; }
       try {
         const generated = await modelAnalysis(env, part, kind, context, child || run);
         generatedParts++;
@@ -658,7 +685,7 @@ async function review(env: Env, userId: string, body: Record<string, unknown>, k
         if (child) await rpc(env, 'complete_run', { p_job_id: child.job_id, p_lease_token: child.lease_token, p_result: { content: generated.content } });
       } catch (error) { if (child) await failRun(env, child, 'CHUNK_FAILED'); throw error; }
     }
-    const generated = { content: mergeAnalyses(parts, events, kind), model: kind === 'session' ? env.coach : env.analysis };
+    const generated = { content: miaReview ? mergeMiaAnalyses(parts, events, kind) : mergeAnalyses(parts, events, kind), model: kind === 'session' ? env.coach : env.analysis };
     let learningPlan: Record<string, unknown> = {};
     if (kind === 'weekly') {
       learningPlan = { learning_plan: null, learning_plan_context: { status: 'unavailable', selection: 'user_required', future_calls_included: false } };
@@ -667,7 +694,7 @@ async function review(env: Env, userId: string, body: Record<string, unknown>, k
         if (await fingerprint(currentEvidence) === await fingerprint(weeklyEvidence)) learningPlan = weeklyLearningPlan(currentEvidence, events, { companionId, period_start: since.toISOString(), period_end: through.toISOString(), generated_at: new Date().toISOString() });
       } catch (error) { if (!(error instanceof AppError)) throw error; }
     }
-    const content = { ...generated.content, ...learningPlan, scope: { companionId, chunk_count: chunks.length, session_count: sessions.length, event_count: events.length, user_event_count: events.filter(e => e.speaker === 'user').length, ...(kind === 'weekly' ? { period_start: since.toISOString(), period_end: through.toISOString() } : {}) }, based_on: events.map(e => ({ event_id: e.id, session_id: e.session_id, timestamp: e.timestamp })) };
+    const content = { ...generated.content, ...learningPlan, ...(miaReview ? {memory_facts:[]} : {}), scope: { companionId, ...(miaReview ? {mode:MIA_ROLEPLAY_VERSION} : {}), chunk_count: chunks.length, session_count: sessions.length, event_count: events.length, user_event_count: events.filter(e => e.speaker === 'user').length, ...(kind === 'weekly' ? { period_start: since.toISOString(), period_end: through.toISOString() } : {}) }, based_on: events.map(e => ({ event_id: e.id, session_id: e.session_id, timestamp: e.timestamp })) };
     const completed = await rpc(env, 'complete_analysis_run', { p_job_id: run.job_id, p_lease_token: run.lease_token, p_content: {...content,...(background?{background_guard:{task_id:background.id,lease_token:background.lease_token,source_version:background.source_version}}:{})}, p_model: generated.model, p_source_event_ids: events.map(event => event.id) });
     if (kind === 'session') { try { await observeUsage(env, userId, { sessionId }); } catch { /* Observations are optional and never hide an already-saved review. */ } }
     return completed;
@@ -745,12 +772,18 @@ async function prepareConversationMemory(env: Env, userId: string, body: Record<
   const companionId=body.companionId===undefined?owned?.companion_id:requireCompanionId(body.companionId);
   if(!companionId||owned&&owned.companion_id!==companionId)throw new AppError(400,'COMPANION_MISMATCH','Choose the companion for this memory.');
   if(owned&&owned.status!=='ended')throw new AppError(409,'SESSION_ACTIVE','End and sync the conversation first.');
+  // Roleplay speech remains available to the journal, but never becomes a
+  // personal-life handoff. The background worker cancels this handoff only.
+  if(owned&&isMiaRoleplaySession(owned))return {status:'unavailable',session_id:owned.id};
   const policy=reviewPolicy('memory',envValue);
   const policyHash=(await fingerprint({version:HANDOFF_VERSION,policy,schema:handoffSchema,instructions:HANDOFF_INSTRUCTIONS})).slice(0,16);
   type Source={status:string;session?:Session;revision:number;source_version:string;request_key:string};
   const sourceBody={p_user_id:userId,p_companion_id:companionId,p_policy:policyHash,p_session_id:owned?.id??null};
   const source=await rpc(env,'conversation_memory_source',sourceBody) as Source;
   if(!source||!['ready','pending','unavailable'].includes(source.status))throw new AppError(503,'DATABASE_UNAVAILABLE','Conversation memory state could not be verified.');
+  let metadata=owned;
+  if(companionId==='mia'&&source.session&&!metadata)metadata=await ownedSession(env,userId,requireUuid(source.session.id));
+  if(metadata&&isMiaRoleplaySession(metadata))return {status:'unavailable',session_id:metadata.id};
   if(source.status!=='pending')return {status:source.status,session_id:source.session?.id??null};
   const session=source.session;
   if(!session||!uuidPattern.test(session.id)||session.companion_id!==companionId||!Number.isSafeInteger(source.revision)||source.revision<0||!source.source_version||!source.request_key)throw new AppError(503,'DATABASE_UNAVAILABLE','Conversation memory source could not be verified.');
@@ -762,7 +795,7 @@ async function prepareConversationMemory(env: Env, userId: string, body: Record<
   }
   try{
     const events=await transcript(env,userId,[session.id]);
-    const metadata=owned??await ownedSession(env,userId,session.id);
+    metadata??=await ownedSession(env,userId,session.id);
     const input=boundedJson({source_call:{...session,scenario:metadata.scenario},transcript_events:events});
     const instructions=HANDOFF_INSTRUCTIONS+(run.attempts&&run.attempts>1?' Previous generation did not produce a committed handoff. Use fewer threads if necessary. Check exact USER IDs, verbatim quotations, time phrases and JSON size before responding.':'');
     const requestBody={model:policy.model,store:false,max_output_tokens:policy.maxOutput,reasoning:{effort:policy.effort},service_tier:'default',
@@ -798,7 +831,7 @@ async function prepareConversationMemory(env: Env, userId: string, body: Record<
 
 async function checkpoint(env: Env, userId: string, body: Record<string, unknown>) {
   allowKeys(body, ['sessionId', 'omitLearningContext', 'qualifiedEventIds']);
-  const omitted = omitLearningContext(body);
+  const requestedOmission = omitLearningContext(body);
   let qualifiedIds: Set<string> | null = null;
   if (body.qualifiedEventIds !== undefined) {
     const value = body.qualifiedEventIds;
@@ -808,6 +841,7 @@ async function checkpoint(env: Env, userId: string, body: Record<string, unknown
   }
   const sessionId = requireUuid(body.sessionId), session = await ownedSession(env, userId, sessionId);
   if (session.status !== 'active') throw new AppError(409, 'SESSION_ENDED', 'This call has ended.');
+  const miaRoleplay = isMiaRoleplaySession(session), omitted = requestedOmission || miaRoleplay;
   // Read the authoritative revision before selecting previous checkpoints. A
   // correction or forget operation must never resurrect a prior handoff.
   const savedEvents = await transcript(env, userId, [sessionId], qualifiedIds === null);
@@ -822,7 +856,7 @@ async function checkpoint(env: Env, userId: string, body: Record<string, unknown
   const retrievalQuery = conversationQuery(session.scenario, events);
   const memory = omitted ? omittedMemories(session.companion_id) : await memories(env, userId, session.companion_id, session, retrievalQuery, true, true);
   const eventFilter = qualifiedIds ? 'qualified:v1' : undefined;
-  const prefix = `checkpoint:${CONVERSATION_CHECKPOINT_VERSION}:${session.companion_id}:${sessionId}:${(await fingerprint({ prompt_version: PROMPT_VERSION, policy: reviewPolicy('checkpoint',envValue) })).slice(0,16)}:${memory.revision}:${omitted ? 'omitted:v2:' : ''}${qualifiedIds ? 'qualified:v1:' : ''}`;
+  const prefix = `checkpoint:${CONVERSATION_CHECKPOINT_VERSION}:${session.companion_id}:${sessionId}:${(await fingerprint({ prompt_version: PROMPT_VERSION, policy: reviewPolicy('checkpoint',envValue), ...(miaRoleplay ? { mode: MIA_ROLEPLAY_VERSION } : {}) })).slice(0,16)}:${memory.revision}:${omitted ? 'omitted:v2:' : ''}${qualifiedIds ? 'qualified:v1:' : ''}`;
   type CheckpointResult = { learning_omitted?: boolean; checkpoint_version?: string; event_filter?: string; covered_ids?: string[]; checkpoint?: unknown; revision?: number; model?: string; prompt_version?: string };
   const matchingPolicy = (value: CheckpointResult | undefined) => value?.revision === memory.revision && value.model === env.checkpoint && value.prompt_version === PROMPT_VERSION && value.checkpoint_version === CONVERSATION_CHECKPOINT_VERSION && (value.learning_omitted === true) === omitted && value.event_filter === eventFilter;
   const checkpointValue = (value: unknown) => {
@@ -842,7 +876,7 @@ async function checkpoint(env: Env, userId: string, body: Record<string, unknown
   if (!fresh.some(event => event.speaker === 'user')) {
     if (!previous) throw new AppError(422, 'NO_TRANSCRIPT', 'Speak before organizing this call.');
   } else {
-    const context = { scenario: omitted ? '' : session.scenario, purpose: 'ongoing_conversation_continuity', previous_checkpoint: compact ? { summary: compact.summary } : null };
+    const context = { scenario: omitted ? '' : session.scenario, ...(miaRoleplay ? { mode: MIA_ROLEPLAY_VERSION } : {}), purpose: 'ongoing_conversation_continuity', previous_checkpoint: compact ? { summary: compact.summary } : null };
     const chunks = analysisChunks(fresh, context);
     if (chunks.length !== 1) throw new AppError(413, 'CHECKPOINT_TOO_LARGE', 'The call needs to be ended and saved before continuing.');
     // Include the prior handoff and coverage, so retries cannot reuse a result
@@ -892,8 +926,9 @@ function authoredDependencies(env: Env): DialogueDependencies {
     session: (userId, sessionId) => ownedSession(env, userId, sessionId),
     events: (userId, sessionId) => transcript(env, userId, [sessionId], false),
     prepare: async (userId, session, omitted, purpose, checkpoint) => {
+      omitted = omitted || isMiaRoleplaySession(session);
       const memory = omitted ? omittedMemories(session.companion_id) : await memories(env, userId, session.companion_id, session, undefined, true, true);
-      const companion = companionProfile(session.companion_id), clock = callClock(session), scenario = omitted ? '' : session.scenario;
+      const companion = companionProfile(session.companion_id), clock = callClock(session), scenario = isMiaRoleplaySession(session) ? MIA_ROLEPLAY_SCENARIO : omitted ? '' : session.scenario;
       const note = checkpoint ? { version: CONVERSATION_CHECKPOINT_VERSION, summary: checkpoint.summary } : undefined;
       const context = liveVoiceContext(companion.id, scenario, memory, clock, note, session.id).context;
       const opening = purpose === 'startup' ? await prepareOpening(env, userId, companion, session, memory, scenario, clock) : null;
@@ -903,7 +938,7 @@ function authoredDependencies(env: Env): DialogueDependencies {
     summarize: async (userId, session, fresh, prior, run, preDispatch) => {
       // The summary contains conversation continuity only. Provider reasoning
       // state is never passed through this ordinary checkpoint schema.
-      const generated = await modelAnalysis(env, fresh, 'session', { scenario: '', purpose: 'ongoing_conversation_continuity', previous_checkpoint: prior ? { summary: prior } : null }, run as Run, 'checkpoint', preDispatch);
+      const generated = await modelAnalysis(env, fresh, 'session', { scenario: '', ...(isMiaRoleplaySession(session) ? { mode: MIA_ROLEPLAY_VERSION } : {}), purpose: 'ongoing_conversation_continuity', previous_checkpoint: prior ? { summary: prior } : null }, run as Run, 'checkpoint', preDispatch);
       return generated.content.summary;
     },
     legacyCheckpoints: async (userId, sessionId, prefix) => await rest(env, `analysis_jobs?${query({ select: 'request_key,result', user_id: `eq.${userId}`, session_id: `eq.${sessionId}`, kind: 'eq.checkpoint', state: 'eq.completed', request_key: `like.${prefix}*`, order: 'updated_at.asc', limit: '100' })}`) as { request_key: string; result: Record<string, unknown> }[],

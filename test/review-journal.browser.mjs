@@ -16,6 +16,7 @@ try {
  await page.route(base+'/',route=>route.fulfill({contentType:'text/html',body:html}));await page.goto(base);
  await page.evaluate(async()=>{
   const {createReviewJournal}=await import('/review-journal.js');
+  const {MIA_ROLEPLAY_SCENARIO}=await import('/conversation-mode.js');
   const $=id=>document.getElementById(id);$('setup').hidden=true;$('workspace').hidden=false;
   document.querySelectorAll('[data-panel]').forEach(el=>el.hidden=el.id!=='review-panel');
   document.querySelectorAll('[data-view]').forEach(el=>{el.removeAttribute('aria-current');if(el.dataset.view==='review')el.setAttribute('aria-current','page');});
@@ -23,7 +24,7 @@ try {
   const f=window.journalFixture={scope:'service|account-a',active:true,mode:'hub',requests:[],notices:[],gate:null};
   f.deferred=()=>{let resolve;const promise=new Promise(yes=>resolve=yes);return{promise,resolve};};
   const ids=['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','cccccccc-cccc-4ccc-8ccc-cccccccccccc'];
-  f.rows=ids.map((id,i)=>({session:{id,companion_id:i===1?'mia':'alex',created_at:i===0?'2026-11-10T11:30:00Z':i===1?'2026-11-09T23:15:00Z':'2026-10-01T01:00:00Z',ended_at:'2026-11-10T11:40:00Z',time_zone:'Asia/Seoul',status:'ended',scenario:i===1?'주말 계획':'발표 준비'},analysis_id:'analysis-'+i,status:'ready',strengths:[{text:'생각할 시간을 요청했어요.',evidence_ids:['event-'+i]}],expressions:i===0?[{key:'a',expression:'Could you give me a moment?',kind:'alternative',original:'Give me a moment.',meaning:'잠시 시간을 주실 수 있나요?',reason:'뜻은 같고, 부탁하는 느낌이 더 부드러워져요.',evidence_ids:['event-0'],saved:false,bookmark_revision:0},{key:'b',expression:"I'm still working on it.",kind:'reusable',original:'',meaning:'아직 준비하고 있어요.',reason:'준비 중인 일을 이야기할 때 써요.',evidence_ids:['event-0'],saved:false,bookmark_revision:0}]:[{key:'c',expression:"I haven't decided yet.",kind:'reusable',original:'',meaning:'아직 정하지 않았어요.',reason:'계획이 정해지지 않았을 때 써요.',evidence_ids:['event-'+i],saved:false,bookmark_revision:0}]}));
+  f.rows=ids.map((id,i)=>({session:{id,companion_id:i===1?'mia':'alex',created_at:i===0?'2026-11-10T11:30:00Z':i===1?'2026-11-09T23:15:00Z':'2026-10-01T01:00:00Z',ended_at:'2026-11-10T11:40:00Z',time_zone:'Asia/Seoul',status:'ended',scenario:i===1?MIA_ROLEPLAY_SCENARIO:'발표 준비'},analysis_id:'analysis-'+i,status:'ready',strengths:[{text:'생각할 시간을 요청했어요.',evidence_ids:['event-'+i]}],expressions:i===0?[{key:'a',expression:'Could you give me a moment?',kind:'alternative',original:'Give me a moment.',meaning:'잠시 시간을 주실 수 있나요?',reason:'뜻은 같고, 부탁하는 느낌이 더 부드러워져요.',evidence_ids:['event-0'],saved:false,bookmark_revision:0},{key:'b',expression:"I'm still working on it.",kind:'reusable',original:'',meaning:'아직 준비하고 있어요.',reason:'준비 중인 일을 이야기할 때 써요.',evidence_ids:['event-0'],saved:false,bookmark_revision:0}]:[{key:'c',expression:"I haven't decided yet.",kind:'reusable',original:'',meaning:'아직 정하지 않았어요.',reason:'계획이 정해지지 않았을 때 써요.',evidence_ids:['event-'+i],saved:false,bookmark_revision:0}]}));
   f.rpc=async(name,args)=>{
    f.requests.push({name,args});
    if(f.gate&&name===f.gate.name)return f.gate.promise;
@@ -42,6 +43,7 @@ try {
  });
  const root=page.locator('#review-journal');
  assert.equal(await root.locator('.journal-expression').count(),3);assert.match(await root.innerText(),/11월 10일/);assert.equal(await root.locator('details').count(),0);assert.equal(await root.locator('.journal-day>h2').count(),1);assert.equal(await root.locator('.journal-day>h2').innerText(),'11월 10일');
+ assert.match(await root.locator('[data-session-id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"] h3').innerText(),/역할극/);assert.doesNotMatch(await root.innerText(),/Mia voice roleplay v1/,'stored voice-mode markers must never appear as a journal topic');
  await page.screenshot({path:'test-results/review-journal/01-date-list.png'});
  assert.equal(await root.locator('.journal-expression').first().getByRole('button').count(),2,'one detail target and one separate bookmark');
  await root.getByRole('tab',{name:'날짜별',exact:true}).focus();await page.keyboard.press('End');

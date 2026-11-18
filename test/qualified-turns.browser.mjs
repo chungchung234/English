@@ -215,7 +215,7 @@ async function buildProductionFixture() {
 }
 
 async function setup({ manual = true, startupNoise = false, detectorFailure = false, nativeGraph = false, built = false, holdRawAck = false,
-  checkpointError = null, voiceContextFailures = 0, realtime = manual, staleAuthored = false } = {}) {
+  checkpointError = null, voiceContextFailures = 0, realtime = manual, staleAuthored = false, companion = 'alex' } = {}) {
   const context = await browser.newContext({ permissions: ['microphone'], viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   await context.addInitScript(({ pcm, waveRate, manual, startupNoise, detectorFailure, nativeGraph }) => {
     window.fixture = { manual, startupNoise, detectorFailure, nativeGraph, nativeContexts: [] };
@@ -408,10 +408,11 @@ async function setup({ manual = true, startupNoise = false, detectorFailure = fa
     assert.equal(sessions[0].status, 'ended'); assert.deepEqual(errors, []); assert.deepEqual(routeErrors, []);
   };
   await page.goto(base + (built ? '/production-built/' : ''), { waitUntil: 'domcontentloaded' });
-  await page.evaluate(({ project, uid, baseInstructions }) => {
+  await page.evaluate(({ project, uid, baseInstructions, companion }) => {
     localStorage.setItem('loop.auth:' + project, JSON.stringify({ access_token: 'fixture-jwt', refresh_token: 'fixture-refresh', expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: uid } }));
+    localStorage.setItem('loop.companion:' + project + '|' + uid, companion);
     window.fixture.baseInstructions = baseInstructions;
-  }, { project, uid, baseInstructions });
+  }, { project, uid, baseInstructions, companion });
   await page.reload({ waitUntil: 'domcontentloaded' }); await page.locator('#workspace').waitFor({ state: 'visible' });
   await page.evaluate(baseInstructions => { window.fixture.baseInstructions = baseInstructions; }, baseInstructions);
   await page.locator('#start-call').click();
@@ -686,6 +687,26 @@ try {
   assert(!longCall.requestedPaths.some(value => /\/coach\/dialogue-/.test(value)));
   await longCall.end(); results.push({ case: 'ten-minute-realtime-low-token-call', elapsedTimeOnlyKeepsMicrophoneLive: true, noAutomaticCheckpoint: true, noDuplicateGreeting: true, ended: true });
   await longCall.context.close();
+
+  const mia = await setup({ companion: 'mia', detectorFailure: true });
+  assert.equal(mia.sessions[0].scenario, 'Mia voice roleplay v1 — scene supplied during the call');
+  assert.equal(mia.voiceRequests[0].omitLearningContext, true);
+  assert.equal(mia.voiceRequests[0].turnControl, 'manual_turns_v1');
+  await eventually(async () => (await mia.creates()).length === 1, 'Mia uses the existing owned opening pipeline');
+  const miaGreeting = (await mia.creates())[0];
+  assert.equal(miaGreeting.response.instructions, openingInstructions, 'Mia must retain backend-approved opening authority');
+  await mia.begin(miaGreeting, 'mia-opening'); await mia.complete(miaGreeting, 'mia-opening');
+  await eventually(() => mia.page.locator('#hint-call').isEnabled(), 'Mia hint waits for the current audio to finish');
+  await mia.page.locator('#hint-call').click();
+  await eventually(async () => (await mia.creates()).length === 2, 'Mia hint uses the qualified response owner');
+  const miaHint = (await mia.creates())[1];
+  assert.equal(miaHint.response.metadata.purpose, 'hint');
+  assert(miaHint.response.instructions.startsWith(baseInstructions));
+  assert.match(miaHint.response.instructions, /then wait for me to speak/);
+  assert.match(miaHint.response.instructions, /do not answer your own suggested phrase as the counterpart/);
+  await mia.begin(miaHint, 'mia-hint'); await mia.complete(miaHint, 'mia-hint');
+  await mia.end(); results.push({ case: 'mia-roleplay-mode-and-qualified-hint', callerSuppliesScene: true, learningContextOmitted: true, instructionsPreserved: true, ended: true });
+  await mia.context.close();
 
   const legacy = await setup({ manual: false });
   assert.equal(Object.hasOwn(legacy.voiceRequests[0], 'turnControl'), false, 'servers without the capability must retain the legacy protocol');

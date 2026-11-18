@@ -169,7 +169,8 @@ test('private usage preparation survives without imposing a target or target-cha
         const data = JSON.parse(instructions.split('UNTRUSTED_CONTEXT_JSON:\n')[1]);
         assert.equal(Object.hasOwn(data, 'prepared_target'), false); assert.equal(Object.hasOwn(data.memory, 'focus'), false);
         assert.equal(instructions.includes('PRIVATE_FOCUS_ONLY'), false); assert.equal(instructions.includes(target().expression), false);
-        assert.match(instructions, /purpose of this call is a friendly, natural English conversation/);
+        assert.match(instructions, /calm, practical English conversation coach/);
+        assert.match(instructions, /Do not impose a drill or a learning plan from stored history/);
         return new Response(sdp);
       }
       if (path.includes('/complete_run')) { stored = body.p_result; return response(true); }

@@ -3,6 +3,7 @@ import { renderCharacterViewpoints } from './character-viewpoints.ts';
 import { SHARED_EXCHANGE_POLICY } from './shared-exchanges.ts';
 import { POLICY_VERSION, reviewPolicy, spendReservation, usageEstimate } from './policy.ts';
 import { CONVERSATION_CHECKPOINT_VERSION } from './live-context.ts';
+import { isMiaRoleplaySession, MIA_ROLEPLAY_VERSION } from './mia-roleplay.ts';
 import { compactQualifiedHistory, qualifiedHistoryNeedsCheckpoint, safeCheckpoint, verifiedLegacyCheckpoint, type QualifiedCheckpoint } from './dialogue-continuity.ts';
 import { createPreparedRealtimeReader, createRealtimeReader, FIDELITY_POLICY_VERSION, pcmToBase64, realtimeReaderRequests, SYNTHESIS_MODEL, SYNTHESIS_OUTPUT_CAP, textDigest, verifySpeechCapture, type PreparedSpeech, type PreparedSpeechBinding, type PrepareSynthesisAdapter, type SynthesisAdapter } from './verified-speech.ts';
 
@@ -189,8 +190,11 @@ export async function handleAuthoredDialogue(endpoint: string, userId: string, b
   }
   if (endpoint === 'dialogue-context') {
     allowKeys(body, ['protocol', 'sessionId', 'callEpoch', 'omitLearningContext', 'reset']); const sessionId = requireUuid(body.sessionId), session = await approved(deps, userId, sessionId);
-    const raw = await deps.rpc('authored_dialogue_context', { p_user_id: userId, p_session_id: sessionId, p_omit_memory: omitted(body.omitLearningContext), p_call_epoch: integer(body.callEpoch, 1), p_reset: body.reset === undefined ? false : omitted(body.reset) });
-    return publicContext(raw, session);
+    const miaRoleplay = isMiaRoleplaySession(session), omitMemory = omitted(body.omitLearningContext) || miaRoleplay;
+    const raw = await deps.rpc('authored_dialogue_context', { p_user_id: userId, p_session_id: sessionId, p_omit_memory: omitMemory, p_call_epoch: integer(body.callEpoch, 1), p_reset: body.reset === undefined ? false : omitted(body.reset) });
+    const context = publicContext(raw, session);
+    if (miaRoleplay && context.memoryMode !== 'omitted') throw rpcInvalid();
+    return context;
   }
   if (endpoint === 'dialogue-cancel') {
     allowKeys(body, ['protocol', 'sessionId', 'callEpoch', 'authorityGeneration', 'turnNonce', 'generation', 'reason']);
@@ -211,7 +215,7 @@ export async function handleAuthoredDialogue(endpoint: string, userId: string, b
   }
   if (endpoint === 'dialogue-synthesis') {
     allowKeys(body, ['protocol', 'owner', 'generation']); const owner = ownerOf(body.owner, deps, userId), generation = integer(body.generation); const session = await approved(deps, userId, owner.sessionId);
-    if (session.companion_id !== owner.companionId) throw invalid(); notAborted(); let run: Run | null = null, accounted = false;
+    if (session.companion_id !== owner.companionId || (isMiaRoleplaySession(session) && owner.expectedMemoryRevision !== null)) throw invalid(); notAborted(); let run: Run | null = null, accounted = false;
     try {
       run = await reserve(deps, userId, session.id, 'dialogue_synthesis', 'dialogue-synthesis:' + owner.turnId + ':' + generation);
       const settingsBase = { model: SYNTHESIS_MODEL, verification_policy: FIDELITY_POLICY_VERSION };
@@ -246,7 +250,8 @@ export async function handleAuthoredDialogue(endpoint: string, userId: string, b
   }
   if (endpoint !== 'dialogue-turn') throw new AppError(404, 'NOT_FOUND', 'This endpoint was not found.');
   allowKeys(body, ['protocol', 'sessionId', 'callEpoch', 'authorityGeneration', 'turnNonce', 'expectedGeneration', 'playbackEpoch', 'purpose', 'hint', 'currentUserEventIds', 'acceptedHistoryEventIds', 'expectedMemoryRevision', 'omitLearningContext', 'speechSpeed', 'pendingPlaybackReports']);
-  const sessionId = requireUuid(body.sessionId), session = await approved(deps, userId, sessionId), callEpoch = integer(body.callEpoch, 1), authorityGeneration = integer(body.authorityGeneration, 1), expectedGeneration = integer(body.expectedGeneration), turnNonce = requireUuid(body.turnNonce), playbackEpoch = integer(body.playbackEpoch), isOmitted = omitted(body.omitLearningContext), expectedRevision = revision(body.expectedMemoryRevision), speed = requireSpeechSpeed(body.speechSpeed);
+  const sessionId = requireUuid(body.sessionId), session = await approved(deps, userId, sessionId), callEpoch = integer(body.callEpoch, 1), authorityGeneration = integer(body.authorityGeneration, 1), expectedGeneration = integer(body.expectedGeneration), turnNonce = requireUuid(body.turnNonce), playbackEpoch = integer(body.playbackEpoch), isOmitted = omitted(body.omitLearningContext) || isMiaRoleplaySession(session), expectedRevision = revision(body.expectedMemoryRevision), speed = requireSpeechSpeed(body.speechSpeed);
+  const roleplayPolicy = isMiaRoleplaySession(session) ? { roleplay_version: MIA_ROLEPLAY_VERSION } : {};
   const currentIds = ids(body.currentUserEventIds), historyIds = ids(body.acceptedHistoryEventIds);
   if (!['startup', 'reply', 'hint'].includes(body.purpose) || body.purpose === 'reply' && !currentIds.length || body.purpose !== 'reply' && currentIds.length || body.purpose === 'hint' && body.hint !== 'next_sentence' || body.purpose !== 'hint' && body.hint !== undefined || currentIds.some(id => historyIds.includes(id)) || isOmitted !== (expectedRevision === null)) throw invalid();
   const pending = pendingReports(body.pendingPlaybackReports, deps, userId);
@@ -269,7 +274,7 @@ export async function handleAuthoredDialogue(endpoint: string, userId: string, b
       p_expected_memory_revision: expectedRevision, p_turn_nonce: turnNonce, p_turn_id: turn?.id ?? null, p_stage: stage, p_job_id: run.job_id, p_lease_token: run.lease_token, p_source_event_digests: digests }) !== true) throw rpcInvalid();
     notAborted();
   };
-  const checkpointPolicy = reviewPolicy('checkpoint', deps.get), checkpointFingerprint = await fingerprint({ version: CONVERSATION_CHECKPOINT_VERSION, policy: checkpointPolicy, prompt_version: POLICY_VERSION });
+  const checkpointPolicy = reviewPolicy('checkpoint', deps.get), checkpointFingerprint = await fingerprint({ version: CONVERSATION_CHECKPOINT_VERSION, policy: checkpointPolicy, prompt_version: POLICY_VERSION, ...roleplayPolicy });
   let previous = safeCheckpoint(state.checkpoint ?? rawState?.checkpoint, history, checkpointFingerprint);
   const storeCheckpoint = async (checkpoint: QualifiedCheckpoint, covered: TranscriptEvent[]) => {
     const saved = data(await deps.rpc('authored_dialogue_checkpoint', { p_user_id: userId, p_session_id: sessionId, p_call_epoch: callEpoch, p_authority_generation: authorityGeneration, p_expected_generation: expectedGeneration, p_covered_event_ids: checkpoint.covered_ids, p_summary: checkpoint.summary, p_expected_memory_revision: expectedRevision, p_policy_fingerprint: checkpointFingerprint, p_source_event_digests: sourceDigests(covered), p_turn_nonce: turnNonce }));
@@ -277,7 +282,7 @@ export async function handleAuthoredDialogue(endpoint: string, userId: string, b
     if (!confirmed || confirmed.summary !== checkpoint.summary || confirmed.covered_ids.length !== covered.length) throw rpcInvalid();
   };
   if (!previous && authorityGeneration === 1 && deps.legacyCheckpoints && qualifiedHistoryNeedsCheckpoint(history)) {
-    const prefix = `checkpoint:${CONVERSATION_CHECKPOINT_VERSION}:${session.companion_id}:${sessionId}:${(await fingerprint({ prompt_version: POLICY_VERSION, policy: checkpointPolicy })).slice(0, 16)}:${expectedRevision ?? 0}:${isOmitted ? 'omitted:v2:' : ''}qualified:v1:`;
+    const prefix = `checkpoint:${CONVERSATION_CHECKPOINT_VERSION}:${session.companion_id}:${sessionId}:${(await fingerprint({ prompt_version: POLICY_VERSION, policy: checkpointPolicy, ...(isMiaRoleplaySession(session) ? { mode: MIA_ROLEPLAY_VERSION } : {}) })).slice(0, 16)}:${expectedRevision ?? 0}:${isOmitted ? 'omitted:v2:' : ''}qualified:v1:`;
     previous = await verifiedLegacyCheckpoint(await deps.legacyCheckpoints(userId, sessionId, prefix), history, { prefix, revision: expectedRevision ?? 0, model: checkpointPolicy.model, promptVersion: POLICY_VERSION, omitted: isOmitted, policyFingerprint: checkpointFingerprint });
     if (previous) await storeCheckpoint(previous, history.slice(0, previous.covered_ids.length));
   }
@@ -294,7 +299,7 @@ export async function handleAuthoredDialogue(endpoint: string, userId: string, b
   }, storeCheckpoint);
   notAborted();
   const prepared = await deps.prepare(userId, session, isOmitted, body.purpose, compact.checkpoint);
-  const policy = reviewPolicy('session', deps.get), policyFingerprint = await fingerprint({ version: AUTHORED_DIALOGUE_POLICY, policy, hint: body.hint ?? null, speed });
+  const policy = reviewPolicy('session', deps.get), policyFingerprint = await fingerprint({ version: AUTHORED_DIALOGUE_POLICY, policy, hint: body.hint ?? null, speed, ...roleplayPolicy });
   const begun = await deps.rpc('authored_dialogue_begin', { p_user_id: userId, p_session_id: sessionId, p_call_epoch: callEpoch, p_authority_generation: authorityGeneration, p_expected_generation: expectedGeneration, p_turn_nonce: turnNonce, p_purpose: body.purpose, p_hint: body.hint ?? null,
     p_current_user_ids: currentIds, p_history_ids: historyIds, p_expected_memory_revision: expectedRevision, p_playback_epoch: playbackEpoch, p_context: prepared.context, p_opening: prepared.opening, p_policy_fingerprint: policyFingerprint,
     p_pending_playbacks: pending, p_speech_speed: speed, p_checkpoint_covered_ids: compact.checkpoint?.covered_ids ?? [], p_source_event_digests: snapshot.digests });
@@ -303,7 +308,9 @@ export async function handleAuthoredDialogue(endpoint: string, userId: string, b
   let run: Run | null = null, accounted = false;
   try {
     run = await reserve(deps, userId, sessionId, 'dialogue', 'dialogue:' + (turn.id ?? turn.turn_id));
-    const instructions = prepared.instructions + (body.purpose === 'hint' ? '\nFor this response only: The caller requested an English next sentence for the current conversation. Give the useful expression directly.' : '');
+    const instructions = prepared.instructions + (body.purpose === 'hint' ? isMiaRoleplaySession(session)
+      ? '\nFor this response only: The caller requested expression help within this roleplay. Preserve the current roles and scene. Give one short useful English phrase, then wait for the caller. Do not answer that phrase as the counterpart in the same turn.'
+      : '\nFor this response only: The caller requested an English next sentence for the current conversation. Give the useful expression directly.' : '');
     const modelInput = authoringRequest(instructions, [...compact.events, ...current], {}, policy, turnNonce, body.purpose);
     const reservation = spendReservation(bytes(JSON.stringify(modelInput)), policy.model, policy.maxOutput);
     await cost(deps, run, policy.model, { version: AUTHORED_DIALOGUE_POLICY, ...policy }, reservation);

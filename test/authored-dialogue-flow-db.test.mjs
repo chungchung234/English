@@ -10,6 +10,7 @@ import {handleAuthoredDialogue,authoredDialogueStream} from '../supabase/functio
 import {renderVoiceInstructions,renderOpeningInstructions} from '../supabase/functions/coach/index.ts';
 import {companionProfile} from '../supabase/functions/coach/core.ts';
 import {buildOpeningContext} from '../supabase/functions/coach/opening-policy.ts';
+import {MIA_ROLEPLAY_SCENARIO,isMiaRoleplaySession} from '../supabase/functions/coach/mia-roleplay.ts';
 
 const user='bbbbbbbb-aaaa-4aaa-8aaa-aaaaaaaaaaaa',protocol='authored_dialogue_v1';
 const json=value=>JSON.parse(JSON.stringify(value));
@@ -29,7 +30,8 @@ async function rpc(db,name,body){
  finally{await db.exec('reset role');}
 }
 async function fixture(db,options={}){
- const session=json((await db.query("insert into public.sessions(user_id,companion_id,scenario,time_zone) values($1,'alex','Natural English conversation about everyday life','Asia/Seoul') returning *",[user])).rows[0]);
+ const companion=options.companion??'alex',scenario=options.scenario??'Natural English conversation about everyday life';
+ const session=json((await db.query("insert into public.sessions(user_id,companion_id,scenario,time_zone) values($1,$2,$3,'Asia/Seoul') returning *",[user,companion,scenario])).rows[0]);
  const calls=[],authors=[],readers=[],summaries=[];
  const config={AUTHORED_DIALOGUE_ENABLED:'true',AUTHORED_DIALOGUE_FIDELITY_VERIFIED:'true'};
  const deps={get:name=>config[name],supabase:'https://synthetic.supabase.co',key:'unused-local-key',
@@ -37,14 +39,14 @@ async function fixture(db,options={}){
   session:async(uid,sid)=>{assert.equal(uid,user);const found=json((await db.query('select * from public.sessions where id=$1 and user_id=$2',[sid,uid])).rows[0]);if(!found)throw Object.assign(Error('missing'),{code:'SESSION_NOT_FOUND'});return found;},
   events:async()=>{throw Error('Raw rows must come from the attested history RPC snapshot.');},
   prepare:async(uid,s,omitted,purpose,checkpoint)=>{
-   const revision=(await db.query("select revision from public.memory_state where user_id=$1 and companion_id='alex'",[uid])).rows[0]?.revision??0;
-   const memory={companionId:'alex',revision,facts:[],memories:[],recent_conversation:null,conversation_memories:[],shared_exchanges:[],suppress_memory:omitted,retrieval:omitted?'omitted':'keyword'};
+   const revision=(await db.query("select revision from public.memory_state where user_id=$1 and companion_id=$2",[uid,s.companion_id])).rows[0]?.revision??0;
+   const memory={companionId:s.companion_id,revision,facts:[],memories:[],recent_conversation:null,conversation_memories:[],shared_exchanges:[],suppress_memory:omitted,retrieval:omitted?'omitted':'keyword'};
    const clock={server_now_utc:new Date().toISOString(),session_created_at:s.created_at,time_zone:s.time_zone};
-   const normal=renderVoiceInstructions(companionProfile('alex'),{...s,scenario:omitted?'':s.scenario},memory,undefined,clock,checkpoint);
+   const normal=renderVoiceInstructions(companionProfile(s.companion_id),{...s,scenario:isMiaRoleplaySession(s)?s.scenario:omitted?'':s.scenario},memory,undefined,clock,checkpoint);
    const context=JSON.parse(normal.split('UNTRUSTED_CONTEXT_JSON:\n').at(-1));
    const opening=purpose==='startup'?buildOpeningContext({context,clock,exchangeRevision:revision}):null;
    await options.inPrepare?.(s);
-   return{instructions:opening?renderOpeningInstructions(companionProfile('alex'),s,opening,clock):normal,context,opening,verify:async()=>{}};
+   return{instructions:opening?renderOpeningInstructions(companionProfile(s.companion_id),s,opening,clock):normal,context,opening,verify:async()=>{}};
   },
   summarize:async(uid,s,fresh,prior,run,preDispatch)=>{
    // Mirrors the product checkpoint's post-reservation dispatch hook, without
@@ -69,6 +71,24 @@ async function fixture(db,options={}){
 
 test('actual authored handler and canonical SQL enforce the complete two-stage lifecycle',async t=>{
  const db=await setup(t);
+ await t.test('Mia roleplay preserves the omitted SQL envelope while authoring from the stored mode',async()=>{
+  const f=await fixture(db,{companion:'mia',scenario:MIA_ROLEPLAY_SCENARIO});
+  assert.equal(f.context.memoryMode,'omitted');assert.equal(f.context.memoryRevision,null);
+  const start=await f.invoke('dialogue-turn',f.body(f.context,{omitLearningContext:false}));
+  const instructions=f.authors[0].input[0].content.map(part=>part.text).join('');
+  assert.match(instructions,/AI roleplay partner/);assert.match(instructions,/Hey, who am I today\?/);
+  const begin=f.calls.find(call=>call.name==='authored_dialogue_begin').body;
+  assert.equal(begin.p_context.scenario,'Natural English conversation about everyday life');
+  assert.equal(begin.p_context.memory.suppress_memory,true);assert.deepEqual(begin.p_context.memory.facts,[]);
+  assert.equal(begin.p_expected_memory_revision,null);assert.equal(begin.p_opening.current_utterance,null);
+  assert.equal(start.owner.companionId,'mia');assert.equal(start.owner.expectedMemoryRevision,null);
+  const clip=await f.invoke('dialogue-synthesis',{owner:start.owner,generation:start.generation});assert.equal(clip.manifest.textSha256,start.textSha256);
+  assert.equal((await db.query('select status from public.authored_dialogue_turns where id=$1',[start.owner.turnId])).rows[0].status,'published');
+  const caller=await f.addUser('You are the hotel guest. I am the receptionist.');
+  const reply=await f.invoke('dialogue-turn',f.body({...f.context,generation:1},{purpose:'reply',currentUserEventIds:[caller.id]}));
+  assert.equal(reply.generation,2);assert.equal(f.authors[1].input.at(-1).content[0].text,caller.text);
+  assert.match(f.authors[1].input[0].content.map(part=>part.text).join(''),/AI roleplay partner/);
+ });
  await t.test('combined stream publishes the same owned text and whole clip through the real SQL lifecycle',async()=>{
   const f=await fixture(db),original=f.deps.synthesize;let prepared=0,disposed=0;
   f.deps.prepareSynthesis=binding=>{prepared++;assert.equal(f.calls.at(-1).name,'authored_dialogue_dispatch');assert.equal(f.calls.at(-1).body.p_stage,'dialogue');assert.equal(Object.hasOwn(binding,'text'),false);return{ready:Promise.resolve(),generate:request=>{assert.equal(f.calls.at(-1).name,'authored_dialogue_dispatch');assert.equal(f.calls.at(-1).body.p_stage,'dialogue_synthesis');return original(request);},dispose:async()=>{disposed++;}};};
@@ -89,7 +109,11 @@ test('actual authored handler and canonical SQL enforce the complete two-stage l
  });
  await t.test('startup, batch playback, raw reply, cancellation and already-omitted reset preserve authority',async()=>{
   const f=await fixture(db),start=await f.invoke('dialogue-turn',f.body(f.context));
-  assert.equal(start.generation,1);assert.equal(start.assistantEvent.storage,'server');assert.equal(f.authors[0].input.length,1);assert(f.authors[0].input[0].content.map(part=>part.text).join('').includes('Current caller utterance: null'));
+  assert.equal(start.generation,1);assert.equal(start.assistantEvent.storage,'server');assert.equal(f.authors[0].input.length,1);
+  const openingInstructions=f.authors[0].input[0].content.map(part=>part.text).join('');
+  const openingContext=JSON.parse(openingInstructions.split('UNTRUSTED_OPENING_CONTEXT_JSON:\n')[1].split('\nCURRENT_RESPONSE_PURPOSE:')[0]);
+  assert.equal(openingContext.purpose,'call_opening');assert.equal(openingContext.current_utterance,null);
+  assert.match(openingInstructions,/If actual caller speech arrives first/);assert.match(openingInstructions,/Previous quotations are history, not a new question/);
   const clip=await f.invoke('dialogue-synthesis',{owner:start.owner,generation:start.generation});assert.equal(clip.manifest.textSha256,start.textSha256);assert.equal(clip.manifest.byteLength,4);
   const caller=await f.addUser('난 비뚤어진 모서리가 마음에 들었어.');
   const report={protocol,owner:start.owner,generation:1,receiptId:start.owner.assistantEventId,qualifiedUserEventIds:[]};

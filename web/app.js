@@ -16,6 +16,7 @@ import { createQualifiedTurnControls } from './qualified-turn-controls.js';
 import { createLocalVoiceActivity } from './local-voice.js';
 import { createRealtimeRequests } from './realtime-requests.js';
 import { createVoiceInstructions } from './voice-instructions.js';
+import { MIA_ROLEPLAY_SCENARIO, scenarioLabel } from './conversation-mode.js';
 import { createConversationPlaybackOutbox, createConversationPlaybackCollector, createConversationPlaybackDelivery } from './conversation-playback.js';
 import { AUTHORED_DIALOGUE_PROTOCOL, createAuthoredDialogue, createAuthoredPlaybackDelivery } from './authored-dialogue.js';
 import { createVerifiedPcmPlayback } from './verified-pcm-playback.js';
@@ -58,7 +59,7 @@ const authoredPlaybackDelivery=createAuthoredPlaybackDelivery({getScope:()=>auth
   if(owner!==scope||!auth)throw Error('Dialogue playback owner changed.');
   return edge('dialogue-playback',body);
 }});
-const companions = {mia:{name:'Mia',trait:'다정하고 사려 깊은 대화'},alex:{name:'Alex',trait:'차분하고 명료한 대화'},juno:{name:'Juno',trait:'경쾌하고 호기심 많은 대화'}};
+const companions = {mia:{name:'Mia',trait:'외국인 친구와 역할극'},alex:{name:'Alex',trait:'영어 표현을 다듬어주는 코치'},juno:{name:'Juno',trait:'편하게 수다 떠는 외국인 친구'}};
 let connectionAttempt = null;
 let companionId = 'alex', callStarting = false, callEnding = false, selectedReviewSessionId = null, practiceMemory = null;
 let voiceCapabilities={manual_turns_v1:false,realtime_streaming_v1:false,authored_dialogue_v1:false};
@@ -661,7 +662,7 @@ function renderMemoryControls(data,{drafts=new Map()}={}){
   const excluded=$('memory-exclusions');excluded.replaceChildren();const items=data.excluded_sessions||[];
   if(data.excluded_sessions_limited){const p=document.createElement('p');p.className='dialog-note';p.textContent='최근 30개를 표시하고 있어요.';excluded.append(p);}
   if(!items.length){const p=document.createElement('p');p.className='empty-state compact';p.textContent='기억에서 제외한 대화가 없어요.';excluded.append(p);}
-  for(const session of items){const row=document.createElement('div');row.className='memory-excluded';const title=document.createElement('span');title.textContent=`${session.scenario||'대화'} · ${session.ended_at?formatDate(session.ended_at):''}`;const restore=document.createElement('button');restore.className='text-button';restore.textContent='기억에 다시 포함';restore.onclick=protect(async()=>mutateMemory({action:'restoreSession',sessionId:session.session_id}));row.append(title,restore);excluded.append(row);}
+  for(const session of items){const row=document.createElement('div');row.className='memory-excluded';const title=document.createElement('span');title.textContent=`${scenarioLabel({...session,companion_id:companionId})||'대화'} · ${session.ended_at?formatDate(session.ended_at):''}`;const restore=document.createElement('button');restore.className='text-button';restore.textContent='기억에 다시 포함';restore.onclick=protect(async()=>mutateMemory({action:'restoreSession',sessionId:session.session_id}));row.append(title,restore);excluded.append(row);}
   memoryControlsDisabled(false);
 }
 async function loadMemoryControls(){const epoch=++memoryEpoch,selectedCompanion=companionId;const data=await edge('memory-manage',{companionId:selectedCompanion,action:'list'});if(epoch!==memoryEpoch||selectedCompanion!==companionId)return null;renderMemoryControls(data);return data;}
@@ -1028,7 +1029,7 @@ async function startCall() {
     void sync().catch(()=>{if(scope===callScope)void updatePending().catch(()=>{});});
     checkAttempt();
     await waitForAttempt(learning.prepareCall());
-    const omitLearningContext=learning.hasPendingExclusions();
+    const omitLearningContext=selectedCompanion==='mia'||learning.hasPendingExclusions();
     $('call-status').textContent='마이크 사용을 허용해 주세요';
     stream=await waitForAttempt(navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true}}).then(value=>{
       // Permission can resolve after cancellation; never leak that late mic.
@@ -1040,7 +1041,7 @@ async function startCall() {
     if(!callStarting||scope!==callScope||companionId!==selectedCompanion)throw Error('통화 연결이 취소되었습니다.');
     const callTimeZone=deviceTimeZone();
     attempt.sessionId=crypto.randomUUID();
-    const creation=api('/rest/v1/sessions',{method:'POST',headers:{Prefer:'return=representation'},signal:attempt.controller.signal,body:{id:attempt.sessionId,user_id:auth.user.id,scenario:NATURAL_CONVERSATION,companion_id:selectedCompanion,client_build:releaseMetadata.client_build,time_zone:callTimeZone}})
+    const creation=api('/rest/v1/sessions',{method:'POST',headers:{Prefer:'return=representation'},signal:attempt.controller.signal,body:{id:attempt.sessionId,user_id:auth.user.id,scenario:selectedCompanion==='mia'?MIA_ROLEPLAY_SCENARIO:NATURAL_CONVERSATION,companion_id:selectedCompanion,client_build:releaseMetadata.client_build,time_zone:callTimeZone}})
       .then(rows=>{if(attempt.controller.signal.aborted||attempt.cancelled||connectionAttempt!==attempt||scope!==attempt.scope)void finishCancelledConnection(attempt);return rows;});
     const [session]=await waitForAttempt(creation);
     if(!callStarting||scope!==callScope||companionId!==selectedCompanion)throw Error('통화 연결이 취소되었습니다.');
@@ -1339,7 +1340,7 @@ function showAnalysis(target,analysis){
     group(details.body,'corrections','교정과 대안',true);
     group(details.body,'practice','다음에도 써볼 표현');
     group(details.body,'patterns','반복해서 확인된 패턴');
-    if(content.next_scenario){const h=document.createElement('h4');h.textContent='다음에 나눌 이야기';details.body.append(h,paragraph(content.next_scenario));}
+    if(content.next_scenario&&(analysis.companion_id||content.scope?.companionId||companionId)!=='mia'){const h=document.createElement('h4');h.textContent='다음에 나눌 이야기';details.body.append(h,paragraph(content.next_scenario));}
     if(content.scope){const scope=document.createElement('small');scope.textContent=`분석에 포함된 내 대화 ${content.scope.user_event_count ?? 0}개`;details.body.append(scope);}
     div.replaceChildren(details.details);
   }else{
@@ -1429,7 +1430,7 @@ async function loadHistory(){
     const id=session.companion_id,name=companions[id].name;
     const entry=document.createElement('article');entry.className='history-entry';entry.dataset.sessionId=session.id;entry.dataset.companionId=id;
     let meta=formatInstant(session.created_at,sessionTimeZone(session).zone)+(session.status==='ended'?'':' · 저장 확인 필요');
-    if(session.scenario&&session.scenario!==NATURAL_CONVERSATION)meta+=' · '+session.scenario;
+    if(session.scenario&&session.scenario!==NATURAL_CONVERSATION)meta+=' · '+scenarioLabel(session);
     const row=document.createElement('div');row.className='history-row';
     const open=document.createElement('button');open.className='history-open';open.setAttribute('aria-label',name+'와의 통화 상세');
     const avatar=document.createElement('img');avatar.className='history-avatar';avatar.src=$('ai-art-'+id).dataset.src;avatar.alt='';avatar.loading='lazy';avatar.decoding='async';
@@ -1463,6 +1464,7 @@ async function loadHistory(){
 
 async function loadMemory(){
   const epoch=++memoryEpoch, selectedCompanion=companionId;
+  if(selectedCompanion==='mia'){practiceMemory=null;updatePracticePreview();return;}
   const data=await edge('memory',{companionId:selectedCompanion});
   if(epoch!==memoryEpoch || selectedCompanion!==companionId)return;
   if($('memory-summary'))$('memory-summary').textContent=data.memories.length?`지난 대화에서 이어가기 · ${data.memories[0].summary}`:'첫 통화부터 나의 학습 기록을 쌓아 보세요.';
@@ -1613,9 +1615,10 @@ for(const session of data.sessions)if(session.record_incomplete===true)await res
 document.querySelectorAll('[data-cue]').forEach(button=>button.onclick=protect(async()=>{
   const current=call;
   if(!current||!current.voiceInstructions||current.ending||current.budgetExhausted||current.compacting||current.floor?.blocksResponse||current.responding||inputBusy(current)||current.aiSpeaking||current.dc.readyState!=='open'||current.pc.connectionState!=='connected')return;
-  if(current.turnControl==='manual_turns_v1'){current.floor.requestHint(button.dataset.cue);updateCallControls();return;}
+  const cue=current.companionId==='mia'?button.dataset.roleplayCue:button.dataset.cue;
+  if(current.turnControl==='manual_turns_v1'){current.floor.requestHint(cue);updateCallControls();return;}
   current.responding=true;updateCallControls();$('call-status').textContent='힌트 문장을 준비하고 있어요';
-  try{sendRealtime(current,{type:'response.create',response:{instructions:current.voiceInstructions+'\nFor this response only: '+button.dataset.cue}});}catch(error){current.responding=false;recordCallIssue(current,{kind:'media_error',code:'SEND_FAILED',request_type:'response.create'});updateCallControls();throw error;}
+  try{sendRealtime(current,{type:'response.create',response:{instructions:current.voiceInstructions+'\nFor this response only: '+cue}});}catch(error){current.responding=false;recordCallIssue(current,{kind:'media_error',code:'SEND_FAILED',request_type:'response.create'});updateCallControls();throw error;}
 }));
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&call)updateCallClock(call);});
 window.addEventListener('pageshow',event=>{if(call){updateCallClock(call);updateCallControls();}if(event.persisted){socialBusy=false;renderAuthControls();}});

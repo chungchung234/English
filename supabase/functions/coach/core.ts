@@ -90,10 +90,10 @@ function citation(item: unknown, sources: Map<string, TranscriptEvent>): Citatio
   return value;
 }
 function text(value: unknown, max = 3000): value is string { return typeof value === 'string' && value.trim().length > 0 && value.length <= max; }
-export function validateAnalysis(value: unknown, events: TranscriptEvent[], kind: 'session' | 'weekly'): Record<string, unknown> {
+export function validateAnalysis(value: unknown, events: TranscriptEvent[], kind: 'session' | 'weekly', allowEmptyNextScenario = false): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return failEvidence();
   const result = value as Record<string, unknown>, sources = new Map(events.filter(e => e.speaker === 'user').map(e => [e.id, e]));
-  if (!text(result.summary) || !Array.isArray(result.strengths) || !Array.isArray(result.corrections) || !Array.isArray(result.practice) || !text(result.next_scenario, 400)) return failEvidence();
+  if (!text(result.summary) || !Array.isArray(result.strengths) || !Array.isArray(result.corrections) || !Array.isArray(result.practice) || (!(allowEmptyNextScenario && result.next_scenario === '') && !text(result.next_scenario, 400))) return failEvidence();
   for (const [key, max] of [['strengths', 6], ['corrections', 8], ['practice', 8]] as const) {
     const entries = result[key] as unknown[];
     if (entries.length > max) return failEvidence();
@@ -185,7 +185,7 @@ export function analysisChunks(events: TranscriptEvent[], context: unknown): Tra
 
 // Combine already-validated outputs without a second model inventing citations.
 // Interleave batches so the beginning of a long call cannot crowd out its end.
-export function mergeAnalyses(parts: Record<string, unknown>[], events: TranscriptEvent[], kind: 'session' | 'weekly') {
+export function mergeAnalyses(parts: Record<string, unknown>[], events: TranscriptEvent[], kind: 'session' | 'weekly', allowEmptyNextScenario = false) {
   if (parts.length === 1) return parts[0];
   const result: Record<string, unknown> = {
     summary: parts.map((part, i) => `${i + 1}. ${String(part.summary).slice(0, 320)}`).join('\n'),
@@ -208,7 +208,7 @@ export function mergeAnalyses(parts: Record<string, unknown>[], events: Transcri
     if (!previous || time(fact) >= time(previous)) facts.set(String(fact.key), fact);
   }
   result.memory_facts = [...facts.values()];
-  return validateAnalysis(result, events, kind);
+  return validateAnalysis(result, events, kind, allowEmptyNextScenario);
 }
 
 export function analysisContext(events: TranscriptEvent[], context: unknown) {

@@ -6,7 +6,8 @@ import { FIDELITY_POLICY_VERSION, textDigest } from './verified-speech.ts';
 import { renderVoiceInstructions, renderOpeningInstructions, handler } from './index.ts';
 import { companionProfile, fingerprint } from './core.ts';
 import { buildOpeningContext } from './opening-policy.ts';
-import { reviewPolicy } from './policy.ts';
+import { POLICY_VERSION, reviewPolicy } from './policy.ts';
+import { MIA_ROLEPLAY_SCENARIO, MIA_ROLEPLAY_VERSION } from './mia-roleplay.ts';
 
 const id=n=>`00000000-0000-4000-8000-${String(n).padStart(12,'0')}`,uid=id(1),sid=id(2),nonce=id(3),tid=id(4),aid=id(5),currentId=id(6);
 const protocol='authored_dialogue_v1',scope='https://project.supabase.co|'+uid;
@@ -16,14 +17,15 @@ const input={id:currentId,session_id:sid,speaker:'user',text:'이 전시가 조�
 const turnBody=(extra={})=>({protocol,sessionId:sid,callEpoch:1,authorityGeneration:1,turnNonce:nonce,expectedGeneration:0,playbackEpoch:1,purpose:'reply',currentUserEventIds:[currentId],acceptedHistoryEventIds:[],expectedMemoryRevision:7,omitLearningContext:false,speechSpeed:.85,...extra});
 const expectedOwner={scope,sessionId:sid,companionId:'alex',callEpoch:1,turnNonce:nonce,turnId:tid,assistantEventId:aid,authorityGeneration:1,expectedMemoryRevision:7,playbackEpoch:1};
 function fixture(options={}){
- const trace=[],provider=[],state={call_epoch:1,authority_generation:1,turn_generation:0,memory_mode:'included',memory_revision:7,checkpoint:null};
- let counter=100,turn={id:tid,assistant_event_id:aid,session_id:sid,user_id:uid,companion_id:'alex',call_epoch:1,authority_generation:1,turn_generation:1,playback_epoch:1,turn_nonce:nonce,memory_mode:'included',memory_revision:7,status:'reserved',speech_speed:.85},event;
+ const selectedSession=options.session??session,memoryMode=options.omitted?'omitted':'included',memoryRevision=options.omitted?null:7;
+ const trace=[],provider=[],state={call_epoch:1,authority_generation:1,turn_generation:0,memory_mode:memoryMode,memory_revision:memoryRevision,checkpoint:null};
+ let counter=100,turn={id:tid,assistant_event_id:aid,session_id:sid,user_id:uid,companion_id:selectedSession.companion_id,call_epoch:1,authority_generation:1,turn_generation:1,playback_epoch:1,turn_nonce:nonce,memory_mode:memoryMode,memory_revision:memoryRevision,status:'reserved',speech_speed:.85},event;
  const config={AUTHORED_DIALOGUE_ENABLED:'true',AUTHORED_DIALOGUE_FIDELITY_VERIFIED:'true'};
  const deps={get:name=>config[name],supabase:'https://project.supabase.co',key:'never-export-mock',
- session:async(user,sessionId)=>{assert.equal(user,uid);assert.equal(sessionId,sid);return options.ended?{...session,status:'ended'}:session;},
+ session:async(user,sessionId)=>{assert.equal(user,uid);assert.equal(sessionId,sid);return options.ended?{...selectedSession,status:'ended'}:selectedSession;},
  events:async()=>options.events??[input],
  prepare:async(user,s,omitted,purpose,checkpoint)=>{
-  const m={companionId:'alex',revision:7,facts:[],memories:[],recent_conversation:null,conversation_memories:[],focus:[],practiced:[],suppress_memory:omitted,limited:false,retrieval:'keyword'},companion=companionProfile('alex');
+  const m={companionId:s.companion_id,revision:7,facts:[],memories:[],recent_conversation:null,conversation_memories:[],focus:[],practiced:[],suppress_memory:omitted,limited:false,retrieval:'keyword'},companion=companionProfile(s.companion_id);
   const note=checkpoint?{version:checkpoint.version,summary:checkpoint.summary}:undefined;
   const normal=renderVoiceInstructions(companion,s,m,undefined,clock,note),context=JSON.parse(normal.split('UNTRUSTED_CONTEXT_JSON:\n')[1]);
   const opening=purpose==='startup'?buildOpeningContext({context,clock,exchangeRevision:7}):null;
@@ -65,13 +67,47 @@ test('context and ASR-only bootstrap expose no private checkpoint and preserve l
  assert.deepEqual(context,{protocol,callEpoch:1,authorityGeneration:1,generation:0,memoryRevision:7,memoryMode:'included',companionId:'alex'});assert(!JSON.stringify(context).includes('PRIVATE_'));
  const voice=await handleAuthoredDialogue('dialogue-voice',uid,{protocol,sessionId:sid,sdp:'fixture',speechSpeed:.85},f.deps);assert.equal(voice.audio_policy.turn_control,'manual_turns_v1');assert.equal(voice.authored_dialogue.asr_only,true);assert.equal(f.trace.find(x=>x.name==='bootstrap').body.omitLearningContext,true);
 });
-test('exact v5 authoring keeps current raw speech, private phase/reasoning and immutable written source separate',async()=>{
+test('authoring keeps current raw speech, private phase/reasoning and immutable written source separate',async()=>{
  const f=fixture(),result=await handleAuthoredDialogue('dialogue-turn',uid,turnBody(),f.deps);
  assert.deepEqual(result.owner,expectedOwner);assert.equal(result.assistantEvent.storage,'server');assert.equal(result.assistantEvent.text,result.text);assert.equal(result.textSha256,createHash('sha256').update(result.text).digest('hex'));
  assert(f.provider[0].input[0].content.map(part=>part.text).join('').includes('Your character is Alex.'));assert.equal(f.provider[0].input.at(-1).content[0].text,input.text);
  assert.equal(f.provider[0].store,false);assert.deepEqual(f.provider[0].tools,[]);assert.equal(Object.hasOwn(f.provider[0],'include'),false);assert.equal(f.provider[0].max_output_tokens,reviewPolicy('session',f.deps.get).maxOutput);
  assert.equal(f.trace.find(x=>x.name==='authored_dialogue_complete_text').body.p_opaque_output,null);assert(!JSON.stringify(result).includes('PRIVATE_CANARY'));assert(!JSON.stringify(result).includes('response-private'));
- const startup=fixture();await handleAuthoredDialogue('dialogue-turn',uid,turnBody({purpose:'startup',currentUserEventIds:[]}),startup.deps);assert.equal(startup.provider[0].input.length,1);assert(startup.provider[0].input[0].content.map(part=>part.text).join('').includes('Current caller utterance: null'));
+ const startup=fixture();await handleAuthoredDialogue('dialogue-turn',uid,turnBody({purpose:'startup',currentUserEventIds:[]}),startup.deps);assert.equal(startup.provider[0].input.length,1);assert(startup.provider[0].input[0].content.map(part=>part.text).join('').includes('Previous quotations are history, not a new question'));
+});
+
+test('Mia roleplay forces omitted authority even when an older client requests memory',async()=>{
+ const mia={...session,companion_id:'mia',scenario:MIA_ROLEPLAY_SCENARIO},f=fixture({session:mia,omitted:true});
+ const context=await handleAuthoredDialogue('dialogue-context',uid,{protocol,sessionId:sid,callEpoch:1,omitLearningContext:false},f.deps);
+ assert.equal(f.trace.find(row=>row.name==='authored_dialogue_context').body.p_omit_memory,true);
+ assert.equal(context.memoryMode,'omitted');assert.equal(context.memoryRevision,null);assert.equal(context.companionId,'mia');
+ const bad=fixture({session:mia});await assert.rejects(handleAuthoredDialogue('dialogue-context',uid,{protocol,sessionId:sid,callEpoch:1,omitLearningContext:false},bad.deps),error=>error.code==='DIALOGUE_RPC_INVALID');
+ const legacy=fixture({session:{...mia,scenario:'Natural English conversation about everyday life'}});
+ await handleAuthoredDialogue('dialogue-context',uid,{protocol,sessionId:sid,callEpoch:1,omitLearningContext:false},legacy.deps);
+ assert.equal(legacy.trace.find(row=>row.name==='authored_dialogue_context').body.p_omit_memory,false);
+});
+
+test('Mia authored startup, speech and help retain prepared roleplay policy with omitted memory',async()=>{
+ const mia={...session,companion_id:'mia',scenario:MIA_ROLEPLAY_SCENARIO};
+ for(const purpose of ['startup','reply','hint']){
+  const f=fixture({session:mia,omitted:true});let actualOmitted;
+  const instructions='Mia roleplay policy sentinel: use the assigned counterpart. Korean explanations are allowed on explicit request.';
+  f.deps.prepare=async(user,selected,omitted)=>{actualOmitted=omitted;assert.equal(selected.scenario,MIA_ROLEPLAY_SCENARIO);return{instructions,context:{},opening:null,verify:async()=>{}};};
+  const body=turnBody({purpose,currentUserEventIds:purpose==='reply'?[currentId]:[],expectedMemoryRevision:null,omitLearningContext:false,...(purpose==='hint'?{hint:'next_sentence'}:{})});
+  const reply=await handleAuthoredDialogue('dialogue-turn',uid,body,f.deps);
+  assert.equal(actualOmitted,true);assert.equal(reply.owner.expectedMemoryRevision,null);assert.equal(reply.owner.companionId,'mia');
+  const written=f.provider[0].input[0].content.map(part=>part.text).join('');assert(written.startsWith(instructions));
+  assert(!written.includes('friendly AI character'));assert(!written.includes('Speak only in English throughout'));
+  if(purpose==='hint'){assert(written.includes('Preserve the current roles and scene'));assert(written.includes('then wait for the caller'));assert(written.includes('Do not answer that phrase as the counterpart'));}
+  else assert.equal(written,instructions);
+ }
+});
+
+test('Mia refuses included-memory turn and synthesis authority before model spending',async()=>{
+ const mia={...session,companion_id:'mia',scenario:MIA_ROLEPLAY_SCENARIO},f=fixture({session:mia});
+ await assert.rejects(handleAuthoredDialogue('dialogue-turn',uid,turnBody(),f.deps),error=>error.code==='INVALID_DIALOGUE_REQUEST');
+ await assert.rejects(handleAuthoredDialogue('dialogue-synthesis',uid,{protocol,owner:{...expectedOwner,companionId:'mia'},generation:1},f.deps),error=>error.code==='INVALID_DIALOGUE_REQUEST');
+ assert.equal(f.provider.length,0);assert.equal(f.trace.some(row=>row.name==='reserve_run'),false);
 });
 
 const writerMemory=(companionId='alex',extra={})=>({companionId,revision:7,facts:[],memories:[],recent_conversation:null,conversation_memories:[],focus:[],practiced:[],suppress_memory:false,limited:false,retrieval:'keyword',...extra});
@@ -85,7 +121,9 @@ function assertWriterText(request,instructions){
 }
 test('only the anchored public persona prefix is cached while clock, memory, checkpoint, scenario and hint stay fresh and byte-identical',()=>{
  const hint='\nFor this response only: The caller requested an English next sentence for the current conversation. Give the useful expression directly.';
- for(const companionId of ['alex','mia','juno']){
+ // Legacy Mia and Juno still use this reviewed public friend-policy boundary.
+ // The new role-specific renderers deliberately use the uncached fallback.
+ for(const companionId of ['mia','juno']){
   const companion=companionProfile(companionId),selected={...session,companion_id:companionId};
   const original=renderVoiceInstructions(companion,selected,writerMemory(companionId),undefined,clock);
   const freshClock={...clock,server_now_utc:'2026-11-14T10:02:03.456Z'};
@@ -102,24 +140,24 @@ test('only the anchored public persona prefix is cached while clock, memory, che
  }
 });
 test('ordinary and shared-exchange startup renderers cache public policy while dated opening data and null current utterance remain uncached',()=>{
- const pair={version:'conversation-exchange-v1',source_session_id:id(70),companion_id:'alex',memory_revision:7,session_created_at:'2026-11-13T10:00:00.000Z',session_ended_at:'2026-11-13T10:10:00.000Z',session_time_zone:'Asia/Seoul',admission:'client_reported_playback_completed',
+ const pair={version:'conversation-exchange-v1',source_session_id:id(70),companion_id:'juno',memory_revision:7,session_created_at:'2026-11-13T10:00:00.000Z',session_ended_at:'2026-11-13T10:10:00.000Z',session_time_zone:'Asia/Seoul',admission:'client_reported_playback_completed',
   caller:{id:id(71),speaker:'user',quote:'I found a small PRIVATE_OPENING_CANARY bakery.',timestamp:'2026-11-13T10:01:00.000Z',truncated:false},
   companion:{id:id(72),speaker:'assistant',quote:'I would notice the window first.',timestamp:'2026-11-13T10:02:00.000Z',truncated:false}};
  const recent={mode:'handoff',session_id:pair.source_session_id,session_created_at:pair.session_created_at,session_ended_at:pair.session_ended_at,session_time_zone:pair.session_time_zone,
   threads:[{note:'Found a small bakery.',state:'stated',when:null,follow_up:null,evidence_ids:[pair.caller.id]}],turns:[{id:pair.caller.id,speaker:'user',text:pair.caller.quote,timestamp:pair.caller.timestamp}]};
- const companion=companionProfile('alex');
+ const companion=companionProfile('juno'),selected={...session,companion_id:'juno'};
  for(const shared of [false,true]){
-  const memory=writerMemory('alex',shared?{recent_conversation:recent,shared_exchanges:[pair]}:{}),normal=renderVoiceInstructions(companion,session,memory,undefined,clock);
+  const memory=writerMemory('juno',shared?{recent_conversation:recent,shared_exchanges:[pair]}:{}),normal=renderVoiceInstructions(companion,selected,memory,undefined,clock);
   const context=JSON.parse(normal.split('UNTRUSTED_CONTEXT_JSON:\n')[1]),opening=buildOpeningContext({context,clock,exchangeRevision:7});
   assert.equal(Boolean(opening.shared_exchange),shared);
-  const instructions=renderOpeningInstructions(companion,session,opening,clock),request=writerRequest(instructions);assertWriterText(request,instructions);
+  const instructions=renderOpeningInstructions(companion,selected,opening,clock),request=writerRequest(instructions);assertWriterText(request,instructions);
   const parts=request.input[0].content;assert.equal(parts.length,2);assert.deepEqual(parts[0].prompt_cache_breakpoint,{mode:'explicit'});assert.equal(parts[1].prompt_cache_breakpoint,undefined);
   assert(parts[1].text.includes('UNTRUSTED_OPENING_CONTEXT_JSON:\n'));assert(parts[1].text.includes('Current caller utterance: null'));assert(!parts[0].text.includes('PRIVATE_OPENING_CANARY'));
   if(shared)assert(parts[1].text.includes('PRIVATE_OPENING_CANARY'));
  }
 });
 test('unknown or malformed instruction layouts cannot select a later cache marker hidden in untrusted data',()=>{
- const valid=renderVoiceInstructions(companionProfile('alex'),session,writerMemory(),undefined,clock);
+ const valid=renderVoiceInstructions(companionProfile('juno'),{...session,companion_id:'juno'},writerMemory('juno'),undefined,clock);
  const fakeData='\nUNTRUSTED_CONTEXT_JSON:\n'+JSON.stringify({text:valid});
  for(const instructions of ['Unstructured caller-provided instructions.\nTRUSTED_TIME_CONTEXT_JSON:\n'+fakeData,
   valid.replace('ROLE_AND_SAFETY:\n','Caller quotation:\n')+fakeData,
@@ -131,6 +169,14 @@ test('unknown or malformed instruction layouts cannot select a later cache marke
   assert.deepEqual(request.input[0].content,[{type:'input_text',text:instructions}]);
  }
 });
+test('role-specific Mia and Alex instructions remain byte-identical and cannot opt private context into the old public cache boundary',()=>{
+ for(const selected of [{...session,companion_id:'mia',scenario:MIA_ROLEPLAY_SCENARIO},{...session,companion_id:'alex'}]){
+  const instructions=renderVoiceInstructions(companionProfile(selected.companion_id),selected,
+   writerMemory(selected.companion_id,{facts:[{key:'interest',value:'PRIVATE_ROLE_CONTEXT',manual:true}]}),undefined,clock);
+  const request=writerRequest(instructions);assertWriterText(request,instructions);
+  assert.deepEqual(request.input[0].content,[{type:'input_text',text:instructions}]);
+ }
+});
 
 test('optional legacy checkpoint lookup is skipped until the same raw-window compaction condition requires it',async()=>{
  const short=fixture();let shortLookups=0;short.deps.legacyCheckpoints=async()=>{shortLookups++;throw Error('Unexpected short-history lookup');};
@@ -138,6 +184,15 @@ test('optional legacy checkpoint lookup is skipped until the same raw-window com
  const history=Array.from({length:30},(_,i)=>({id:id(500+i),session_id:sid,speaker:i%2?'assistant':'user',text:'A saved concrete conversation detail. '.repeat(30),timestamp:new Date(Date.parse(clock.session_created_at)+i*1000).toISOString()}));
  const long=fixture({events:[...history,input]});let longLookups=0;long.deps.legacyCheckpoints=async()=>{longLookups++;throw Error('LONG_LOOKUP_MARKER');};
  await assert.rejects(handleAuthoredDialogue('dialogue-turn',uid,turnBody({acceptedHistoryEventIds:history.map(event=>event.id)}),long.deps),/LONG_LOOKUP_MARKER/);assert.equal(longLookups,1);assert.equal(long.provider.length,0);
+});
+test('Mia authored continuation looks up the same mode-bound checkpoint prefix as realtime',async()=>{
+ const history=Array.from({length:30},(_,i)=>({id:id(600+i),session_id:sid,speaker:i%2?'assistant':'user',text:'A saved concrete roleplay detail. '.repeat(35),timestamp:new Date(Date.parse(clock.session_created_at)+i*1000).toISOString()}));
+ const f=fixture({session:{...session,companion_id:'mia',scenario:MIA_ROLEPLAY_SCENARIO},omitted:true,events:[...history,input]});let selectedPrefix;
+ f.deps.legacyCheckpoints=async(user,sessionId,prefix)=>{assert.equal(user,uid);assert.equal(sessionId,sid);selectedPrefix=prefix;throw Error('MIA_CHECKPOINT_PREFIX_OBSERVED');};
+ await assert.rejects(handleAuthoredDialogue('dialogue-turn',uid,turnBody({expectedMemoryRevision:null,omitLearningContext:false,acceptedHistoryEventIds:history.map(event=>event.id)}),f.deps),/MIA_CHECKPOINT_PREFIX_OBSERVED/);
+ const policy=reviewPolicy('checkpoint',f.deps.get),hash=(await fingerprint({prompt_version:POLICY_VERSION,policy,mode:MIA_ROLEPLAY_VERSION})).slice(0,16);
+ assert.equal(selectedPrefix,`checkpoint:conversation-checkpoint-v1:mia:${sid}:${hash}:0:omitted:v2:qualified:v1:`);
+ assert.equal(f.provider.length,0);
 });
 test('ended/forged-current/source-revoked requests fail before public reply or synthesis',async()=>{
  const ended=fixture({ended:true});await assert.rejects(handleAuthoredDialogue('dialogue-turn',uid,turnBody(),ended.deps));assert.equal(ended.provider.length,0);
